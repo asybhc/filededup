@@ -1,0 +1,455 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://filededup.local/schema/v1/filededup.schema.json",
+  "title": "FileDedup v1 契约",
+  "description": "扫描/整理/计划三类输出的唯一权威 Schema。字段冻结后只能提升 schemaVersion。",
+  "oneOf": [
+    { "$ref": "#/$defs/ScanResult" },
+    { "$ref": "#/$defs/OrganizeResult" },
+    { "$ref": "#/$defs/Plan" }
+  ],
+  "$defs": {
+    "schemaVersion": { "const": 1 },
+    "groupKind": { "enum": ["exact", "image", "audio"] },
+    "keepPolicy": {
+      "enum": ["newest", "oldest", "largest", "nameShortest", "pathShortest"]
+    },
+    "skipCode": {
+      "enum": [
+        "size_failed",
+        "permission_denied",
+        "path_too_long",
+        "read_failed",
+        "vanished",
+        "decode_failed",
+        "unsupported_format",
+        "hardlink_alias",
+        "precheck_failed",
+        "conflict",
+        "dry_run"
+      ]
+    },
+    "skip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "code", "message"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "code": { "$ref": "#/$defs/skipCode" },
+        "message": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    },
+    "precheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "modTime"],
+      "properties": {
+        "size": { "type": "integer", "minimum": 0 },
+        "modTime": { "type": "string", "format": "date-time" },
+        "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "modTime", "keep", "deletable"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 0 },
+        "modTime": { "type": "string", "format": "date-time" },
+        "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "keep": { "type": "boolean" },
+        "deletable": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "snapshot": { "$ref": "#/$defs/precheck" }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "key", "members", "keep", "reclaimable"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/groupKind" },
+        "key": { "type": "string" },
+        "members": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/member" } },
+        "keep": { "type": "string", "minLength": 1 },
+        "reclaimable": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedAt", "finishedAt", "elapsedMs", "workers", "goVersion"],
+      "properties": {
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
+        "peakRssBytes": { "type": "integer", "minimum": 0 },
+        "workers": { "type": "integer", "minimum": 1, "maximum": 256 },
+        "goVersion": { "type": "string" }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesEnumerated",
+        "bytesEnumerated",
+        "filesHashed",
+        "bytesHashed",
+        "cacheHits",
+        "cacheMisses",
+        "groups",
+        "exactGroups",
+        "imageGroups",
+        "audioGroups",
+        "duplicateFiles",
+        "reclaimableBytes",
+        "skipped"
+      ],
+      "properties": {
+        "filesEnumerated": { "type": "integer", "minimum": 0 },
+        "bytesEnumerated": { "type": "integer", "minimum": 0 },
+        "filesHashed": { "type": "integer", "minimum": 0 },
+        "bytesHashed": { "type": "integer", "minimum": 0 },
+        "cacheHits": { "type": "integer", "minimum": 0 },
+        "cacheMisses": { "type": "integer", "minimum": 0 },
+        "groups": { "type": "integer", "minimum": 0 },
+        "exactGroups": { "type": "integer", "minimum": 0 },
+        "imageGroups": { "type": "integer", "minimum": 0 },
+        "audioGroups": { "type": "integer", "minimum": 0 },
+        "duplicateFiles": { "type": "integer", "minimum": 0 },
+        "reclaimableBytes": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "imageOpts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "threshold"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "threshold": { "type": "integer", "minimum": 0, "maximum": 64 }
+      }
+    },
+    "audioOpts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "tolerance"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "tolerance": { "type": "integer", "minimum": 0, "maximum": 60 }
+      }
+    },
+    "scanRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "roots",
+        "excludes",
+        "minSize",
+        "includeHidden",
+        "followLinks",
+        "exact",
+        "quickHash",
+        "keepPolicy",
+        "imageKeepPolicy",
+        "workers",
+        "useCache"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "requestId": { "type": "string" },
+        "roots": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "excludes": { "type": "array", "items": { "type": "string" } },
+        "minSize": { "type": "integer", "minimum": 0 },
+        "includeHidden": { "type": "boolean" },
+        "followLinks": { "type": "boolean" },
+        "exact": { "type": "boolean" },
+        "quickHash": { "type": "boolean" },
+        "similarImage": { "$ref": "#/$defs/imageOpts" },
+        "similarAudio": { "$ref": "#/$defs/audioOpts" },
+        "keepPolicy": { "$ref": "#/$defs/keepPolicy" },
+        "imageKeepPolicy": { "$ref": "#/$defs/keepPolicy" },
+        "workers": { "type": "integer", "minimum": 0, "maximum": 256 },
+        "useCache": { "type": "boolean" }
+      }
+    },
+    "scanResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "requestId", "request", "stats", "groups", "skipped"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "requestId": { "type": "string" },
+        "request": { "$ref": "#/$defs/scanRequest" },
+        "stats": { "$ref": "#/$defs/stats" },
+        "groups": { "type": "array", "items": { "$ref": "#/$defs/group" } },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/skip" } },
+        "runtime": { "$ref": "#/$defs/runtime" }
+      }
+    },
+    "ScanResult": { "$ref": "#/$defs/scanResult" },
+
+    "stepId": {
+      "enum": [
+        "rename_prefix",
+        "rename_suffix",
+        "special_delete",
+        "readonly",
+        "content_dedup",
+        "image_dedup",
+        "audio_dedup",
+        "organize",
+        "empty_dirs"
+      ]
+    },
+    "stepToggles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "renamePrefix",
+        "renameSuffix",
+        "specialDelete",
+        "readonly",
+        "contentDedup",
+        "imageDedup",
+        "audioDedup",
+        "organize",
+        "emptyDirs"
+      ],
+      "properties": {
+        "renamePrefix": { "type": "boolean" },
+        "renameSuffix": { "type": "boolean" },
+        "specialDelete": { "type": "boolean" },
+        "readonly": { "type": "boolean" },
+        "contentDedup": { "type": "boolean" },
+        "imageDedup": { "type": "boolean" },
+        "audioDedup": { "type": "boolean" },
+        "organize": { "type": "boolean" },
+        "emptyDirs": { "type": "boolean" }
+      }
+    },
+    "organizeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "root",
+        "targetDir",
+        "excludes",
+        "minSize",
+        "includeHidden",
+        "dryRun",
+        "hasPreviewPlan",
+        "conflictPolicy",
+        "deleteMode",
+        "hardlinkInsteadOfDelete",
+        "recognizeStrength",
+        "whitelistExtensions",
+        "confirmedSuspects",
+        "autoDeleteConfirmed",
+        "keepPolicy",
+        "imageKeepPolicy",
+        "imageThreshold",
+        "audioToleranceSec",
+        "steps",
+        "organize",
+        "workers"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "requestId": { "type": "string" },
+        "root": { "type": "string", "minLength": 1 },
+        "targetDir": { "type": "string" },
+        "excludes": { "type": "array", "items": { "type": "string" } },
+        "minSize": { "type": "integer", "minimum": 0 },
+        "includeHidden": { "type": "boolean" },
+        "dryRun": { "type": "boolean" },
+        "hasPreviewPlan": { "type": "boolean" },
+        "conflictPolicy": { "enum": ["overwrite", "skip", "rename"] },
+        "deleteMode": { "enum": ["trash", "permanent"] },
+        "hardlinkInsteadOfDelete": { "type": "boolean" },
+        "recognizeStrength": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "whitelistExtensions": { "type": "array", "items": { "type": "string" } },
+        "confirmedSuspects": { "type": "array", "items": { "type": "string" } },
+        "autoDeleteConfirmed": { "type": "boolean" },
+        "keepPolicy": { "$ref": "#/$defs/keepPolicy" },
+        "imageKeepPolicy": { "$ref": "#/$defs/keepPolicy" },
+        "imageThreshold": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "audioToleranceSec": { "type": "integer", "minimum": 0, "maximum": 60 },
+        "steps": { "$ref": "#/$defs/stepToggles" },
+        "organize": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["category", "extension", "folder", "nameKeyword", "nameRegex"] },
+            "keyword": { "type": "string" },
+            "regex": { "type": "string" },
+            "fixedDir": { "type": "string" }
+          }
+        },
+        "workers": { "type": "integer", "minimum": 0, "maximum": 256 }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "src", "irreversible", "rollback", "status"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "step": { "$ref": "#/$defs/stepId" },
+        "kind": {
+          "enum": [
+            "rename",
+            "move",
+            "delete_trash",
+            "delete_permanent",
+            "hardlink",
+            "clear_readonly",
+            "mkdir",
+            "remove_dir"
+          ]
+        },
+        "src": { "type": "string", "minLength": 1 },
+        "dst": { "type": "string" },
+        "reason": { "type": "string" },
+        "irreversible": { "type": "boolean" },
+        "precheck": { "$ref": "#/$defs/precheck" },
+        "rollback": { "enum": ["none", "rename_back", "drop_link", "restore_attr", "remove_dir"] },
+        "status": { "enum": ["planned", "applied", "skipped", "failed", "dry_run"] },
+        "error": { "type": "string" }
+      }
+    },
+    "stepResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "enabled", "executed", "scanned", "changed", "skipped", "failed", "actionCount"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stepId" },
+        "title": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "executed": { "type": "boolean" },
+        "scanned": { "type": "integer", "minimum": 0 },
+        "changed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "actionCount": { "type": "integer", "minimum": 0 },
+        "messages": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "organizeCounters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "renamedPrefix",
+        "renamedSuffix",
+        "specialDeleted",
+        "suspectsKept",
+        "readonlyCleared",
+        "contentDeleted",
+        "imageDeleted",
+        "audioDeleted",
+        "moved",
+        "emptyDirsRemoved",
+        "conflictsSkipped",
+        "failed"
+      ],
+      "properties": {
+        "renamedPrefix": { "type": "integer", "minimum": 0 },
+        "renamedSuffix": { "type": "integer", "minimum": 0 },
+        "specialDeleted": { "type": "integer", "minimum": 0 },
+        "suspectsKept": { "type": "integer", "minimum": 0 },
+        "readonlyCleared": { "type": "integer", "minimum": 0 },
+        "contentDeleted": { "type": "integer", "minimum": 0 },
+        "imageDeleted": { "type": "integer", "minimum": 0 },
+        "audioDeleted": { "type": "integer", "minimum": 0 },
+        "moved": { "type": "integer", "minimum": 0 },
+        "emptyDirsRemoved": { "type": "integer", "minimum": 0 },
+        "conflictsSkipped": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "organizeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "request",
+        "dryRun",
+        "order",
+        "steps",
+        "counters",
+        "actions",
+        "skipped"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "requestId": { "type": "string" },
+        "request": { "$ref": "#/$defs/organizeRequest" },
+        "dryRun": { "type": "boolean" },
+        "order": { "type": "array", "minItems": 9, "maxItems": 9, "items": { "$ref": "#/$defs/stepId" } },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/stepResult" } },
+        "counters": { "$ref": "#/$defs/organizeCounters" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/skip" } },
+        "runtime": { "$ref": "#/$defs/runtime" }
+      }
+    },
+    "OrganizeResult": { "$ref": "#/$defs/organizeResult" },
+
+    "planSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actions",
+        "deletes",
+        "trash",
+        "permanent",
+        "moves",
+        "renames",
+        "hardlinks",
+        "clearReadonly",
+        "removeDirs",
+        "irreversible",
+        "reclaimableBytes"
+      ],
+      "properties": {
+        "actions": { "type": "integer", "minimum": 0 },
+        "deletes": { "type": "integer", "minimum": 0 },
+        "trash": { "type": "integer", "minimum": 0 },
+        "permanent": { "type": "integer", "minimum": 0 },
+        "moves": { "type": "integer", "minimum": 0 },
+        "renames": { "type": "integer", "minimum": 0 },
+        "hardlinks": { "type": "integer", "minimum": 0 },
+        "clearReadonly": { "type": "integer", "minimum": 0 },
+        "removeDirs": { "type": "integer", "minimum": 0 },
+        "irreversible": { "type": "integer", "minimum": 0 },
+        "reclaimableBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "requestId", "createdAt", "source", "actions", "summary"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "requestId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "source": { "enum": ["scan", "organize"] },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+        "summary": { "$ref": "#/$defs/planSummary" }
+      }
+    },
+    "Plan": { "$ref": "#/$defs/plan" }
+  }
+}

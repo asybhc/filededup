@@ -1,0 +1,24 @@
+# 构建产物
+/bin/
+/dist/
+/build/bin/
+
+# 本地语料与对拍产物（可再生成，不入库）
+/testdata/corpus/
+/testdata/out/
+/testdata/*-manifest.json
+*.test
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 前端依赖
+/web/node_modules/
+/web/dist/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store

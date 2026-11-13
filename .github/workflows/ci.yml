@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # 语料路径清单哈希跨平台必须一致；语料改动时需同步更新 tools/corpusgen 的 golden 常量。
+  CORPUS_SEED: "20260113"
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        shell: bash
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "以下文件未格式化："
+            echo "$out"
+            exit 1
+          fi
+
+      - name: vet
+        run: go vet ./...
+
+      - name: build
+        run: go build ./...
+
+      - name: test
+        run: go test ./...
+
+      - name: corpus 可复现性（跨平台一致）
+        shell: bash
+        run: |
+          go run ./tools/corpusgen -out "${{ runner.temp }}/corpus" -seed "$CORPUS_SEED" | tee corpus.out
+          grep -q "pathListSHA256: 6ffaff777d4cc947e561fb061eb5f7fb0454ff8d73c1b1d7bab0bfc29c380273" corpus.out || {
+            echo "路径清单哈希与 golden 不符"; exit 1;
+          }
+
+      - name: parity 工具自检
+        run: go test ./tools/parity/ -run . -count=1 -v
