@@ -32,6 +32,8 @@ func main() {
 		os.Exit(runPlan(os.Args[2:]))
 	case "scenes":
 		os.Exit(runScenes(os.Args[2:]))
+	case "similar":
+		os.Exit(runSimilar(os.Args[2:]))
 	case "plans":
 		os.Exit(runPlans(os.Args[2:]))
 	case "-h", "--help", "help":
@@ -50,6 +52,7 @@ func usage() {
   parity plan --base <csharp-plan.json> --cand <go-plan.json> [选项]
   parity scenes [-write] [-plans] [-only <ids>]  13 组场景对拍；-write 生成 golden，-plans 追加计划对拍
   parity plans [-groups N]  生成多组语料，对拍 C#/Go 计划并用 C# 计划驱动 Go 执行器
+  parity similar --csharp <similar.json> [--root <dir>] [-allow <relpaths>]  逐文件指纹/时长对拍
 
 选项:
   --root <dir>   语料根目录；缺省取 base.request.roots[0]

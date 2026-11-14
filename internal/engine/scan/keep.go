@@ -24,6 +24,11 @@ func utf16Len(s string) int {
 // keepIndex 在候选下标中选出保留项。语义见 B/E.cs#L1188-L1207。
 // 并列时追加确定性比较（路径长度、路径序数），避免依赖枚举顺序。
 func keepIndex(policy model.KeepPolicy, idxs []int, files []fileEntry) int {
+	return keepIndexPolicy(policy, idxs, files)
+}
+
+// keepIndexPolicy 是 keepIndex 的显式策略版本，供图片组使用独立保留策略。
+func keepIndexPolicy(policy model.KeepPolicy, idxs []int, files []fileEntry) int {
 	best := idxs[0]
 	better := func(a, b int) bool { return compareKeep(policy, files[a], files[b]) < 0 }
 	for _, i := range idxs[1:] {

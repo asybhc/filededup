@@ -21,7 +21,7 @@ import (
 	"filededup/internal/engine/scan"
 )
 
-const version = "0.2.0-m2"
+const version = "0.3.0-m3"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `fdedup %s
@@ -38,7 +38,13 @@ scan 选项:
   --min-size <n>       最小文件大小（字节），0=不限
   --include-hidden     包含隐藏/系统文件
   --follow-links       跟随符号链接（默认不跟随，与 C# 一致）
-  --keep <policy>      newest|oldest|nameShortest|pathShortest（默认 pathShortest）
+  --keep <policy>      newest|oldest|largest|nameShortest|pathShortest（默认 pathShortest）
+  --no-exact           关闭精确查重（可与 --image/--audio 组合）
+  --image              开启相似图片判定（jpg/jpeg/png/gif/bmp）
+  --image-threshold <n> 图片 dHash 汉明阈值，0-64（默认 8）
+  --image-keep <policy> 相似图片保留策略（默认 largest）
+  --audio              开启相似音频判定（mp3/wav）
+  --audio-threshold <n> 音频时长容差（秒，默认 2）
   --workers <n>        哈希并发数，0=自动
   --no-cache           禁用哈希缓存
   --request <file>     读取 JSON 请求（model.Request），显式参数覆盖
@@ -109,6 +115,12 @@ func runScan(args []string) int {
 	includeHidden := fs.Bool("include-hidden", false, "包含隐藏文件")
 	followLinks := fs.Bool("follow-links", false, "跟随符号链接")
 	keep := fs.String("keep", "", "保留策略")
+	noExact := fs.Bool("no-exact", false, "关闭精确查重")
+	image := fs.Bool("image", false, "开启相似图片判定")
+	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-64）")
+	imageKeep := fs.String("image-keep", "", "相似图片保留策略")
+	audio := fs.Bool("audio", false, "开启相似音频判定")
+	audioThreshold := fs.Int("audio-threshold", 2, "音频时长容差（秒）")
 	workers := fs.Int("workers", 0, "哈希并发数")
 	noCache := fs.Bool("no-cache", false, "禁用缓存")
 	requestPath := fs.String("request", "", "请求 JSON")
@@ -156,7 +168,34 @@ func runScan(args []string) int {
 	if *noCache {
 		req.UseCache = false
 	}
-	req.Exact = true
+	if *noExact {
+		req.Exact = false
+	}
+	if *image || set["image-threshold"] || *imageKeep != "" {
+		opts := model.ImageOpts{Enabled: true, Threshold: 8}
+		if req.SimilarImage != nil {
+			opts = *req.SimilarImage
+			opts.Enabled = true
+		}
+		if set["image-threshold"] {
+			opts.Threshold = *imageThreshold
+		}
+		req.SimilarImage = &opts
+	}
+	if *imageKeep != "" {
+		req.ImageKeepPolicy = model.KeepPolicy(*imageKeep)
+	}
+	if *audio || set["audio-threshold"] {
+		opts := model.AudioOpts{Enabled: true, Tolerance: 2}
+		if req.SimilarAudio != nil {
+			opts = *req.SimilarAudio
+			opts.Enabled = true
+		}
+		if set["audio-threshold"] {
+			opts.Tolerance = *audioThreshold
+		}
+		req.SimilarAudio = &opts
+	}
 	req.SchemaVersion = model.SchemaVersion
 	if req.KeepPolicy == "" {
 		req.KeepPolicy = model.KeepPathShortest

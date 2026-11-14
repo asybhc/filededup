@@ -63,8 +63,8 @@ func run(ctx context.Context, req model.Request, d deps) (*model.Result, error) 
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if !req.Exact {
-		return nil, fmt.Errorf("scan: M1 仅实现精确查重（exact=true）")
+	if !req.Exact && req.SimilarImage == nil && req.SimilarAudio == nil {
+		return nil, fmt.Errorf("scan: 未启用任何查重方式（exact/similarImage/similarAudio）")
 	}
 	if req.KeepPolicy == "" {
 		req.KeepPolicy = model.KeepPathShortest
@@ -81,24 +81,56 @@ func run(ctx context.Context, req model.Request, d deps) (*model.Result, error) 
 	if !req.UseCache {
 		cache.disable()
 	}
-	results, stats, err := hashAll(ctx, files, cache, workers, d.open)
-	if err != nil {
-		// 取消：返回部分结果，由调用方决定是否落盘。
-		res := buildResult(req, files, results, skipped, stats, workers, started)
-		return res, err
-	}
-	for i, r := range results {
-		if r.err != nil && !errors.Is(r.err, context.Canceled) {
-			skipped = append(skipped, model.Skip{
-				Path:    files[i].path,
-				Code:    classifyError(r.err),
-				Message: r.err.Error(),
-				Err:     r.err.Error(),
-			})
+	var results []hashResult
+	var stats hashStats
+	if req.Exact {
+		results, stats, err = hashAll(ctx, files, cache, workers, d.open)
+		if err != nil {
+			// 取消：返回部分结果，由调用方决定是否落盘。
+			res := buildResult(req, files, results, skipped, stats, workers, started)
+			return res, err
+		}
+		for i, r := range results {
+			if r.err != nil && !errors.Is(r.err, context.Canceled) {
+				skipped = append(skipped, model.Skip{
+					Path:    files[i].path,
+					Code:    classifyError(r.err),
+					Message: r.err.Error(),
+					Err:     r.err.Error(),
+				})
+			}
 		}
 	}
 
-	groups := buildGroups(req, files, results)
+	var groups []model.Group
+	if req.Exact {
+		groups = append(groups, buildGroups(req, files, results)...)
+	}
+	if req.SimilarImage != nil && req.SimilarImage.Enabled {
+		g, sk := buildImageGroups(req, files, *req.SimilarImage)
+		groups = append(groups, g...)
+		skipped = append(skipped, sk...)
+	}
+	if req.SimilarAudio != nil && req.SimilarAudio.Enabled {
+		g, sk := buildAudioGroups(req, files, *req.SimilarAudio)
+		groups = append(groups, g...)
+		skipped = append(skipped, sk...)
+	}
+	// 与 C# 基线一致：相似组内成员同样计算 SHA-256，并计入哈希统计。
+	if len(groups) > 0 && (req.SimilarImage != nil && req.SimilarImage.Enabled ||
+		req.SimilarAudio != nil && req.SimilarAudio.Enabled) {
+		if results == nil {
+			results = make([]hashResult, len(files))
+		}
+		hashMediaGroups(ctx, files, results, groups, cache, d.open, &stats)
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Kind != groups[j].Kind {
+			return groups[i].Kind < groups[j].Kind
+		}
+		return groups[i].Key < groups[j].Key
+	})
+
 	res := buildResult(req, files, results, skipped, stats, workers, started)
 	if groups == nil {
 		groups = []model.Group{}
@@ -168,8 +200,18 @@ func buildResult(req model.Request, files []fileEntry, results []hashResult, ski
 
 func fillGroupStats(s *model.Stats, groups []model.Group) {
 	s.Groups = int64(len(groups))
-	s.ExactGroups = int64(len(groups))
+	s.ExactGroups = 0
+	s.ImageGroups = 0
+	s.AudioGroups = 0
 	for _, g := range groups {
+		switch g.Kind {
+		case model.GroupExact:
+			s.ExactGroups++
+		case model.GroupImage:
+			s.ImageGroups++
+		case model.GroupAudio:
+			s.AudioGroups++
+		}
 		s.DuplicateFiles += int64(len(g.Members) - 1)
 		s.ReclaimableBytes += g.Reclaimable
 	}
