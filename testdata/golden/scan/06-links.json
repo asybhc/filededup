@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "request": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-0000-0000-000000000000",
+    "roots": [
+      "F:\\我的软件项目\\文件去重\\2026-11-13\\go-port\\filededup\\testdata\\corpus\\06-links"
+    ],
+    "excludes": [],
+    "minSize": 0,
+    "includeHidden": false,
+    "followLinks": false,
+    "exact": true,
+    "quickHash": false,
+    "keepPolicy": "pathShortest",
+    "imageKeepPolicy": "largest",
+    "workers": 0,
+    "useCache": false
+  },
+  "stats": {
+    "filesEnumerated": 2,
+    "bytesEnumerated": 48,
+    "filesHashed": 2,
+    "bytesHashed": 48,
+    "cacheHits": 0,
+    "cacheMisses": 0,
+    "groups": 1,
+    "exactGroups": 1,
+    "imageGroups": 0,
+    "audioGroups": 0,
+    "duplicateFiles": 1,
+    "reclaimableBytes": 24,
+    "skipped": 0
+  },
+  "groups": [
+    {
+      "id": "exact:a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47",
+      "kind": "exact",
+      "key": "a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47",
+      "members": [
+        {
+          "path": "hardlink-alias.txt",
+          "size": 24,
+          "modTime": "2024-01-01T08:51:00.0000000+08:00",
+          "hash": "a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 24,
+            "modTime": "2024-01-01T00:51:00.0000000Z",
+            "hash": "a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47"
+          }
+        },
+        {
+          "path": "hardlink-target.txt",
+          "size": 24,
+          "modTime": "2024-01-01T08:51:00.0000000+08:00",
+          "hash": "a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 24,
+            "modTime": "2024-01-01T00:51:00.0000000Z",
+            "hash": "a84885c20460432b14e48e473cb65022fc0b8e959f2fc70a2a92ca6f11853d47"
+          }
+        }
+      ],
+      "keep": "hardlink-alias.txt",
+      "reclaimable": 24
+    }
+  ],
+  "skipped": []
+}

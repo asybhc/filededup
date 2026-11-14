@@ -55,5 +55,9 @@ jobs:
             echo "路径清单哈希与 golden 不符"; exit 1;
           }
 
+      - name: parity 13 场景（对 golden 回归）
+        shell: bash
+        run: go run ./tools/parity scenes -corpus "${{ runner.temp }}/corpus" -golden testdata/golden/scan
+
       - name: parity 工具自检
         run: go test ./tools/parity/ -run . -count=1 -v

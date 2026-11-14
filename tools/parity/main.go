@@ -4,6 +4,7 @@
 //
 //	parity scan --base csharp.json --cand go.json [--root 语料根] [-json] [-ignore ...]
 //	parity plan --base csharp-plan.json --cand go-plan.json [--root 语料根] [-json]
+//	parity scenes [-write] [-only 01-exact,...]
 //
 // 退出码：0 = MATCH，1 = DIFF（字段级差异已列出），2 = 用法/读取错误。
 // 归一化规则：绝对路径 → 相对 --root（缺省取 base.request.roots[0]）；路径统一 "/" 分隔并做 NFC；
@@ -28,6 +29,8 @@ func main() {
 		os.Exit(runScan(os.Args[2:]))
 	case "plan":
 		os.Exit(runPlan(os.Args[2:]))
+	case "scenes":
+		os.Exit(runScenes(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
@@ -42,6 +45,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `用法:
   parity scan --base <csharp.json> --cand <go.json> [选项]
   parity plan --base <csharp-plan.json> --cand <go-plan.json> [选项]
+  parity scenes [-write] [-only <ids>]  13 组场景对拍；-write 生成 golden
 
 选项:
   --root <dir>   语料根目录；缺省取 base.request.roots[0]

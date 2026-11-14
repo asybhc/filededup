@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "request": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-0000-0000-000000000000",
+    "roots": [
+      "F:\\我的软件项目\\文件去重\\2026-11-13\\go-port\\filededup\\testdata\\corpus\\01-exact"
+    ],
+    "excludes": [],
+    "minSize": 0,
+    "includeHidden": false,
+    "followLinks": false,
+    "exact": true,
+    "quickHash": false,
+    "keepPolicy": "pathShortest",
+    "imageKeepPolicy": "largest",
+    "workers": 0,
+    "useCache": false
+  },
+  "stats": {
+    "filesEnumerated": 12,
+    "bytesEnumerated": 524413,
+    "filesHashed": 12,
+    "bytesHashed": 524413,
+    "cacheHits": 0,
+    "cacheMisses": 0,
+    "groups": 5,
+    "exactGroups": 5,
+    "imageGroups": 0,
+    "audioGroups": 0,
+    "duplicateFiles": 5,
+    "reclaimableBytes": 262186,
+    "skipped": 0
+  },
+  "groups": [
+    {
+      "id": "exact:75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df",
+      "kind": "exact",
+      "key": "75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df",
+      "members": [
+        {
+          "path": "a.txt",
+          "size": 18,
+          "modTime": "2024-01-01T08:00:00.0000000+08:00",
+          "hash": "75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 18,
+            "modTime": "2024-01-01T00:00:00.0000000Z",
+            "hash": "75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df"
+          }
+        },
+        {
+          "path": "b.txt",
+          "size": 18,
+          "modTime": "2024-01-01T08:01:00.0000000+08:00",
+          "hash": "75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 18,
+            "modTime": "2024-01-01T00:01:00.0000000Z",
+            "hash": "75a9a33143f66085eba755b0ca58c912d03072c0e04e3a68e769b3e9fc9c19df"
+          }
+        }
+      ],
+      "keep": "b.txt",
+      "reclaimable": 18
+    },
+    {
+      "id": "exact:d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456",
+      "kind": "exact",
+      "key": "d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456",
+      "members": [
+        {
+          "path": "no-ext-a",
+          "size": 23,
+          "modTime": "2024-01-01T08:10:00.0000000+08:00",
+          "hash": "d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 23,
+            "modTime": "2024-01-01T00:10:00.0000000Z",
+            "hash": "d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456"
+          }
+        },
+        {
+          "path": "no-ext-b",
+          "size": 23,
+          "modTime": "2024-01-01T08:11:00.0000000+08:00",
+          "hash": "d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 23,
+            "modTime": "2024-01-01T00:11:00.0000000Z",
+            "hash": "d49d5cb6d8f88b8c5f3d8cd8f22b2a92008f9743eca2ece151a96715ce146456"
+          }
+        }
+      ],
+      "keep": "no-ext-b",
+      "reclaimable": 23
+    },
+    {
+      "id": "exact:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "exact",
+      "key": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "members": [
+        {
+          "path": "empty-1.bin",
+          "size": 0,
+          "modTime": "2024-01-01T08:04:00.0000000+08:00",
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 0,
+            "modTime": "2024-01-01T00:04:00.0000000Z",
+            "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        {
+          "path": "empty-2.bin",
+          "size": 0,
+          "modTime": "2024-01-01T08:05:00.0000000+08:00",
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 0,
+            "modTime": "2024-01-01T00:05:00.0000000Z",
+            "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      ],
+      "keep": "empty-2.bin",
+      "reclaimable": 0
+    },
+    {
+      "id": "exact:54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0",
+      "kind": "exact",
+      "key": "54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0",
+      "members": [
+        {
+          "path": "medium-1.bin",
+          "size": 262144,
+          "modTime": "2024-01-01T08:08:00.0000000+08:00",
+          "hash": "54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 262144,
+            "modTime": "2024-01-01T00:08:00.0000000Z",
+            "hash": "54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0"
+          }
+        },
+        {
+          "path": "medium-2.bin",
+          "size": 262144,
+          "modTime": "2024-01-01T08:09:00.0000000+08:00",
+          "hash": "54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 262144,
+            "modTime": "2024-01-01T00:09:00.0000000Z",
+            "hash": "54354c9d5c1d1bc97bafbd20ce0d0385f3c310781a8660391b2d8ebf035ecef0"
+          }
+        }
+      ],
+      "keep": "medium-2.bin",
+      "reclaimable": 262144
+    },
+    {
+      "id": "exact:df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+      "kind": "exact",
+      "key": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+      "members": [
+        {
+          "path": "one-1.bin",
+          "size": 1,
+          "modTime": "2024-01-01T08:06:00.0000000+08:00",
+          "hash": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 1,
+            "modTime": "2024-01-01T00:06:00.0000000Z",
+            "hash": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c"
+          }
+        },
+        {
+          "path": "one-2.bin",
+          "size": 1,
+          "modTime": "2024-01-01T08:07:00.0000000+08:00",
+          "hash": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 1,
+            "modTime": "2024-01-01T00:07:00.0000000Z",
+            "hash": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c"
+          }
+        }
+      ],
+      "keep": "one-2.bin",
+      "reclaimable": 1
+    }
+  ],
+  "skipped": []
+}

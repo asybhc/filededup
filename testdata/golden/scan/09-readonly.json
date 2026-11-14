@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "request": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-0000-0000-000000000000",
+    "roots": [
+      "F:\\我的软件项目\\文件去重\\2026-11-13\\go-port\\filededup\\testdata\\corpus\\09-readonly"
+    ],
+    "excludes": [],
+    "minSize": 0,
+    "includeHidden": false,
+    "followLinks": false,
+    "exact": true,
+    "quickHash": false,
+    "keepPolicy": "pathShortest",
+    "imageKeepPolicy": "largest",
+    "workers": 0,
+    "useCache": false
+  },
+  "stats": {
+    "filesEnumerated": 3,
+    "bytesEnumerated": 63,
+    "filesHashed": 2,
+    "bytesHashed": 54,
+    "cacheHits": 0,
+    "cacheMisses": 0,
+    "groups": 1,
+    "exactGroups": 1,
+    "imageGroups": 0,
+    "audioGroups": 0,
+    "duplicateFiles": 1,
+    "reclaimableBytes": 27,
+    "skipped": 0
+  },
+  "groups": [
+    {
+      "id": "exact:64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b",
+      "kind": "exact",
+      "key": "64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b",
+      "members": [
+        {
+          "path": "readonly-copy.txt",
+          "size": 27,
+          "modTime": "2024-01-01T08:59:00.0000000+08:00",
+          "hash": "64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 27,
+            "modTime": "2024-01-01T00:59:00.0000000Z",
+            "hash": "64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b"
+          }
+        },
+        {
+          "path": "readonly.txt",
+          "size": 27,
+          "modTime": "2024-01-01T08:58:00.0000000+08:00",
+          "hash": "64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 27,
+            "modTime": "2024-01-01T00:58:00.0000000Z",
+            "hash": "64b08bdc0c08140dac5b9aa9fdcfc2415a5d4e335c97e40ce04d19ca860dcf9b"
+          }
+        }
+      ],
+      "keep": "readonly.txt",
+      "reclaimable": 27
+    }
+  ],
+  "skipped": []
+}

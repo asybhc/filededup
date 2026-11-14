@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "request": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-0000-0000-000000000000",
+    "roots": [
+      "F:\\我的软件项目\\文件去重\\2026-11-13\\go-port\\filededup\\testdata\\corpus\\03-rename"
+    ],
+    "excludes": [],
+    "minSize": 0,
+    "includeHidden": false,
+    "followLinks": false,
+    "exact": true,
+    "quickHash": false,
+    "keepPolicy": "pathShortest",
+    "imageKeepPolicy": "largest",
+    "workers": 0,
+    "useCache": false
+  },
+  "stats": {
+    "filesEnumerated": 11,
+    "bytesEnumerated": 155,
+    "filesHashed": 10,
+    "bytesHashed": 140,
+    "cacheHits": 0,
+    "cacheMisses": 0,
+    "groups": 0,
+    "exactGroups": 0,
+    "imageGroups": 0,
+    "audioGroups": 0,
+    "duplicateFiles": 0,
+    "reclaimableBytes": 0,
+    "skipped": 0
+  },
+  "groups": [],
+  "skipped": []
+}

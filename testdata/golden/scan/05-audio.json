@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "request": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-0000-0000-000000000000",
+    "roots": [
+      "F:\\我的软件项目\\文件去重\\2026-11-13\\go-port\\filededup\\testdata\\corpus\\05-audio"
+    ],
+    "excludes": [],
+    "minSize": 0,
+    "includeHidden": false,
+    "followLinks": false,
+    "exact": true,
+    "quickHash": false,
+    "keepPolicy": "pathShortest",
+    "imageKeepPolicy": "largest",
+    "workers": 0,
+    "useCache": false
+  },
+  "stats": {
+    "filesEnumerated": 10,
+    "bytesEnumerated": 1048875,
+    "filesHashed": 4,
+    "bytesHashed": 352976,
+    "cacheHits": 0,
+    "cacheMisses": 0,
+    "groups": 1,
+    "exactGroups": 1,
+    "imageGroups": 0,
+    "audioGroups": 0,
+    "duplicateFiles": 1,
+    "reclaimableBytes": 88244,
+    "skipped": 0
+  },
+  "groups": [
+    {
+      "id": "exact:716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550",
+      "kind": "exact",
+      "key": "716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550",
+      "members": [
+        {
+          "path": "tone-440-1s-copy.wav",
+          "size": 88244,
+          "modTime": "2024-01-01T08:42:00.0000000+08:00",
+          "hash": "716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550",
+          "keep": false,
+          "deletable": true,
+          "reason": "duplicate",
+          "snapshot": {
+            "size": 88244,
+            "modTime": "2024-01-01T00:42:00.0000000Z",
+            "hash": "716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550"
+          }
+        },
+        {
+          "path": "tone-440-1s.wav",
+          "size": 88244,
+          "modTime": "2024-01-01T08:41:00.0000000+08:00",
+          "hash": "716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550",
+          "keep": true,
+          "deletable": false,
+          "reason": "keep",
+          "snapshot": {
+            "size": 88244,
+            "modTime": "2024-01-01T00:41:00.0000000Z",
+            "hash": "716125b5dd044ab96d6552e6d3c41e1ba53b2a00d35b456f1bd1cfaa3322b550"
+          }
+        }
+      ],
+      "keep": "tone-440-1s.wav",
+      "reclaimable": 88244
+    }
+  ],
+  "skipped": []
+}
