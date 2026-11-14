@@ -4,7 +4,8 @@
 //
 //	parity scan --base csharp.json --cand go.json [--root 语料根] [-json] [-ignore ...]
 //	parity plan --base csharp-plan.json --cand go-plan.json [--root 语料根] [-json]
-//	parity scenes [-write] [-only 01-exact,...]
+//	parity scenes [-write] [-plans] [-only 01-exact,...]
+//	parity plans [-groups 30]
 //
 // 退出码：0 = MATCH，1 = DIFF（字段级差异已列出），2 = 用法/读取错误。
 // 归一化规则：绝对路径 → 相对 --root（缺省取 base.request.roots[0]）；路径统一 "/" 分隔并做 NFC；
@@ -31,6 +32,8 @@ func main() {
 		os.Exit(runPlan(os.Args[2:]))
 	case "scenes":
 		os.Exit(runScenes(os.Args[2:]))
+	case "plans":
+		os.Exit(runPlans(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
@@ -45,7 +48,8 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `用法:
   parity scan --base <csharp.json> --cand <go.json> [选项]
   parity plan --base <csharp-plan.json> --cand <go-plan.json> [选项]
-  parity scenes [-write] [-only <ids>]  13 组场景对拍；-write 生成 golden
+  parity scenes [-write] [-plans] [-only <ids>]  13 组场景对拍；-write 生成 golden，-plans 追加计划对拍
+  parity plans [-groups N]  生成多组语料，对拍 C#/Go 计划并用 C# 计划驱动 Go 执行器
 
 选项:
   --root <dir>   语料根目录；缺省取 base.request.roots[0]
@@ -53,6 +57,8 @@ func usage() {
   -max <n>       最多列出 n 条差异（默认 200，0=不限）
   -ignore <list> 忽略项，逗号分隔：
                  totalBytes(C# 计入 -1 的已知差异) skipped cache imageKey fingerprint modTime
+                 planOrder(图片/音频组 key 派生不同导致的动作顺序) requestId source summary
+                 precheck precheckHash precheckModTime
 `)
 }
 

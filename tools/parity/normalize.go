@@ -135,12 +135,20 @@ func normalizeScan(r *model.Result, root string) normScan {
 }
 
 type normPlan struct {
-	Version int
-	Actions []model.Action
+	Version   int
+	RequestID string
+	Source    model.PlanSource
+	Summary   model.PlanSummary
+	Actions   []model.Action
 }
 
 func normalizePlan(p *model.Plan, root string) normPlan {
-	n := normPlan{Version: p.SchemaVersion}
+	n := normPlan{
+		Version:   p.SchemaVersion,
+		RequestID: p.RequestID,
+		Source:    p.Source,
+		Summary:   p.Summary,
+	}
 	for _, a := range p.Actions {
 		a.Src = relPath(a.Src, root)
 		if a.Dst != "" {

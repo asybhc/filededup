@@ -57,6 +57,7 @@ func runScenes(args []string) int {
 	goldenFlag := fs.String("golden", "", "golden 目录（默认 <repo>/testdata/golden/scan）")
 	csharpFlag := fs.String("csharp", defaultCSharpExe, "C# 参考可执行文件")
 	write := fs.Bool("write", false, "调用 C# dump 对拍，MATCH 后写入 golden")
+	plans := fs.Bool("plans", false, "同时对比 plan 输出（需 C# 支持 --dump-plan-json）")
 	onlyFlag := fs.String("only", "", "只跑指定场景 id，逗号分隔")
 	ignoreFlag := fs.String("ignore", "cache", "忽略项，逗号分隔")
 	keepTemp := fs.Bool("keep-temp", false, "保留临时目录")
@@ -109,7 +110,7 @@ func runScenes(args []string) int {
 		}
 		return 2
 	}
-	if *write {
+	if *write || *plans {
 		if _, err := os.Stat(*csharpFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "C# 可执行文件不可用 %s：%v\n", *csharpFlag, err)
 			return 2
@@ -138,7 +139,7 @@ func runScenes(args []string) int {
 
 	var failed []string
 	for _, sc := range selected {
-		if note, ok := runScene(sc, bin, corpus, golden, *csharpFlag, *write, ignore, tmp, repo); !ok {
+		if note, ok := runScene(sc, bin, corpus, golden, *csharpFlag, *write, *plans, ignore, tmp, repo); !ok {
 			failed = append(failed, fmt.Sprintf("%s: %s", sc.id, note))
 		}
 	}
@@ -156,7 +157,7 @@ func runScenes(args []string) int {
 }
 
 // runScene 执行单个场景，返回失败说明；ok=false 时由调用方汇总。
-func runScene(sc sceneCase, bin, corpus, golden, csharp string, write bool, ignore map[string]bool,
+func runScene(sc sceneCase, bin, corpus, golden, csharp string, write, plans bool, ignore map[string]bool,
 	tmp, repo string) (string, bool) {
 	sceneDir := filepath.Join(corpus, sc.id)
 	goJSON := filepath.Join(tmp, sc.id+".go.json")
@@ -210,6 +211,61 @@ func runScene(sc sceneCase, bin, corpus, golden, csharp string, write bool, igno
 			fmt.Printf("[%s] 写入 golden 失败：%v\n", sc.id, err)
 			return "写入 golden 失败", false
 		}
+	}
+	if plans {
+		return runPlanParity(sc, bin, csharp, sceneDir, tmp, repo)
+	}
+	return "", true
+}
+
+// runPlanParity 用同一份语料分别生成 C# 基准计划与 Go 计划，逐条比较回收站/永久删除两种模式。
+func runPlanParity(sc sceneCase, bin, csharp, sceneDir, tmp, repo string) (string, bool) {
+	goScan := filepath.Join(tmp, sc.id+".go.json")
+	for _, mode := range []string{"trash", "permanent"} {
+		reqID := "parity-" + sc.id + "-" + mode
+		csPlan := filepath.Join(tmp, sc.id+"."+mode+".csharp.plan.json")
+		goPlan := filepath.Join(tmp, sc.id+"."+mode+".go.plan.json")
+
+		argsC := append([]string{"--dump-plan-json", csPlan, "--root", sceneDir, "--request-id", reqID}, sc.args...)
+		if mode == "permanent" {
+			argsC = append(argsC, "--permanent")
+		}
+		if out, code, err := runSceneCmd(csharp, argsC, repo); err != nil {
+			fmt.Printf("[%s/%s] C# 计划失败 退出码=%d\n%s\n", sc.id, mode, code, strings.TrimSpace(out))
+			return "C# 计划退出码 " + fmt.Sprint(code), false
+		}
+
+		argsGo := []string{"plan", "--scan", goScan, "--request-id", reqID, "--dump", goPlan}
+		if mode == "permanent" {
+			argsGo = append(argsGo, "--permanent")
+		}
+		if out, code, err := runSceneCmd(bin, argsGo, repo); err != nil {
+			fmt.Printf("[%s/%s] Go 计划失败 退出码=%d\n%s\n", sc.id, mode, code, strings.TrimSpace(out))
+			return "Go 计划退出码 " + fmt.Sprint(code), false
+		}
+
+		base, err := loadPlan(csPlan)
+		if err != nil {
+			fmt.Printf("[%s/%s] 读取 C# 计划失败：%v\n", sc.id, mode, err)
+			return "读取 C# 计划失败", false
+		}
+		cand, err := loadPlan(goPlan)
+		if err != nil {
+			fmt.Printf("[%s/%s] 读取 Go 计划失败：%v\n", sc.id, mode, err)
+			return "读取 Go 计划失败", false
+		}
+		nb, nc := normalizePlan(base, sceneDir), normalizePlan(cand, sceneDir)
+		d := newDiffer(0)
+		comparePlan(d, nb, nc, nil)
+		res := d.finish("plan", len(nb.Actions), len(nc.Actions))
+		if res.Result != "MATCH" {
+			fmt.Printf("[%s/%s] PLAN DIFF diffs=%d\n", sc.id, mode, res.Summary.DiffCount)
+			for _, item := range res.Diffs {
+				fmt.Println(item.String())
+			}
+			return mode + " 计划 DIFF", false
+		}
+		fmt.Printf("[%s/%s] PLAN MATCH actions=%d compared=%d\n", sc.id, mode, len(nb.Actions), res.Summary.Compared)
 	}
 	return "", true
 }

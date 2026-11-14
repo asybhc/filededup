@@ -253,12 +253,25 @@ func compareSkipped(d *differ, b, c []model.Skip, ig map[string]bool) {
 	}
 }
 
-// comparePlan 比较两个 Plan 的动作集合与顺序。
+// comparePlan 比较两个 Plan 的头部、汇总与动作（逐字段 + 顺序）。
+// createdAt 属于生成时刻，不参与比较；requestId 可用 -ignore requestId 关闭。
 func comparePlan(d *differ, b, c normPlan, ig map[string]bool) {
-	_ = ig
 	if b.Version != c.Version {
 		d.add("schemaVersion", fmt.Sprint(b.Version), fmt.Sprint(c.Version))
 	}
+	if !ig["requestId"] {
+		d.compared++
+		if b.RequestID != c.RequestID {
+			d.add("requestId", b.RequestID, c.RequestID)
+		}
+	}
+	if !ig["source"] {
+		d.compared++
+		if b.Source != c.Source {
+			d.add("source", string(b.Source), string(c.Source))
+		}
+	}
+	comparePlanSummary(d, b.Summary, c.Summary, ig)
 	key := func(a model.Action) string {
 		return fmt.Sprintf("%s|%s|%s|%s|%s", a.Kind, a.Src, a.Dst, a.Reason, boolStr(a.Irreversible))
 	}
@@ -284,13 +297,90 @@ func comparePlan(d *differ, b, c normPlan, ig map[string]bool) {
 		used[pick] = true
 		d.matched++
 		d.compared++
-		if pick != i {
+		if pick != i && !ig["planOrder"] {
 			d.add(fmt.Sprintf("actions[%d].order", i+1), string(b.Actions[i].Kind), string(c.Actions[pick].Kind))
 		}
+		comparePlanAction(d, i, b.Actions[i], c.Actions[pick], ig)
 	}
 	for j, a := range c.Actions {
 		if !used[j] {
 			d.addExtra(fmt.Sprintf("actions[%d](%s)", j+1, a.Kind))
+		}
+	}
+}
+
+// comparePlanSummary 比较计划汇总的全部计数。
+func comparePlanSummary(d *differ, b, c model.PlanSummary, ig map[string]bool) {
+	if ig["summary"] {
+		return
+	}
+	items := []struct {
+		name string
+		b, c int64
+	}{
+		{"actions", int64(b.Actions), int64(c.Actions)},
+		{"deletes", int64(b.Deletes), int64(c.Deletes)},
+		{"trash", int64(b.Trash), int64(c.Trash)},
+		{"permanent", int64(b.Permanent), int64(c.Permanent)},
+		{"moves", int64(b.Moves), int64(c.Moves)},
+		{"renames", int64(b.Renames), int64(c.Renames)},
+		{"hardlinks", int64(b.Hardlinks), int64(c.Hardlinks)},
+		{"clearReadonly", int64(b.ClearReadonly), int64(c.ClearReadonly)},
+		{"removeDirs", int64(b.RemoveDirs), int64(c.RemoveDirs)},
+		{"irreversible", int64(b.Irreversible), int64(c.Irreversible)},
+		{"reclaimableBytes", b.ReclaimableBytes, c.ReclaimableBytes},
+	}
+	for _, it := range items {
+		d.compared++
+		if it.b != it.c {
+			d.add("summary."+it.name, fmt.Sprint(it.b), fmt.Sprint(it.c))
+		}
+	}
+}
+
+// comparePlanAction 比较单条动作的序号、预检、回滚与状态。
+func comparePlanAction(d *differ, i int, b, c model.Action, ig map[string]bool) {
+	prefix := fmt.Sprintf("actions[%d]", i+1)
+	d.compared++
+	if b.Seq != c.Seq {
+		d.add(prefix+".seq", fmt.Sprint(b.Seq), fmt.Sprint(c.Seq))
+	}
+	d.compared++
+	if string(b.Rollback) != string(c.Rollback) {
+		d.add(prefix+".rollback", string(b.Rollback), string(c.Rollback))
+	}
+	d.compared++
+	if string(b.Status) != string(c.Status) {
+		d.add(prefix+".status", string(b.Status), string(c.Status))
+	}
+	if ig["precheck"] {
+		return
+	}
+	if b.Precheck == nil || c.Precheck == nil {
+		d.compared++
+		if (b.Precheck == nil) != (c.Precheck == nil) {
+			d.add(prefix+".precheck", boolStr(b.Precheck != nil), boolStr(c.Precheck != nil))
+		}
+		return
+	}
+	d.compared++
+	if b.Precheck.Size != c.Precheck.Size {
+		d.add(prefix+".precheck.size", fmt.Sprint(b.Precheck.Size), fmt.Sprint(c.Precheck.Size))
+	}
+	d.compared++
+	if b.Precheck.Hash != c.Precheck.Hash && !ig["precheckHash"] {
+		d.add(prefix+".precheck.hash", b.Precheck.Hash, c.Precheck.Hash)
+	}
+	d.compared++
+	if !ig["precheckModTime"] {
+		bns, braw := normTime(b.Precheck.ModTime)
+		cns, craw := normTime(c.Precheck.ModTime)
+		if braw != "" || craw != "" {
+			if b.Precheck.ModTime != c.Precheck.ModTime {
+				d.add(prefix+".precheck.modTime", b.Precheck.ModTime, c.Precheck.ModTime)
+			}
+		} else if bns != cns {
+			d.add(prefix+".precheck.modTime", b.Precheck.ModTime, c.Precheck.ModTime)
 		}
 	}
 }
