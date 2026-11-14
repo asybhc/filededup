@@ -12,10 +12,13 @@ const (
 	SkipVanished          SkipCode = "vanished"           // 枚举后文件消失
 	SkipDecodeFailed      SkipCode = "decode_failed"      // 图片/音频解码失败
 	SkipUnsupportedFormat SkipCode = "unsupported_format" // 格式不在支持清单
-	SkipHardlinkAlias     SkipCode = "hardlink_alias"     // 同一 inode 的多个路径，已折叠
-	SkipPrecheckFailed    SkipCode = "precheck_failed"    // 执行前复核不通过（大小/时间/哈希变化）
-	SkipConflict          SkipCode = "conflict"           // 目标已存在且策略为跳过
-	SkipDryRun            SkipCode = "dry_run"            // 试运行，未实际落盘
+	// SkipUniformFingerprint 表示图片指纹无行内梯度（全 0，或纯色图经 GDI+ 白边得到的 0x0101…01），
+	// 因 skipUniform 开关开启而未参与相似分组。默认关闭该开关，此码不出现。
+	SkipUniformFingerprint SkipCode = "uniform_fingerprint"
+	SkipHardlinkAlias      SkipCode = "hardlink_alias"  // 同一 inode 的多个路径，已折叠
+	SkipPrecheckFailed     SkipCode = "precheck_failed" // 执行前复核不通过（大小/时间/哈希变化）
+	SkipConflict           SkipCode = "conflict"        // 目标已存在且策略为跳过
+	SkipDryRun             SkipCode = "dry_run"         // 试运行，未实际落盘
 )
 
 // Skip 是一条跳过记录。必须能在结果页"未处理项"中看到。

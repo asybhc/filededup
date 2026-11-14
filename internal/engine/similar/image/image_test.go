@@ -2,6 +2,7 @@ package image
 
 import (
 	"bytes"
+	"encoding/base64"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/image/tiff"
 )
 
 func writeTemp(t *testing.T, name string, data []byte) string {
@@ -44,6 +47,46 @@ func TestHashSolidColor(t *testing.T) {
 	}
 	if want := uint64(0x0101010101010101); h != want {
 		t.Fatalf("dHash = %016x, want %016x", h, want)
+	}
+}
+
+// 纯色图（含纯白，其画布内部有 255/254 的浮点误差）都必须判为退化指纹；
+// 有真实横向明暗变化的图不算退化。
+func TestComputeUniform(t *testing.T) {
+	solid := []color.NRGBA{
+		{R: 200, G: 30, B: 40, A: 255},
+		{R: 10, G: 10, B: 200, A: 255},
+		{R: 0, G: 0, B: 0, A: 255},
+		{R: 255, G: 255, B: 255, A: 255},
+	}
+	for _, c := range solid {
+		img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+		for y := 0; y < 64; y++ {
+			for x := 0; x < 64; x++ {
+				img.SetNRGBA(x, y, c)
+			}
+		}
+		fp, ok := Compute(writeTemp(t, "solid.png", encodePNG(t, img)))
+		if !ok {
+			t.Fatalf("纯色 PNG 应能解码")
+		}
+		if !fp.Uniform {
+			t.Errorf("纯色 %v 应判为退化指纹（fingerprint=%016x）", c, fp.Hash)
+		}
+	}
+
+	grad := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			grad.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 4), G: uint8(x * 3), B: uint8(x * 2), A: 255})
+		}
+	}
+	fp, ok := Compute(writeTemp(t, "grad.png", encodePNG(t, grad)))
+	if !ok {
+		t.Fatal("渐变 PNG 应能解码")
+	}
+	if fp.Uniform {
+		t.Errorf("横向渐变图不应判为退化指纹（fingerprint=%016x）", fp.Hash)
 	}
 }
 
@@ -218,5 +261,66 @@ func TestHashWithExifOrientation(t *testing.T) {
 	path := writeTemp(t, "exif6.jpg", withExif)
 	if _, ok := Hash(path); !ok {
 		t.Fatal("带 EXIF 的 JPEG 应能解码")
+	}
+}
+
+// TIFF 走 golang.org/x/image/tiff：同像素内容的 TIFF 与 PNG 必须得到相同 dHash。
+// 与 C# 基线的一致性另由 parity similar 对 GDI+ 生成的 tif/tiff 验证。
+func TestDecodeTIFF(t *testing.T) {
+	const w, h = 20, 12
+	pixel := func(x, y int) color.NRGBA {
+		return color.NRGBA{R: uint8(x * 10), G: uint8(y * 20), B: 7, A: 255}
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.SetNRGBA(x, y, pixel(x, y))
+		}
+	}
+	var buf bytes.Buffer
+	if err := tiff.Encode(&buf, img, &tiff.Options{Compression: tiff.Deflate}); err != nil {
+		t.Fatalf("编码 TIFF 失败: %v", err)
+	}
+	for _, name := range []string{"test.tif", "test.tiff"} {
+		path := writeTemp(t, name, buf.Bytes())
+		h1, ok := Hash(path)
+		if !ok {
+			t.Fatalf("%s 应能解码", name)
+		}
+		h2, ok := Hash(writeTemp(t, "test.png", encodePNG(t, img)))
+		if !ok {
+			t.Fatal("PNG 应能解码")
+		}
+		if h1 != h2 {
+			t.Fatalf("%s 与 PNG 的 dHash 不一致: %016x vs %016x", name, h1, h2)
+		}
+	}
+}
+
+// gopher.webp：来自 golang.org/x/image testdata 的 442 字节有损 WebP。
+// 原版 GDI+ 不支持 WebP，这里只验证"纯 Go 解码器可用且指纹非退化"。
+const gopherWebPBase64 = "UklGRrIBAABXRUJQVlA4TKUBAAAvSsAYAA8w//M///MfeJAkbXvaSG7m8Q3GfYSBJekwQztm/IcZlgwnmWImn2BK7aFmBtnVir6q//8VOkFE/xm4baTIu8c48ArEo6+B3zFKYln3pqClSCKX0begFTAXFOLXHSyF8cCNcZEG4OywuA4KVVfJCiArU7GAgJI8+lJP/OKMT/fBAjevg1cYB7YVkFuWga2lyPi5I0HFy5YTpWIHg0RZpkniRVW9odHAKOwosWuOGdxIyn2OvaCDvhg/we6TwadPBPbqBV58MsLmMJ8yZnOWk8SRz4N+QoyPL+MnamzMvcE1rHNEr91F9GKZPVUcS9w7PhhH36suB9qPeYb/oLk6cuTiJ0wOK3m5h1cKjW6EVZCYMK7dxcKCBdgP9HkKr9gkAO2P8GKZGWVdIAatQa+1IDpt6qyorVwdy01xdW8Jkfk6xjEXmVQQ+HQdFr6OKhIN34dXWq0+0qr6EJSCeeVLH9+gvGTLyqM65PQ44ihzlTXxQKjKbAvshXgir7Lil9w4L2bvMycmjQcqXaMCO6BlY28i+FOLzbfI1vEqxAhotocAAA=="
+
+func TestDecodeWebP(t *testing.T) {
+	data, err := base64.StdEncoding.DecodeString(gopherWebPBase64)
+	if err != nil {
+		t.Fatalf("样本解码失败: %v", err)
+	}
+	path := writeTemp(t, "gopher.webp", data)
+	fp, ok := Compute(path)
+	if !ok {
+		t.Fatal("WebP 应能解码")
+	}
+	if fp.Uniform {
+		t.Fatalf("真实照片的指纹不应是退化指纹: %016x", fp.Hash)
+	}
+	if len(Hex(fp.Hash)) != 16 {
+		t.Fatalf("Hex 长度应为 16: %q", Hex(fp.Hash))
+	}
+
+	// 截断的 WebP 必须按解码失败处理，而不是 panic 或返回指纹。
+	truncated := writeTemp(t, "broken.webp", data[:len(data)/2])
+	if _, ok := Hash(truncated); ok {
+		t.Fatal("截断的 WebP 不应算出指纹")
 	}
 }

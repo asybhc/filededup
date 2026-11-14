@@ -6,12 +6,13 @@
 2. 任何第三方依赖必须纯 Go（`CGO_ENABLED=0` 可构建），不引入 cgo 与系统库；
 3. 引入新依赖必须在本文件登记"为什么不用标准库"，并在 CI 三平台通过。
 
-## 1. 当前（M0）
+## 1. 当前（M0–M3）
 
 | 模块 | 版本 | 用途 | 引入原因 / 替代方案 | 作用域 |
 | --- | --- | --- | --- | --- |
 | Go | 1.27.0 | 工具链 | `go.mod` 固定；语义化 `max/min` 内建、`os.Root` 等 | 全部 |
 | `golang.org/x/text` | v0.44.0 | `unicode/norm`（NFC 归一化） | 标准库无 Unicode 归一化；跨平台路径必须统一 NFC，否则 macOS(APFS/NFD) 与 Windows 会产生不同的清单哈希 | 工具 + 后续引擎路径层 |
+| `golang.org/x/image` | v0.48.0 | `webp`、`tiff` 解码（相似图片 dHash） | 标准库 `image/*` 不含 WebP/TIFF；这两个子包纯 Go、`CGO_ENABLED=0` 可构建。原版 GDI+ 支持 TIFF、不支持 WebP，Go 侧因此是 WebP 的超集能力（已登记） | engine（`similar/image`，由 `arch_test` 白名单放行） |
 | `github.com/santhosh-tekuri/jsonschema/v6` | v6.0.3 | JSON Schema v1 校验 | 手写校验无法覆盖 `additionalProperties`/`oneOf`/枚举；仅用于契约测试，不进入产品二进制 | 测试 |
 
 `go.sum` 中的 `github.com/dlclark/regexp2` 为 jsonschema 的传递依赖，未直接使用。
@@ -23,7 +24,7 @@
 | M1 | 标准库 `crypto/sha256`、`hash` | 内容哈希 | 不引入 xxhash：对拍要求 SHA-256 逐字节一致 |
 | M1 | 标准库 `encoding/json` | 输出 | 不引入第三方 JSON，避免字段顺序/转义差异影响对拍 |
 | M2 | `golang.org/x/sys/windows` | IFileOperation 回收站、属性读写 | 需 cgo 之外的原生调用，`x/sys` 是官方扩展 |
-| M3 | `golang.org/x/image/webp` | WebP 解码 | 标准库 `image/*` 不含 WebP；HEIC/RAW 不做（原版也不支持） |
+| M3 | `golang.org/x/image/webp`、`golang.org/x/image/tiff` | WebP/TIFF 解码 | **M3 已引入**（v0.48.0，见上表）；HEIC/RAW 不做（原版也不支持） |
 | M5 | `github.com/wailsapp/wails/v2` | 桌面壳 | **M0 spike 结论为准**；不通过则回退 Fyne |
 | M5 | React + TypeScript + Vite + TanStack Virtual | 前端 | 仅构建期依赖，产物为静态资源 |
 | M6 | `fyne.io/systray` 或 `getlantern/systray` | 托盘 | M6 冻结；Linux 走 StatusNotifier，无托盘时降级 |

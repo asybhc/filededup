@@ -6,9 +6,9 @@
 //     bit = row*8+col。
 //   - 分组：贪心锚点 + 组内直径约束（与锚点及组内每个已加入成员的海明距离都 <= 阈值）。
 //
-// 与原版的差异（M3 已登记）：引擎禁止第三方依赖，TIFF/WebP 无法解码，
-// 这两个扩展名会进入 Skipped(unsupported_format)，其余 5 种格式（jpg/jpeg/png/gif/bmp）
-// 用标准库 + 自写 BMP 解码实现。
+// 与原版的差异（M3 已登记）：JPEG/PNG/GIF/BMP/TIFF 逐位对齐 C#；
+// WebP 用纯 Go 解码器（原版 GDI+ 不支持，实测 C# 对 webp 一律解码失败），
+// 因此 WebP 属于 Go 侧超集能力，不参与与 C# 的指纹对拍。
 package image
 
 import (
@@ -17,14 +17,11 @@ import (
 	"strings"
 )
 
+// supportedExts 是参与相似图片判定的扩展名清单（与原版一致）。
+// 全部格式均可解码：jpg/jpeg/png/gif/bmp 走标准库或本包实现，tif/tiff/webp 走 golang.org/x/image。
 var supportedExts = []string{"jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp"}
 
-var decodableExts = map[string]bool{
-	"jpg": true, "jpeg": true, "png": true, "gif": true, "bmp": true,
-}
-
 // Supported 报告扩展名是否在原版图片支持清单内（大小写不敏感）。
-// 注意：tif/tiff/webp 在原版清单内，但当前实现无法解码。
 func Supported(path string) bool {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
 	for _, e := range supportedExts {
@@ -35,38 +32,70 @@ func Supported(path string) bool {
 	return false
 }
 
-// Decodable 报告当前实现是否能解码该扩展名。
-func Decodable(path string) bool {
-	return decodableExts[strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))]
+// Fingerprint 是一张图片的指纹与退化标记。
+type Fingerprint struct {
+	Hash uint64
+	// Uniform 为 true 表示归一化画布去掉 1 像素白边后，内部各像素灰度几乎相同
+	// （极差 <= 1），即这张图没有任何行内明暗变化。纯色图、纯色条都属于这一类，
+	// 它们的 dHash 位由实现细节（白边、浮点截断）决定，彼此无关的图会得到相同指纹。
+	Uniform bool
 }
 
 // Hash 计算 9×8 dHash。第二个返回值为 false 表示解码失败。
 func Hash(path string) (uint64, bool) {
+	fp, ok := Compute(path)
+	return fp.Hash, ok
+}
+
+// Compute 计算指纹，并判定是否为退化（均匀）指纹。
+func Compute(path string) (Fingerprint, bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, false
+		return Fingerprint{}, false
 	}
 	defer f.Close()
 	img, _, err := decode(f, path)
 	if err != nil {
-		return 0, false
+		return Fingerprint{}, false
 	}
 	orientation := 1
 	if isJPEG(path) {
 		orientation = jpegOrientation(f)
 	}
 	px := normalize(img, orientation)
-	var h uint64
+	var fp Fingerprint
 	bit := 0
 	for y := 0; y < 8; y++ {
 		for x := 0; x < 8; x++ {
 			if gray(px.at(x, y)) > gray(px.at(x+1, y)) {
-				h |= 1 << uint(bit)
+				fp.Hash |= 1 << uint(bit)
 			}
 			bit++
 		}
 	}
-	return h, true
+	fp.Uniform = uniformCanvas(px)
+	return fp, true
+}
+
+// uniformCanvas 判断归一化画布内部（去掉人为叠加的白边）是否几乎没有灰度变化。
+// 白边是 1 像素宽的外框，会制造出与实际内容无关的固定梯度，因此不在判定范围内。
+func uniformCanvas(px *rgbImage) bool {
+	lo, hi := 255, 0
+	for y := 1; y < px.h-1; y++ {
+		for x := 1; x < px.w-1; x++ {
+			g := gray(px.at(x, y))
+			if g < lo {
+				lo = g
+			}
+			if g > hi {
+				hi = g
+			}
+		}
+	}
+	if hi == 0 && lo == 255 { // 画布过小、没有内部像素
+		return true
+	}
+	return hi-lo <= 1
 }
 
 // Hex 输出 16 位小写十六进制，与 C# ulong.ToString("x16") 对齐。

@@ -1,6 +1,7 @@
 package image
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"io"
@@ -12,6 +13,10 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+
+	// 纯 Go 的官方扩展解码器（不引入 cgo）：标准库 image/* 不含 TIFF/WebP。
+	"golang.org/x/image/tiff"
+	"golang.org/x/image/webp"
 )
 
 func isJPEG(path string) bool {
@@ -19,15 +24,32 @@ func isJPEG(path string) bool {
 	return ext == ".jpg" || ext == ".jpeg"
 }
 
-// decode 按扩展名选择解码器。BMP 使用本包实现（标准库不含 BMP）。
+// decode 按扩展名选择解码器。
+// BMP 使用本包实现（标准库不含 BMP）；TIFF/WebP 使用 golang.org/x/image 的纯 Go 解码器。
 func decode(r io.Reader, path string) (image.Image, string, error) {
-	if strings.EqualFold(filepath.Ext(path), ".bmp") {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".bmp":
 		data, err := io.ReadAll(r)
 		if err != nil {
 			return nil, "", err
 		}
 		img, err := decodeBMPBytes(data)
 		return img, "bmp", err
+	case ".tif", ".tiff":
+		// 先读入内存：TIFF 解码器需要可 Seek 的读取器。
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, "", err
+		}
+		img, err := tiff.Decode(bytes.NewReader(data))
+		return img, "tiff", err
+	case ".webp":
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, "", err
+		}
+		img, err := webp.Decode(bytes.NewReader(data))
+		return img, "webp", err
 	}
 	return image.Decode(r)
 }

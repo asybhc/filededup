@@ -16,7 +16,7 @@ import (
 )
 
 // buildImageGroups 计算相似图片组。算法见 engine/similar/image。
-// 解码失败登记 decode_failed；tif/tiff/webp 因引擎无第三方解码器登记 unsupported_format。
+// 解码失败登记 decode_failed；开启 skipUniform 时退化指纹登记 uniform_fingerprint。
 func buildImageGroups(req model.Request, files []fileEntry, opts model.ImageOpts) ([]model.Group, []model.Skip) {
 	index := make(map[string]int, len(files))
 	for i, f := range files {
@@ -30,15 +30,7 @@ func buildImageGroups(req model.Request, files []fileEntry, opts model.ImageOpts
 		if !image.Supported(f.path) {
 			continue
 		}
-		if !image.Decodable(f.path) {
-			skipped = append(skipped, model.Skip{
-				Path:    f.path,
-				Code:    model.SkipUnsupportedFormat,
-				Message: "引擎不支持该图片格式（需要第三方解码器）：" + strings.TrimPrefix(strings.ToLower(filepath.Ext(f.path)), "."),
-			})
-			continue
-		}
-		h, ok := image.Hash(f.path)
+		fp, ok := image.Compute(f.path)
 		if !ok {
 			skipped = append(skipped, model.Skip{
 				Path:    f.path,
@@ -47,8 +39,17 @@ func buildImageGroups(req model.Request, files []fileEntry, opts model.ImageOpts
 			})
 			continue
 		}
-		hashed = append(hashed, image.Hashed{Path: f.path, Hash: h})
-		fingerprints[f.path] = h
+		// 可选规则（默认关闭，保持与原版一致）：退化指纹不参与相似分组。
+		if opts.SkipUniform && fp.Uniform {
+			skipped = append(skipped, model.Skip{
+				Path:    f.path,
+				Code:    model.SkipUniformFingerprint,
+				Message: "图片无行内明暗变化（纯色图/纯色条等退化指纹），按 skipUniform 规则不参与相似分组",
+			})
+			continue
+		}
+		hashed = append(hashed, image.Hashed{Path: f.path, Hash: fp.Hash})
+		fingerprints[f.path] = fp.Hash
 	}
 	sort.SliceStable(hashed, func(i, j int) bool {
 		li, lj := strings.ToLower(hashed[i].Path), strings.ToLower(hashed[j].Path)

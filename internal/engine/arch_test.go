@@ -34,6 +34,11 @@ func TestEngineHasNoPlatformOrUIDependencies(t *testing.T) {
 		"golang.org/x/sys": "engine 禁止直接系统调用（应走 platform）",
 	}
 
+	// 已登记的纯 Go 官方扩展：WebP/TIFF 解码（标准库 image/* 不含这两种格式）。
+	allowedPrefixes := []string{
+		"golang.org/x/image/",
+	}
+
 	root := "."
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -58,6 +63,16 @@ func TestEngineHasNoPlatformOrUIDependencies(t *testing.T) {
 				if imp == p || strings.HasPrefix(imp, p+"/") {
 					t.Errorf("%s 导入了 %q：engine 不得依赖 %s", path, imp, p)
 				}
+			}
+			allowed := false
+			for _, p := range allowedPrefixes {
+				if strings.HasPrefix(imp, p) {
+					allowed = true
+					break
+				}
+			}
+			if allowed {
+				continue
 			}
 			if strings.HasPrefix(imp, "filededup/internal/engine/") || !strings.Contains(imp, ".") {
 				continue

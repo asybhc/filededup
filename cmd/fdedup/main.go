@@ -40,9 +40,10 @@ scan 选项:
   --follow-links       跟随符号链接（默认不跟随，与 C# 一致）
   --keep <policy>      newest|oldest|largest|nameShortest|pathShortest（默认 pathShortest）
   --no-exact           关闭精确查重（可与 --image/--audio 组合）
-  --image              开启相似图片判定（jpg/jpeg/png/gif/bmp）
+  --image              开启相似图片判定（jpg/jpeg/png/gif/bmp/tif/tiff/webp）
   --image-threshold <n> 图片 dHash 汉明阈值，0-64（默认 8）
   --image-keep <policy> 相似图片保留策略（默认 largest）
+  --image-skip-uniform 无行内梯度的退化指纹（纯色图）不参与相似分组（默认关闭，与原版一致）
   --audio              开启相似音频判定（mp3/wav）
   --audio-threshold <n> 音频时长容差（秒，默认 2）
   --workers <n>        哈希并发数，0=自动
@@ -119,6 +120,7 @@ func runScan(args []string) int {
 	image := fs.Bool("image", false, "开启相似图片判定")
 	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-64）")
 	imageKeep := fs.String("image-keep", "", "相似图片保留策略")
+	imageSkipUniform := fs.Bool("image-skip-uniform", false, "退化指纹（纯色图）不参与相似分组")
 	audio := fs.Bool("audio", false, "开启相似音频判定")
 	audioThreshold := fs.Int("audio-threshold", 2, "音频时长容差（秒）")
 	workers := fs.Int("workers", 0, "哈希并发数")
@@ -171,7 +173,7 @@ func runScan(args []string) int {
 	if *noExact {
 		req.Exact = false
 	}
-	if *image || set["image-threshold"] || *imageKeep != "" {
+	if *image || set["image-threshold"] || *imageKeep != "" || *imageSkipUniform {
 		opts := model.ImageOpts{Enabled: true, Threshold: 8}
 		if req.SimilarImage != nil {
 			opts = *req.SimilarImage
@@ -179,6 +181,9 @@ func runScan(args []string) int {
 		}
 		if set["image-threshold"] {
 			opts.Threshold = *imageThreshold
+		}
+		if *imageSkipUniform {
+			opts.SkipUniform = true
 		}
 		req.SimilarImage = &opts
 	}
@@ -283,4 +288,13 @@ func printSummary(r *model.Result) {
 			}
 			return r.Runtime.ElapsedMS
 		}())
+	uniform := 0
+	for _, s := range r.Skipped {
+		if s.Code == model.SkipUniformFingerprint {
+			uniform++
+		}
+	}
+	if uniform > 0 {
+		fmt.Printf("退化指纹未参与相似分组：%d 个（--image-skip-uniform）\n", uniform)
+	}
 }

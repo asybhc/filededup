@@ -24,6 +24,10 @@ type Request struct {
 type ImageOpts struct {
 	Enabled   bool `json:"enabled"`
 	Threshold int  `json:"threshold"` // 汉明距离阈值 0..64，默认 8，判定为 <=
+	// SkipUniform 为 true 时，无行内梯度的退化指纹（全 0 或纯色图产生的 0x0101…01）不参与相似分组。
+	// 原版没有该规则（互不相关的纯色图会被并入同组），默认 false 保持等价；开启后会在 Skipped 中
+	// 登记 code=uniform_fingerprint。详见 docs/similar-image.md。
+	SkipUniform bool `json:"skipUniform,omitempty"`
 }
 
 // AudioOpts 是相似音频判定参数。C# A_1.f / A_1.a_2。

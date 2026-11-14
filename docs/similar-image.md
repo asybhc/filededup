@@ -1,0 +1,94 @@
+# 相似图片判定（M3）
+
+本文记录相似图片判定的实现口径、与原版的一致性状态，以及 `skipUniform` 退化指纹规则。
+
+## 1. 支持格式
+
+| 扩展名 | 解码器 | 与原版（GDI+）一致性 |
+| --- | --- | --- |
+| jpg / jpeg | 标准库 `image/jpeg`（含 EXIF Orientation 1–8 归一） | 逐位一致 |
+| png | 标准库 `image/png` | 逐位一致 |
+| gif | 标准库 `image/gif`（取首帧） | 逐位一致 |
+| bmp | 本包自实现（24/32 位） | 逐位一致 |
+| tif / tiff | `golang.org/x/image/tiff`（纯 Go） | 与 GDI+ 生成的样本对拍一致 |
+| webp | `golang.org/x/image/webp`（纯 Go） | **原版不支持**（GDI+ 对 webp 一律解码失败），Go 侧为超集能力，无法对拍 |
+
+不允许 HEIC/RAW：原版也不支持，且没有纯 Go 解码器。
+
+## 2. 指纹算法
+
+1. 按 EXIF Orientation(274) 归一：5–8 时先按行列互换的尺寸绘制，再旋转/镜像回正。
+2. 缩放到 9×8、白底、24 位画布。缩小的轴用面积平均（复刻 GDI+ 预滤波），放大的轴用双线性；
+   被缩放的轴最外 1 像素叠加约 `0.129` 的白（实测 GDI+ 边缘抗锯齿）。
+3. 8 行 × 8 列，灰度 `(R*299+G*587+B*114)/1000` 取整，左侧大于右侧时置位，`bit = row*8+col`。
+4. 分组：按路径（忽略大小写）升序，贪心锚点 + 组内直径约束——新成员与锚点、与每个已加入
+   成员的汉明距离都必须 `<= 阈值`（默认 8）。
+
+已知退化差异：`1×1` 等极小图放大到 9×8 时 GDI+ 会整体掺白（C# 得 `0x0f0f…`，Go 得 `0x0101…`），
+已在对拍中登记。其余样本逐位一致。
+
+## 3. 退化（均匀）指纹规则 `skipUniform`
+
+### 3.1 问题
+
+纯色图归一化后每行相邻灰度相等，理论上 dHash 全 0。但白边会让最左（及最右/上下）一列变亮，
+实际指纹恒定落在 `0x0101010101010101` 一类，纯白图还会因浮点截断得到 `0x2828282828282828`。
+结果是互不相关的红色、蓝色、黑色纯色图被判成"相似"，形成假阳性组。
+
+### 3.2 判定
+
+`image.Compute` 在算指纹的同时返回 `Uniform`：
+
+- 取归一化画布 **去掉 1 像素白边后的内部区域**（9×8 画布即 x∈[1,7]、y∈[1,6]）；
+- 若内部灰度极差 `<= 1`，判定为退化指纹（纯色、纯色条、没有行内明暗变化的图）；
+- 判定不看指纹数值，因此不受白边与浮点截断影响。
+
+### 3.3 开关
+
+| 位置 | 名称 | 默认 |
+| --- | --- | --- |
+| CLI | `fdedup scan --image-skip-uniform` | 关闭 |
+| JSON 请求 | `similarImage.skipUniform` | 关闭（`false`） |
+
+默认关闭＝与原版完全一致（纯色图仍会被合并）。默认值最终由产品口径决定，改动时只需改默认值，
+无需改算法。
+
+### 3.4 日志与输出
+
+开启后，被排除的图片不进入相似分组，并在结果 `skipped` 中逐条登记：
+
+```json
+{ "path": "...", "code": "uniform_fingerprint",
+  "message": "图片无行内明暗变化（纯色图/纯色条等退化指纹），按 skipUniform 规则不参与相似分组" }
+```
+
+`fdedup scan` 的文本摘要会额外打印一行：`退化指纹未参与相似分组：N 个（--image-skip-uniform）`。
+
+注意：这些文件仍参与**精确查重**（`--exact`），规则只影响相似图片分组。
+
+## 4. 对拍与验证
+
+- `parity similar --csharp <dump.json> --root <dir>`：逐文件指纹/时长对拍；`-allow <relpaths>`
+  登记已知差异（`04-images/corrupt.png`、`04-images/tiny-1x1.png`）。
+- `parity scan`：扫描结果对拍，相似组集合、成员、可回收字节逐项比较。
+- 单测：`internal/engine/similar/image`（纯色/渐变退化判定、TIFF↔PNG 一致性、WebP 解码与截断容错、
+  分组拆组、EXIF、BMP）、`internal/engine/similar/audio`。
+
+### 4.1 M3.1 实测（2026-11-14）
+
+| 对拍 | 结果 |
+| --- | --- |
+| `parity scenes` | 13/13 MATCH |
+| `parity similar`（m3corpus，18 图 11 音频） | 图 16/18 + 2 条已登记；音频 11/11 → MATCH |
+| `parity scan`（m3corpus） | 仅 tiny-1x1 引起的 6 条（+1 文件 / +74B / 图组成员）→ 已登记 |
+| `parity scan`（tif/tiff/webp 语料） | TIFF 组（tif+tiff+纯色 png）逐位一致；仅多出 Go 独有的 WebP 组（`lossless.webp`+`lossy.webp`），由它带来 7 条统计差异 |
+| `parity similar`（tif/tiff/webp 语料） | tif/tiff 2/2 指纹一致；3 个 webp 为 C# 解码失败 → Go 超集 |
+
+WebP 差异不可消除：GDI+ 不支持 WebP，C# 一律解码失败，因此这两条只能登记为 Go 侧超集能力。
+
+## 5. 纯色图合并：默认值待定
+
+按当前默认（`skipUniform=false`），纯色图仍会与其他无梯度图片合并为一组，与原版行为一致。
+是否改为默认开启由产品口径决定；确定后只需把 CLI 开关默认值与 `similarImage.skipUniform`
+的缺省值改为 `true`，规则本身与对拍基线不受影响。
+
