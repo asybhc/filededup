@@ -271,6 +271,29 @@ func TestHashWithExifOrientation(t *testing.T) {
 	}
 }
 
+// 大比例缩小（1024×1024 → 9×8）必须复现 GDI+ 的预滤波核：支撑宽度 2×缩放比的
+// 三角核、目标像素中心取 (x+0.5)×scale、源图外按白底取样、两趟之间中间结果取整到 8 位。
+// 两个样本与 E 批次对拍用的是同一文件，指纹须与 C# 基线逐位一致。
+func TestHashLargeDownscaleGDIPlus(t *testing.T) {
+	cases := []struct {
+		parts []string
+		want  string
+	}{
+		{[]string{"build", "appicon.png"}, "011397970f2b2b03"},
+		{[]string{"frontend", "src", "assets", "images", "logo-universal.png"}, "63431f1f1f1f1f3c"},
+	}
+	for _, c := range cases {
+		path := filepath.Join(append([]string{"..", "..", "..", "..", "testdata", "out", "uispike"}, c.parts...)...)
+		fp, ok := Compute(path)
+		if !ok {
+			t.Fatalf("%s 应能解码", path)
+		}
+		if got := Hex(fp.Hash); got != c.want {
+			t.Errorf("%s 指纹 = %s, want %s（须与 C# 基线一致）", path, got, c.want)
+		}
+	}
+}
+
 // TIFF 走 golang.org/x/image/tiff：同像素内容的 TIFF 与 PNG 必须得到相同 dHash。
 // 与 C# 基线的一致性另由 parity similar 对 GDI+ 生成的 tif/tiff 验证。
 func TestDecodeTIFF(t *testing.T) {

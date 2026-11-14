@@ -111,31 +111,32 @@ func over(c color.NRGBA) rgb {
 
 func (m *rgbImage) bounds() (int, int) { return m.w, m.h }
 
-// 白边系数：实测 GDI+ 对每个被缩放的轴，最外 1 像素叠加大约 1/7.75 的白底
-// （100 灰的纯色图缩到 9×8 后边为 120，内部仍为 100）。
+// 白边系数：实测 GDI+ 对"放大轴"的最外 1 像素叠加大约 1/7.75 的白底
+// （100 灰的纯色图放大后边为 120 左右）。
+// 缩小轴不需要人工白边：三角核在源图边界外按白底取样，天然产生同样的白渗入。
 const edgeWhite = 0.129
 
 // drawScaled 把 src 缩放到 dstW×dstH 的白底画布。
-// 逐轴选择算法：缩小的轴用面积平均（GDI+ 的预滤波行为），放大的轴用双线性。
-// 任一轴发生缩放时，该轴最外 1 像素叠加白底，复现 GDI+ 的边缘抗锯齿。
+// 逐轴选择算法：缩小轴用展宽三角核（GDI+ 的预滤波行为），放大轴用双线性。
+// 放大轴的最外 1 像素叠加白底，复现 GDI+ 的边缘抗锯齿；缩小轴由核本身处理。
 func drawScaled(dstW, dstH int, src sampler) *rgbImage {
 	sw, sh := src.bounds()
 	if sw <= 0 || sh <= 0 {
 		return newRGBImage(dstW, dstH)
 	}
-	dst := resampleY(dstH, resampleX(dstW, src))
-	scaleX := sw != dstW
-	scaleY := sh != dstH
-	if !scaleX && !scaleY {
+	dst := resampleY(dstH, midPass(dstW, dstH, src))
+	upX := sw < dstW
+	upY := sh < dstH
+	if !upX && !upY {
 		return dst
 	}
 	for y := 0; y < dstH; y++ {
 		for x := 0; x < dstW; x++ {
 			c := dst.at(x, y)
-			if scaleX && (x == 0 || x == dstW-1) {
+			if upX && (x == 0 || x == dstW-1) {
 				c = overWhite(c, edgeWhite)
 			}
-			if scaleY && (y == 0 || y == dstH-1) {
+			if upY && (y == 0 || y == dstH-1) {
 				c = overWhite(c, edgeWhite)
 			}
 			dst.set(x, y, c)
@@ -146,6 +147,65 @@ func drawScaled(dstW, dstH int, src sampler) *rgbImage {
 
 func overWhite(c rgb, t float64) rgb {
 	return rgb{c.r + (255-c.r)*t, c.g + (255-c.g)*t, c.b + (255-c.b)*t}
+}
+
+// midPass 执行水平重采样，并在"两轴同时缩小"时把中间结果取整到 8 位。
+// GDI+ 的两趟缩放在两趟之间落一块 8 位缓冲，这一步取整会改变少数临界像素的
+// 灰度比较结果（实测：不取整时纯竖向渐变会翻转 1 位）。只有两轴都缩小时中间
+// 结果才有非整数值、且不会被随后的输出取整覆盖，因此只在该情形下取整。
+func midPass(dstW, dstH int, src sampler) *rgbImage {
+	sw, sh := src.bounds()
+	mid := resampleX(dstW, src)
+	if sw > dstW && sh > dstH {
+		for i := range mid.px {
+			mid.px[i] = quantize(mid.px[i])
+		}
+	}
+	return mid
+}
+
+// tap 是三角核在某个源下标上的权重。
+type tap struct {
+	i int
+	w float64
+}
+
+// tentTaps 计算缩小方向的三角核权重。
+// 实测 GDI+ HighQualityBilinear 在缩小方向的等效核是"支撑宽度 2×缩放比"的三角核，
+// 目标像素中心映射为 (x+0.5)×缩放比（不减半像素）；源图外的部分按白底计。
+// center 是目标像素中心在源轴上的坐标，scale 是源/目标像素比（>1）。
+func tentTaps(center, scale float64) []tap {
+	r := scale
+	lo := center - r
+	hi := center + r
+	i0 := int(math.Floor(lo))
+	i1 := int(math.Ceil(hi))
+	taps := make([]tap, 0, i1-i0)
+	for i := i0; i < i1; i++ {
+		a := math.Max(lo, float64(i))
+		b := math.Min(hi, float64(i+1))
+		if b <= a {
+			continue
+		}
+		var area float64
+		if center > a && center < b {
+			// 峰值落在该源像素内，拆成两段梯形分别积分。
+			area = tentSegment(a, center, center, r) + tentSegment(center, b, center, r)
+		} else {
+			area = tentSegment(a, b, center, r)
+		}
+		if area > 0 {
+			taps = append(taps, tap{i, area})
+		}
+	}
+	return taps
+}
+
+// tentSegment 计算三角核在 [a,b] 上的精确积分（线性函数用梯形公式即可）。
+func tentSegment(a, b, center, r float64) float64 {
+	w0 := 1 - math.Abs(a-center)/r
+	w1 := 1 - math.Abs(b-center)/r
+	return (w0 + w1) / 2 * (b - a)
 }
 
 // resampleX 把 src 水平重采样到 dw 列，高度不变。
@@ -160,33 +220,51 @@ func resampleX(dw int, src sampler) *rgbImage {
 		}
 		return out
 	}
-	if dw < sw {
+	if dw > sw {
+		scale := float64(sw) / float64(dw)
 		for y := 0; y < sh; y++ {
 			for x := 0; x < dw; x++ {
-				start := float64(x) * float64(sw) / float64(dw)
-				end := float64(x+1) * float64(sw) / float64(dw)
-				out.set(x, y, rangeAverage(src, y, start, end))
+				f := (float64(x)+0.5)*scale - 0.5
+				i0 := int(math.Floor(f))
+				t := f - float64(i0)
+				if i0 < 0 {
+					i0, t = 0, 0
+				}
+				if i0 >= sw-1 {
+					i0, t = sw-1, 0
+				}
+				i1 := i0 + 1
+				if i1 >= sw {
+					i1 = sw - 1
+				}
+				out.set(x, y, mix(src.at(i0, y), src.at(i1, y), t))
 			}
 		}
 		return out
 	}
 	scale := float64(sw) / float64(dw)
+	cols := make([][]tap, dw)
+	for x := 0; x < dw; x++ {
+		cols[x] = tentTaps((float64(x)+0.5)*scale, scale)
+	}
 	for y := 0; y < sh; y++ {
 		for x := 0; x < dw; x++ {
-			f := (float64(x)+0.5)*scale - 0.5
-			i0 := int(math.Floor(f))
-			t := f - float64(i0)
-			if i0 < 0 {
-				i0, t = 0, 0
+			var r, g, b, total float64
+			for _, t := range cols[x] {
+				c := rgb{255, 255, 255}
+				if t.i >= 0 && t.i < sw {
+					c = src.at(t.i, y)
+				}
+				r += c.r * t.w
+				g += c.g * t.w
+				b += c.b * t.w
+				total += t.w
 			}
-			if i0 >= sw-1 {
-				i0, t = sw-1, 0
+			if total <= 0 {
+				out.set(x, y, rgb{255, 255, 255})
+				continue
 			}
-			i1 := i0 + 1
-			if i1 >= sw {
-				i1 = sw - 1
-			}
-			out.set(x, y, mix(src.at(i0, y), src.at(i1, y), t))
+			out.set(x, y, rgb{r / total, g / total, b / total})
 		}
 	}
 	return out
@@ -204,56 +282,51 @@ func resampleY(dh int, src *rgbImage) *rgbImage {
 		}
 		return out
 	}
-	if dh < sh {
+	if dh > sh {
+		scale := float64(sh) / float64(dh)
 		for y := 0; y < dh; y++ {
-			start := float64(y) * float64(sh) / float64(dh)
-			end := float64(y+1) * float64(sh) / float64(dh)
-			j0 := int(math.Floor(start))
-			j1 := int(math.Ceil(end))
+			f := (float64(y)+0.5)*scale - 0.5
+			j0 := int(math.Floor(f))
+			t := f - float64(j0)
 			if j0 < 0 {
-				j0 = 0
+				j0, t = 0, 0
 			}
-			if j1 > sh {
-				j1 = sh
+			if j0 >= sh-1 {
+				j0, t = sh-1, 0
+			}
+			j1 := j0 + 1
+			if j1 >= sh {
+				j1 = sh - 1
 			}
 			for x := 0; x < sw; x++ {
-				var r, g, b, total float64
-				for j := j0; j < j1; j++ {
-					w := math.Min(end, float64(j+1)) - math.Max(start, float64(j))
-					if w <= 0 {
-						continue
-					}
-					c := src.at(x, j)
-					r += c.r * w
-					g += c.g * w
-					b += c.b * w
-					total += w
-				}
-				if total <= 0 {
-					continue
-				}
-				out.set(x, y, rgb{r / total, g / total, b / total})
+				out.set(x, y, mix(src.at(x, j0), src.at(x, j1), t))
 			}
 		}
 		return out
 	}
 	scale := float64(sh) / float64(dh)
+	rows := make([][]tap, dh)
 	for y := 0; y < dh; y++ {
-		f := (float64(y)+0.5)*scale - 0.5
-		j0 := int(math.Floor(f))
-		t := f - float64(j0)
-		if j0 < 0 {
-			j0, t = 0, 0
-		}
-		if j0 >= sh-1 {
-			j0, t = sh-1, 0
-		}
-		j1 := j0 + 1
-		if j1 >= sh {
-			j1 = sh - 1
-		}
+		rows[y] = tentTaps((float64(y)+0.5)*scale, scale)
+	}
+	for y := 0; y < dh; y++ {
 		for x := 0; x < sw; x++ {
-			out.set(x, y, mix(src.at(x, j0), src.at(x, j1), t))
+			var r, g, b, total float64
+			for _, t := range rows[y] {
+				c := rgb{255, 255, 255}
+				if t.i >= 0 && t.i < sh {
+					c = src.at(x, t.i)
+				}
+				r += c.r * t.w
+				g += c.g * t.w
+				b += c.b * t.w
+				total += t.w
+			}
+			if total <= 0 {
+				out.set(x, y, rgb{255, 255, 255})
+				continue
+			}
+			out.set(x, y, rgb{r / total, g / total, b / total})
 		}
 	}
 	return out
@@ -265,81 +338,6 @@ func mix(a, b rgb, t float64) rgb {
 		r: a.r + (b.r-a.r)*t,
 		g: a.g + (b.g-a.g)*t,
 		b: a.b + (b.b-a.b)*t,
-	}
-}
-
-func rangeAverage(src sampler, y int, start, end float64) rgb {
-	sw, _ := src.bounds()
-	var r, g, b, total float64
-	i0 := int(math.Floor(start))
-	i1 := int(math.Ceil(end))
-	if i0 < 0 {
-		i0 = 0
-	}
-	if i1 > sw {
-		i1 = sw
-	}
-	for i := i0; i < i1; i++ {
-		w := math.Min(end, float64(i+1)) - math.Max(start, float64(i))
-		if w <= 0 {
-			continue
-		}
-		c := src.at(i, y)
-		r += c.r * w
-		g += c.g * w
-		b += c.b * w
-		total += w
-	}
-	if total <= 0 {
-		return rgb{255, 255, 255}
-	}
-	return rgb{r / total, g / total, b / total}
-}
-
-// bilinearScale 按目标像素中心映射做双线性插值（用于放大或单轴放大）。
-func bilinearScale(dst *rgbImage, src sampler) {
-	sw, sh := src.bounds()
-	sx := float64(sw) / float64(dst.w)
-	sy := float64(sh) / float64(dst.h)
-	for y := 0; y < dst.h; y++ {
-		fy := (float64(y)+0.5)*sy - 0.5
-		y0 := int(math.Floor(fy))
-		wy := fy - float64(y0)
-		if y0 < 0 {
-			y0, wy = 0, 0
-		}
-		if y0 >= sh-1 {
-			y0, wy = sh-1, 0
-		}
-		y1 := y0 + 1
-		if y1 >= sh {
-			y1 = sh - 1
-		}
-		for x := 0; x < dst.w; x++ {
-			fx := (float64(x)+0.5)*sx - 0.5
-			x0 := int(math.Floor(fx))
-			wx := fx - float64(x0)
-			if x0 < 0 {
-				x0, wx = 0, 0
-			}
-			if x0 >= sw-1 {
-				x0, wx = sw-1, 0
-			}
-			x1 := x0 + 1
-			if x1 >= sw {
-				x1 = sw - 1
-			}
-			c00 := src.at(x0, y0)
-			c10 := src.at(x1, y0)
-			c01 := src.at(x0, y1)
-			c11 := src.at(x1, y1)
-			blend := func(a, b, t float64) float64 { return a + (b-a)*t }
-			dst.set(x, y, rgb{
-				r: blend(blend(c00.r, c10.r, wx), blend(c01.r, c11.r, wx), wy),
-				g: blend(blend(c00.g, c10.g, wx), blend(c01.g, c11.g, wx), wy),
-				b: blend(blend(c00.b, c10.b, wx), blend(c01.b, c11.b, wx), wy),
-			})
-		}
 	}
 }
 
