@@ -34,6 +34,7 @@ type Plan struct {
 }
 
 // Summarize 依据 Actions 计算 Summary。执行器与 UI 都必须使用同一实现。
+// 可释放字节数取删除动作的 Precheck.Size 之和（回收站与永久删除同等计入）。
 func (p *Plan) Summarize() {
 	s := PlanSummary{Actions: len(p.Actions)}
 	for _, a := range p.Actions {
@@ -41,9 +42,15 @@ func (p *Plan) Summarize() {
 		case ActionDeleteTrash:
 			s.Deletes++
 			s.Trash++
+			if a.Precheck != nil {
+				s.ReclaimableBytes += a.Precheck.Size
+			}
 		case ActionDeletePermanent:
 			s.Deletes++
 			s.Permanent++
+			if a.Precheck != nil {
+				s.ReclaimableBytes += a.Precheck.Size
+			}
 		case ActionMove:
 			s.Moves++
 		case ActionRename:

@@ -1,6 +1,8 @@
 // Package main 是 fdedup 命令行入口（--nogui 能力的基础）。
 //
-// M1 提供 scan（精确查重，只读）；输出契约见 internal/engine/model。
+// M1 提供 scan（精确查重，只读）；M2 增加 plan / apply（可审查、可回放、可回滚）
+// 与 machine-id（授权方案 B 的机器码 v2 采集）。
+// 输出契约见 internal/engine/model。
 package main
 
 import (
@@ -19,7 +21,7 @@ import (
 	"filededup/internal/engine/scan"
 )
 
-const version = "0.2.0-m1"
+const version = "0.2.0-m2"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `fdedup %s
@@ -27,6 +29,9 @@ func usage() {
 用法:
   fdedup version
   fdedup scan --root <dir> [--root <dir>...] [选项]
+  fdedup plan --scan <result.json> [--permanent] [--dump <plan.json>]
+  fdedup apply --plan <plan.json> (--dry-run | --yes) [选项]
+  fdedup machine-id [--json]
 
 scan 选项:
   --exclude <list>     排除项，逗号/分号/空白分隔；纯名称匹配目录名
@@ -39,6 +44,25 @@ scan 选项:
   --request <file>     读取 JSON 请求（model.Request），显式参数覆盖
   --json               结果输出到 stdout
   --dump <file>        结果写入文件（2 空格缩进）
+
+plan 选项:
+  --scan <file>        扫描结果 JSON（必填）
+  --permanent          永久删除（默认移入回收站）；会标记 irreversible
+  --request-id <id>    计划 ID（默认沿用扫描 requestId）
+  --json               计划输出到 stdout（否则只打印摘要）
+  --dump <file>        计划写入文件
+
+apply 选项:
+  --plan <file>        计划 JSON（必填）
+  --dry-run            只做执行前复核，不改动文件系统
+  --yes                确认执行（必须与 --dry-run 二选一）
+  --continue-on-error  单条失败后继续执行（默认中止后续）
+  --journal-dir <dir>  操作清单目录（默认 <配置目录>/filededup/logs/ops）
+  --no-journal         不写操作清单（不建议）
+  --out <file>         执行报告写入文件
+  --json               执行报告输出到 stdout
+
+退出码: 0 成功 / 2 参数或输入错误 / 3 执行失败或内部错误 / 4 用户取消
 `, version)
 }
 
@@ -60,6 +84,12 @@ func main() {
 		fmt.Printf("fdedup %s %s/%s %s\n", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
 	case "scan":
 		os.Exit(runScan(os.Args[2:]))
+	case "plan":
+		os.Exit(runPlan(os.Args[2:]))
+	case "apply":
+		os.Exit(runApply(os.Args[2:]))
+	case "machine-id":
+		os.Exit(runMachineID(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
