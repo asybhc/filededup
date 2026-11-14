@@ -12,7 +12,7 @@ import (
 	// 注册标准库解码器；gif 取首帧。
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 
 	// 纯 Go 的官方扩展解码器（不引入 cgo）：标准库 image/* 不含 TIFF/WebP。
 	"golang.org/x/image/tiff"
@@ -28,6 +28,22 @@ func isJPEG(path string) bool {
 // BMP 使用本包实现（标准库不含 BMP）；TIFF/WebP 使用 golang.org/x/image 的纯 Go 解码器。
 func decode(r io.Reader, path string) (image.Image, string, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		// 先严格解码；失败时按原版 validateImageData:false 的宽松行为，
+		// 对截断 PNG 做"已到达的行 + 其余补黑"的部分解码。
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, "", err
+		}
+		img, err := png.Decode(bytes.NewReader(data))
+		if err == nil {
+			return img, "png", nil
+		}
+		img, perr := partialPNG(data)
+		if perr != nil {
+			return nil, "", err
+		}
+		return img, "png", nil
 	case ".bmp":
 		data, err := io.ReadAll(r)
 		if err != nil {
@@ -111,42 +127,29 @@ func over(c color.NRGBA) rgb {
 
 func (m *rgbImage) bounds() (int, int) { return m.w, m.h }
 
-// 白边系数：实测 GDI+ 对"放大轴"的最外 1 像素叠加大约 1/7.75 的白底
-// （100 灰的纯色图放大后边为 120 左右）。
-// 缩小轴不需要人工白边：三角核在源图边界外按白底取样，天然产生同样的白渗入。
-const edgeWhite = 0.129
-
 // drawScaled 把 src 缩放到 dstW×dstH 的白底画布。
-// 逐轴选择算法：缩小轴用展宽三角核（GDI+ 的预滤波行为），放大轴用双线性。
-// 放大轴的最外 1 像素叠加白底，复现 GDI+ 的边缘抗锯齿；缩小轴由核本身处理。
+//
+// 实测 GDI+（HighQualityBilinear + PixelOffsetMode.HighQuality）的等效核在缩小、放大
+// 两个方向上是同一个三角核：半径 = max(1, 缩放比) 个源像素，目标像素中心取 (x+0.5)×缩放比，
+// 源图外按白底参与加权。缩小方向半径 >1（预滤波），放大方向半径固定为 1 个源像素；
+// 某一轴恰好 1:1 时只要另一轴发生缩放，GDI+ 仍会走同一条滤波路径，因此该轴也会出现
+// 约 1/8 的边缘白渗入（纯黑 8×8 源放大到 9×8 时首末行即为此现象）。
+// 只有两轴同时 1:1 才是纯拷贝（对应 C# 第二趟 DrawImage 的直通情形）。
 func drawScaled(dstW, dstH int, src sampler) *rgbImage {
 	sw, sh := src.bounds()
 	if sw <= 0 || sh <= 0 {
 		return newRGBImage(dstW, dstH)
 	}
-	dst := resampleY(dstH, midPass(dstW, dstH, src))
-	upX := sw < dstW
-	upY := sh < dstH
-	if !upX && !upY {
-		return dst
-	}
-	for y := 0; y < dstH; y++ {
-		for x := 0; x < dstW; x++ {
-			c := dst.at(x, y)
-			if upX && (x == 0 || x == dstW-1) {
-				c = overWhite(c, edgeWhite)
+	if sw == dstW && sh == dstH {
+		out := newRGBImage(dstW, dstH)
+		for y := 0; y < dstH; y++ {
+			for x := 0; x < dstW; x++ {
+				out.set(x, y, src.at(x, y))
 			}
-			if upY && (y == 0 || y == dstH-1) {
-				c = overWhite(c, edgeWhite)
-			}
-			dst.set(x, y, c)
 		}
+		return out
 	}
-	return dst
-}
-
-func overWhite(c rgb, t float64) rgb {
-	return rgb{c.r + (255-c.r)*t, c.g + (255-c.g)*t, c.b + (255-c.b)*t}
+	return resampleY(dstH, midPass(dstW, dstH, src))
 }
 
 // midPass 执行水平重采样，并在"两轴同时缩小"时把中间结果取整到 8 位。
@@ -170,12 +173,12 @@ type tap struct {
 	w float64
 }
 
-// tentTaps 计算缩小方向的三角核权重。
-// 实测 GDI+ HighQualityBilinear 在缩小方向的等效核是"支撑宽度 2×缩放比"的三角核，
-// 目标像素中心映射为 (x+0.5)×缩放比（不减半像素）；源图外的部分按白底计。
-// center 是目标像素中心在源轴上的坐标，scale 是源/目标像素比（>1）。
+// tentTaps 计算三角核权重。
+// 实测 GDI+ HighQualityBilinear 的等效核在缩小/放大方向相同：支撑宽度 2×半径，
+// 半径 = max(1, 缩放比) 个源像素；目标像素中心映射为 (x+0.5)×缩放比（不减半像素）；
+// 源图外的部分按白底计。center 是目标像素中心在源轴上的坐标，scale 是源/目标像素比。
 func tentTaps(center, scale float64) []tap {
-	r := scale
+	r := math.Max(1, scale)
 	lo := center - r
 	hi := center + r
 	i0 := int(math.Floor(lo))
@@ -209,39 +212,11 @@ func tentSegment(a, b, center, r float64) float64 {
 }
 
 // resampleX 把 src 水平重采样到 dw 列，高度不变。
+// 缩放比 sw/dw 可大于 1（缩小）、小于 1（放大）或等于 1（该轴 1:1 但另一轴缩放），
+// 三者统一走三角核 + 越界白底。
 func resampleX(dw int, src sampler) *rgbImage {
 	sw, sh := src.bounds()
 	out := newRGBImage(dw, sh)
-	if dw == sw {
-		for y := 0; y < sh; y++ {
-			for x := 0; x < dw; x++ {
-				out.set(x, y, src.at(x, y))
-			}
-		}
-		return out
-	}
-	if dw > sw {
-		scale := float64(sw) / float64(dw)
-		for y := 0; y < sh; y++ {
-			for x := 0; x < dw; x++ {
-				f := (float64(x)+0.5)*scale - 0.5
-				i0 := int(math.Floor(f))
-				t := f - float64(i0)
-				if i0 < 0 {
-					i0, t = 0, 0
-				}
-				if i0 >= sw-1 {
-					i0, t = sw-1, 0
-				}
-				i1 := i0 + 1
-				if i1 >= sw {
-					i1 = sw - 1
-				}
-				out.set(x, y, mix(src.at(i0, y), src.at(i1, y), t))
-			}
-		}
-		return out
-	}
 	scale := float64(sw) / float64(dw)
 	cols := make([][]tap, dw)
 	for x := 0; x < dw; x++ {
@@ -270,40 +245,10 @@ func resampleX(dw int, src sampler) *rgbImage {
 	return out
 }
 
-// resampleY 把 src 垂直重采样到 dh 行，宽度不变。
+// resampleY 把 src 垂直重采样到 dh 行，宽度不变。核与 resampleX 相同。
 func resampleY(dh int, src *rgbImage) *rgbImage {
 	sw, sh := src.w, src.h
 	out := newRGBImage(sw, dh)
-	if dh == sh {
-		for y := 0; y < dh; y++ {
-			for x := 0; x < sw; x++ {
-				out.set(x, y, src.at(x, y))
-			}
-		}
-		return out
-	}
-	if dh > sh {
-		scale := float64(sh) / float64(dh)
-		for y := 0; y < dh; y++ {
-			f := (float64(y)+0.5)*scale - 0.5
-			j0 := int(math.Floor(f))
-			t := f - float64(j0)
-			if j0 < 0 {
-				j0, t = 0, 0
-			}
-			if j0 >= sh-1 {
-				j0, t = sh-1, 0
-			}
-			j1 := j0 + 1
-			if j1 >= sh {
-				j1 = sh - 1
-			}
-			for x := 0; x < sw; x++ {
-				out.set(x, y, mix(src.at(x, j0), src.at(x, j1), t))
-			}
-		}
-		return out
-	}
 	scale := float64(sh) / float64(dh)
 	rows := make([][]tap, dh)
 	for y := 0; y < dh; y++ {
@@ -330,15 +275,6 @@ func resampleY(dh int, src *rgbImage) *rgbImage {
 		}
 	}
 	return out
-}
-
-// mix 在两种颜色间线性插值。
-func mix(a, b rgb, t float64) rgb {
-	return rgb{
-		r: a.r + (b.r-a.r)*t,
-		g: a.g + (b.g-a.g)*t,
-		b: a.b + (b.b-a.b)*t,
-	}
 }
 
 // normalize 复刻 C# A/Q.cs A_m_1(Image, 9, 8)：

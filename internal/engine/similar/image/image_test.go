@@ -294,6 +294,32 @@ func TestHashLargeDownscaleGDIPlus(t *testing.T) {
 	}
 }
 
+// 截断 PNG 的宽松解码必须与原版 validateImageData:false 的行为一致：
+// 已完整 inflate 出的行照常还原，其余行按不透明黑处理。
+// 夹具是 A 批次语料里的 04-images/corrupt.png（377 字节，IDAT 声明 1074 字节但文件提前结束），
+// 指纹固定为 C# 基线 0x01010101117f7f7f。
+func TestHashTruncatedPNGGDIPlus(t *testing.T) {
+	fp, ok := Compute(filepath.Join("testdata", "corrupt.png"))
+	if !ok {
+		t.Fatal("截断 PNG 应按原版宽松模式出指纹，而不是解码失败")
+	}
+	if got := Hex(fp.Hash); got != "01010101117f7f7f" {
+		t.Errorf("指纹 = %s, want 01010101117f7f7f（须与 C# 基线一致）", got)
+	}
+}
+
+// 1×1 极小图放大到 9×8 时，GDI+ 的三角核（半径 1 源像素、越界按白底加权）会让整体掺白；
+// 指纹固定为 C# 基线 0x0f0f0f0f0f0f0f0f。夹具是 A 批次语料的 04-images/tiny-1x1.png。
+func TestHashTiny1x1GDIPlus(t *testing.T) {
+	fp, ok := Compute(filepath.Join("testdata", "tiny-1x1.png"))
+	if !ok {
+		t.Fatal("1×1 PNG 应能解码")
+	}
+	if got := Hex(fp.Hash); got != "0f0f0f0f0f0f0f0f" {
+		t.Errorf("指纹 = %s, want 0f0f0f0f0f0f0f0f（须与 C# 基线一致）", got)
+	}
+}
+
 // TIFF 走 golang.org/x/image/tiff：同像素内容的 TIFF 与 PNG 必须得到相同 dHash。
 // 与 C# 基线的一致性另由 parity similar 对 GDI+ 生成的 tif/tiff 验证。
 func TestDecodeTIFF(t *testing.T) {
