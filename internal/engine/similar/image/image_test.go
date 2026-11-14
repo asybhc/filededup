@@ -50,20 +50,24 @@ func TestHashSolidColor(t *testing.T) {
 	}
 }
 
-// 纯色图（含纯白，其画布内部有 255/254 的浮点误差）都必须判为退化指纹；
+// 纯色图（含纯白）都必须判为退化指纹，且指纹与 C# 一致：
+// 非白色因白边得 0x0101…01，纯白无边缘对比得全 0。
 // 有真实横向明暗变化的图不算退化。
 func TestComputeUniform(t *testing.T) {
-	solid := []color.NRGBA{
-		{R: 200, G: 30, B: 40, A: 255},
-		{R: 10, G: 10, B: 200, A: 255},
-		{R: 0, G: 0, B: 0, A: 255},
-		{R: 255, G: 255, B: 255, A: 255},
+	solid := []struct {
+		c    color.NRGBA
+		want string
+	}{
+		{color.NRGBA{R: 200, G: 30, B: 40, A: 255}, "0101010101010101"},
+		{color.NRGBA{R: 10, G: 10, B: 200, A: 255}, "0101010101010101"},
+		{color.NRGBA{R: 0, G: 0, B: 0, A: 255}, "0101010101010101"},
+		{color.NRGBA{R: 255, G: 255, B: 255, A: 255}, "0000000000000000"},
 	}
-	for _, c := range solid {
+	for _, s := range solid {
 		img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 		for y := 0; y < 64; y++ {
 			for x := 0; x < 64; x++ {
-				img.SetNRGBA(x, y, c)
+				img.SetNRGBA(x, y, s.c)
 			}
 		}
 		fp, ok := Compute(writeTemp(t, "solid.png", encodePNG(t, img)))
@@ -71,7 +75,10 @@ func TestComputeUniform(t *testing.T) {
 			t.Fatalf("纯色 PNG 应能解码")
 		}
 		if !fp.Uniform {
-			t.Errorf("纯色 %v 应判为退化指纹（fingerprint=%016x）", c, fp.Hash)
+			t.Errorf("纯色 %v 应判为退化指纹（fingerprint=%016x）", s.c, fp.Hash)
+		}
+		if got := Hex(fp.Hash); got != s.want {
+			t.Errorf("纯色 %v 指纹 = %s, want %s（须与 C# 基线一致）", s.c, got, s.want)
 		}
 	}
 

@@ -356,7 +356,18 @@ func normalize(img image.Image, orientation int) *rgbImage {
 	if orientation > 1 {
 		first = rotateFlip(first, orientation)
 	}
-	return drawScaled(dstW, dstH, first)
+	out := drawScaled(dstW, dstH, first)
+	// GDI+ 全程使用 8 位整数通道；这里把浮点结果就近取整，避免 254.9999… 被
+	// 灰度公式截断成 254，从而在纯色图等场景制造出与原版不同的指纹位。
+	for i := range out.px {
+		out.px[i] = quantize(out.px[i])
+	}
+	return out
+}
+
+// quantize 把浮点通道四舍五入回 8 位整数。
+func quantize(c rgb) rgb {
+	return rgb{math.Round(c.r), math.Round(c.g), math.Round(c.b)}
 }
 
 // rotateFlip 复刻 GDI+ RotateFlipType 的 7 种变换。

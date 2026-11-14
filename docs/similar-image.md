@@ -74,17 +74,33 @@
 - 单测：`internal/engine/similar/image`（纯色/渐变退化判定、TIFF↔PNG 一致性、WebP 解码与截断容错、
   分组拆组、EXIF、BMP）、`internal/engine/similar/audio`。
 
-### 4.1 M3.1 实测（2026-11-14）
+### 4.1 多语料对拍（2026-11-14）
 
-| 对拍 | 结果 |
-| --- | --- |
-| `parity scenes` | 13/13 MATCH |
-| `parity similar`（m3corpus，18 图 11 音频） | 图 16/18 + 2 条已登记；音频 11/11 → MATCH |
-| `parity scan`（m3corpus） | 仅 tiny-1x1 引起的 6 条（+1 文件 / +74B / 图组成员）→ 已登记 |
-| `parity scan`（tif/tiff/webp 语料） | TIFF 组（tif+tiff+纯色 png）逐位一致；仅多出 Go 独有的 WebP 组（`lossless.webp`+`lossy.webp`），由它带来 7 条统计差异 |
-| `parity similar`（tif/tiff/webp 语料） | tif/tiff 2/2 指纹一致；3 个 webp 为 C# 解码失败 → Go 超集 |
+四批语料，C# 侧统一用 `FileDedupTool.exe --dump-similar-json <out> --root <dir>` 导出基线：
 
-WebP 差异不可消除：GDI+ 不支持 WebP，C# 一律解码失败，因此这两条只能登记为 Go 侧超集能力。
+| 批次 | 语料目录 | 一致 / 总数 | 差异 |
+| --- | --- | --- | --- |
+| A | `%TEMP%\m3corpus`（98 文件：18 图 11 音频） | 图 16/18，音频 11/11 | 2 条已登记：`corrupt.png`（C# 有指纹、Go 解码失败）、`tiny-1x1.png`（`0f0f…` vs `0101…`） |
+| B | `%TEMP%\m3fmt`（2 tif + 3 webp） | 2/5 | 3 条已登记：webp 为 Go 超集 |
+| C | `%TEMP%\m3uniform`（4 张纯色 png） | 4/4 | 无 |
+| D | `%TEMP%\m3fmt-scan`（B + photo.png） | 3/6 | 3 条已登记：webp 为 Go 超集 |
+
+命令（以 A 为例）：
+
+```powershell
+go run ./tools/parity similar --csharp "$env:TEMP\m3-csharp-similar.json" `
+  --root "$env:TEMP\m3corpus" -allow "04-images/corrupt.png,04-images/tiny-1x1.png"
+```
+
+扫描层对拍（`-ignore imageKey,skipped,cache`）：m3corpus 仅 tiny-1x1 引起 6 条；m3fmt-scan 仅 WebP 组引起 7 条。
+
+WebP 的 3 条差异不可消除：GDI+ 不支持 WebP，C# 一律解码失败，因此只能登记为 Go 侧超集能力。
+
+### 4.2 已修复：纯白图指纹偏差
+
+C 批次曾暴露一处新差异：纯白图 C# 得 `0000000000000000`，Go 得 `2828282828282828`。
+原因是面积平均得到 `254.9999…`，被灰度公式截断成 254，凭空造出梯度位。
+现在 `normalize` 末尾把 9×8 画布通道就近取整（GDI+ 全程是 8 位整数），偏差消除且 A 批次结果不变。
 
 ## 5. 纯色图合并：默认值待定
 
