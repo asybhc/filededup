@@ -7,15 +7,30 @@ interface Props<T> {
   renderRow: (row: T, index: number) => ReactNode;
   className?: string;
   overscan?: number;
+  // 可视区间变化时回调（含首帧）。服务端分页列表用它按需拉取当前窗口附近的数据。
+  onRangeChange?: (start: number, end: number) => void;
 }
 
 /**
  * 固定行高虚拟列表。只渲染可视窗口 + overscan，10 万行时 DOM 节点数保持在几十个。
  * 垂直滚动容器本身也是组件根节点；行使用绝对定位，避免大列表的布局抖动。
  */
-export function VirtualList<T>({ rows, rowHeight, rowKey, renderRow, className, overscan = 10 }: Props<T>) {
+export function VirtualList<T>({
+  rows,
+  rowHeight,
+  rowKey,
+  renderRow,
+  className,
+  overscan = 10,
+  onRangeChange,
+}: Props<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState({ start: 0, end: 0 });
+  // 回调放 ref，避免父组件每次重渲染都重建滚动监听。
+  const rangeCb = useRef(onRangeChange);
+  useEffect(() => {
+    rangeCb.current = onRangeChange;
+  }, [onRangeChange]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -27,6 +42,7 @@ export function VirtualList<T>({ rows, rowHeight, rowKey, renderRow, className, 
       const start = Math.max(0, Math.floor(el.scrollTop / rowHeight) - overscan);
       const end = Math.min(rows.length, Math.ceil((el.scrollTop + viewport) / rowHeight) + overscan);
       setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+      if (rows.length > 0 && end > start) rangeCb.current?.(start, end);
     };
     const onScroll = () => {
       if (frame === 0) frame = window.requestAnimationFrame(update);

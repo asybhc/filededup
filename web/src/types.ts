@@ -239,6 +239,55 @@ export interface ScheduleRunState {
   elapsedMs: number;
 }
 
+// ---------- 本地搜索（对应 internal/engine/search 与 cmd/filededup/search.go） ----------
+
+export type SearchMode = "substring" | "wildcard";
+
+export interface SearchRequest {
+  roots: string[];
+  query: string;
+  mode: SearchMode;
+  exts: string[];
+  minSize: number;
+  maxSize: number;
+  includeHidden: boolean;
+  excludes: string[];
+  limit: number;
+}
+
+export interface SearchState {
+  id: string;
+  running: boolean;
+  done: boolean;
+  cancelled: boolean;
+  error?: string;
+  visited: number;
+  dirs: number;
+  matched: number;
+  truncated: boolean;
+  elapsedMs: number;
+  current?: string;
+}
+
+export interface SearchMatch {
+  path: string;
+  name: string;
+  dir: string;
+  size: number;
+  modTime: string;
+  root: string;
+}
+
+export interface SearchResultPage {
+  total: number;
+  offset: number;
+  limit: number;
+  rows: SearchMatch[];
+  truncated: boolean;
+  sortKey: string;
+  sortDesc: boolean;
+}
+
 // ---------- 授权（对应 internal/auth） ----------
 
 export type LicenseStatus = "licensed" | "trial" | "trial-expired" | "unlicensed";

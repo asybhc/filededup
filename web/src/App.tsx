@@ -6,6 +6,7 @@ import { VirtualList } from "./components/VirtualList";
 import { Organizer } from "./Organizer";
 import { Lanzou } from "./Lanzou";
 import { SettingsDialog } from "./Settings";
+import { Search } from "./Search";
 import type {
   AppInfo,
   DeleteMode,
@@ -157,7 +158,7 @@ export default function App() {
   const [perfRows, setPerfRows] = useState<Row[]>([]);
   const [perfActive, setPerfActive] = useState(false);
   const [fps, setFps] = useState(0);
-  const [view, setView] = useState<"dedup" | "organize" | "lanzou">("dedup");
+  const [view, setView] = useState<"dedup" | "organize" | "lanzou" | "search">("dedup");
   const [settings, setSettings] = useState<UISettings>();
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsPath, setSettingsPath] = useState("");
@@ -169,6 +170,7 @@ export default function App() {
   const [licenseText, setLicenseText] = useState("");
   const [licenseNote, setLicenseNote] = useState("");
   const licenseStop = Boolean(license && !license.canApply);
+  const searchFeature = license?.featureList?.find((f) => f.key === "search");
 
   // 自动更新：更新源默认留空，只有配置后才检查。
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -799,6 +801,9 @@ export default function App() {
         <button className={view === "lanzou" ? "active" : ""} onClick={() => setView("lanzou")}>
           蓝奏云上传
         </button>
+        <button className={view === "search" ? "active" : ""} onClick={() => setView("search")}>
+          本地搜索
+        </button>
         {view === "dedup" && (
           <span className="tabs-hint">
             当前流程：{STEPS.map((s) => s.label).join(" → ")}
@@ -855,6 +860,17 @@ export default function App() {
               <p className="hint">正在读取设置…</p>
             </section>
           )
+        ) : view === "search" ? (
+          <Search
+            canRun={searchFeature?.unlocked ?? false}
+            licenseHint={
+              searchFeature
+                ? `未解锁：${searchFeature.reason ?? "本地搜索需要标准版许可证"}（本机机器码 ${
+                    license?.machineCode ?? "读取中"
+                  }）。`
+                : "正在读取授权状态，请稍候。"
+            }
+          />
         ) : (
           <>
         {step === "pick" && (

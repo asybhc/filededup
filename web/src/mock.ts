@@ -29,6 +29,10 @@ import type {
   ScanRequest,
   ScanState,
   ScheduleRunState,
+  SearchMatch,
+  SearchRequest,
+  SearchResultPage,
+  SearchState,
   SettingsResult,
   SkippedPage,
   UISettings,
@@ -63,6 +67,35 @@ const NAMES = [
 ];
 
 const FOLDERS = ["2024\\旅行\\青岛", "2024\\旅行\\厦门", "工作\\2025 规划", "客户资料\\华东区", "手机备份\\DCIM"];
+
+interface MockFile {
+  path: string;
+  name: string;
+  size: number;
+  modTime: string;
+}
+
+// 搜索页的合成文件表：覆盖多种扩展名、大小与目录，便于预览过滤与排序。
+const MOCK_FILES: MockFile[] = (() => {
+  const out: MockFile[] = [];
+  for (let i = 0; i < 96; i++) {
+    const sample = NAMES[i % NAMES.length];
+    const ext = sample.slice(sample.lastIndexOf("."));
+    const base = sample.slice(0, sample.lastIndexOf("."));
+    const suffix = i < NAMES.length ? "" : `-${i}`;
+    const folder = FOLDERS[i % FOLDERS.length];
+    out.push({
+      path: `${SAMPLE_ROOT}\\${folder}\\${base}${suffix}${ext}`,
+      name: `${base}${suffix}${ext}`,
+      size: (1 + (i % 40)) * 1024 * 512,
+      modTime: new Date(Date.UTC(2024, i % 12, (i % 27) + 1, 9, 0)).toISOString(),
+    });
+  }
+  return out;
+})();
+
+let searchSeq = 0;
+let search: { id: string; rows: SearchMatch[]; done: boolean; truncated: boolean; startedAt: number } | null = null;
 
 function makeGroups(count: number, root = SAMPLE_ROOT): GroupView[] {
   const out: GroupView[] = [];
@@ -1098,6 +1131,90 @@ export const mock = {
     const s = readSettings();
     s.lanzou.disclaimerAccepted = true;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  },
+
+  // ---- 本地搜索：浏览器预览用合成文件表，排序与分页行为与真实后端一致 ----
+  startSearch(req: SearchRequest): string {
+    searchSeq += 1;
+    const id = `mock-search-${searchSeq}`;
+    const query = req.query.trim().toLowerCase();
+    const wildcard = req.mode === "wildcard" && /[*?]/.test(query);
+    const exts = req.exts.map((e) => e.replace(/^\./, "").toLowerCase()).filter(Boolean);
+    const rows = MOCK_FILES.filter((f) => {
+      if (exts.length > 0 && !exts.includes(f.name.split(".").pop()?.toLowerCase() ?? "")) return false;
+      if (f.size < req.minSize) return false;
+      if (req.maxSize > 0 && f.size > req.maxSize) return false;
+      if (!query) return true;
+      const lowerName = f.name.toLowerCase();
+      const lowerPath = f.path.toLowerCase();
+      if (wildcard) {
+        const re = new RegExp("^" + query.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+        return re.test(lowerName) || re.test(lowerPath);
+      }
+      return lowerName.includes(query) || lowerPath.includes(query);
+    });
+    const limit = req.limit > 0 ? req.limit : 200000;
+    const truncated = rows.length > limit;
+    search = {
+      id,
+      rows: rows.slice(0, limit).map((f) => ({
+        path: f.path,
+        name: f.name,
+        dir: f.path.slice(0, Math.max(0, f.path.lastIndexOf("\\"))),
+        size: f.size,
+        modTime: f.modTime,
+        root: SAMPLE_ROOT,
+      })),
+      done: true,
+      truncated,
+      startedAt: Date.now(),
+    };
+    return id;
+  },
+  getSearchState(id: string): SearchState {
+    if (!search || search.id !== id) throw new Error(`找不到搜索任务：${id}`);
+    return {
+      id,
+      running: false,
+      done: true,
+      cancelled: false,
+      visited: MOCK_FILES.length,
+      dirs: 12,
+      matched: search.rows.length,
+      truncated: search.truncated,
+      elapsedMs: Date.now() - search.startedAt,
+    };
+  },
+  cancelSearch(_id: string): void {
+    // 合成数据瞬间完成，没有可取消的工作。
+  },
+  getSearchResults(id: string, sortKey: string, desc: boolean, offset: number, limit: number): SearchResultPage {
+    if (!search || search.id !== id) throw new Error(`找不到搜索任务：${id}`);
+    const sorted = [...search.rows].sort((a, b) => {
+      let r = 0;
+      if (sortKey === "name") r = a.name.localeCompare(b.name, "zh-CN");
+      else if (sortKey === "size") r = a.size - b.size;
+      else if (sortKey === "modTime") r = a.modTime.localeCompare(b.modTime);
+      else r = a.path.localeCompare(b.path, "zh-CN");
+      return desc ? -r : r;
+    });
+    const start = Math.max(0, offset);
+    const size = Math.max(1, Math.min(1000, limit));
+    return {
+      total: sorted.length,
+      offset: start,
+      limit: size,
+      rows: sorted.slice(start, start + size),
+      truncated: search.truncated,
+      sortKey,
+      sortDesc: desc,
+    };
+  },
+  revealPath(_path: string): void {
+    throw new Error("浏览器预览无法定位文件，请在桌面版中使用。");
+  },
+  openPath(_path: string): void {
+    throw new Error("浏览器预览无法打开文件，请在桌面版中使用。");
   },
 };
 

@@ -27,7 +27,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.1"
+const appVersion = "0.9.2"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -184,6 +184,10 @@ type App struct {
 	// schedCancel 取消当前定时任务循环；设置为空表示没有启用定时任务。
 	schedMu     sync.Mutex
 	schedCancel context.CancelFunc
+
+	// searches 是本地搜索任务；searchMu 保护这张表，任务内部状态另有锁。
+	searchMu sync.Mutex
+	searches map[string]*searchJob
 }
 
 func NewApp() *App {
@@ -191,6 +195,7 @@ func NewApp() *App {
 		sessions:    make(map[string]*scanSession),
 		orgJobs:     make(map[string]*organizeJob),
 		lanzouPreps: make(map[string]*lanzouPrepare),
+		searches:    make(map[string]*searchJob),
 	}
 }
 

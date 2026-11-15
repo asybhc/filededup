@@ -21,6 +21,9 @@ import type {
   ScanRequest,
   ScanState,
   ScheduleRunState,
+  SearchRequest,
+  SearchResultPage,
+  SearchState,
   SettingsResult,
   SkippedPage,
   UISettings,
@@ -52,6 +55,12 @@ interface WailsApp {
   SaveSettings(s: UISettings): Promise<void>;
   SaveAIKey(key: string): Promise<void>;
   GetScheduleState(): Promise<ScheduleRunState>;
+  StartSearch(req: SearchRequest): Promise<string>;
+  GetSearchState(id: string): Promise<SearchState>;
+  CancelSearch(id: string): Promise<void>;
+  GetSearchResults(id: string, sortKey: string, desc: boolean, offset: number, limit: number): Promise<SearchResultPage>;
+  RevealPath(path: string): Promise<void>;
+  OpenPath(path: string): Promise<void>;
   GetOrganizeMeta(): Promise<OrganizeMeta>;
   StartOrganize(req: OrganizeRequest): Promise<string>;
   GetOrganizeState(id: string): Promise<OrganizeState>;
@@ -165,6 +174,42 @@ export const api = {
     const b = bridge();
     if (b) return b.GetScheduleState();
     return mock.getScheduleState();
+  },
+  async startSearch(req: SearchRequest): Promise<string> {
+    const b = bridge();
+    if (b) return b.StartSearch(req);
+    return mock.startSearch(req);
+  },
+  async getSearchState(id: string): Promise<SearchState> {
+    const b = bridge();
+    if (b) return b.GetSearchState(id);
+    return mock.getSearchState(id);
+  },
+  async cancelSearch(id: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.CancelSearch(id);
+    mock.cancelSearch(id);
+  },
+  async getSearchResults(
+    id: string,
+    sortKey: string,
+    desc: boolean,
+    offset: number,
+    limit: number,
+  ): Promise<SearchResultPage> {
+    const b = bridge();
+    if (b) return b.GetSearchResults(id, sortKey, desc, offset, limit);
+    return mock.getSearchResults(id, sortKey, desc, offset, limit);
+  },
+  async revealPath(path: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.RevealPath(path);
+    mock.revealPath(path);
+  },
+  async openPath(path: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.OpenPath(path);
+    mock.openPath(path);
   },
   async getOrganizeMeta(): Promise<OrganizeMeta> {
     const b = bridge();
