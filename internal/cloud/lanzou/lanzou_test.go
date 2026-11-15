@@ -212,7 +212,11 @@ func TestListing(t *testing.T) {
 		}
 		switch r.PostForm.Get("task") {
 		case "47":
-			_, _ = io.WriteString(w, `{"zt":1,"info":"ok","text":[{"folder_id":"-1","folder_name":"根目录"},{"folder_id":"9","folder_name":"A&amp;B"}]}`)
+			// 实测：根目录只能传 -1，返回字段是 fol_id/name。
+			if got := r.PostForm.Get("folder_id"); got != "-1" {
+				t.Errorf("根目录 folder_id 应归一化为 -1，实际 %q", got)
+			}
+			_, _ = io.WriteString(w, `{"zt":1,"info":"ok","text":[{"fol_id":"-1","name":"根目录"},{"folder_id":"9","folder_name":"A&amp;B"}]}`)
 		case "5":
 			if r.PostForm.Get("page") == "1" {
 				_, _ = io.WriteString(w, `{"zt":1,"info":"ok","text":[{"id":"f1","name_all":"a&amp;b.mp4","size":"1.2 M","time":"2026-01-01"},{"id":"f2","name_all":"c.txt","size":"10"}]}`)
@@ -230,6 +234,12 @@ func TestListing(t *testing.T) {
 	}
 	if len(list.Folders) != 2 || list.Folders[1].Name != "A&B" {
 		t.Errorf("文件夹解析不对：%+v", list.Folders)
+	}
+	if list.FolderID != "-1" {
+		t.Errorf("根目录 ID 应归一化为 -1，实际 %q", list.FolderID)
+	}
+	if list.Folders[0].ID != "-1" || list.Folders[1].ID != "9" {
+		t.Errorf("文件夹 ID 解析不对（应兼容 fol_id 与 folder_id）：%+v", list.Folders)
 	}
 	if len(list.Files) != 2 || list.Files[0].Size != 1258291 || list.Files[0].Name != "a&b.mp4" {
 		t.Errorf("文件解析不对：%+v", list.Files)

@@ -295,9 +295,7 @@ func (c *Client) Listing(ctx context.Context, folderID string) (Listing, error) 
 	if !c.creds.Valid() {
 		return Listing{}, &APIError{Op: "列目录", Detail: "未登录"}
 	}
-	if strings.TrimSpace(folderID) == "" {
-		folderID = "0"
-	}
+	folderID = normalizeFolderID(folderID)
 	folders, err := c.listFolders(ctx, folderID)
 	if err != nil {
 		return Listing{}, err
@@ -309,8 +307,21 @@ func (c *Client) Listing(ctx context.Context, folderID string) (Listing, error) 
 	return Listing{FolderID: folderID, Folders: folders, Files: files}, nil
 }
 
+// rootFolderID 是老版蓝奏云的根目录标识。实测 folder_id=0 或缺失时
+// task=47 返回 {"zt":2}，只有 -1 能列出根目录。
+const rootFolderID = "-1"
+
+// normalizeFolderID 把界面上的 "0"（根目录）与空值统一成服务端认识的 -1。
+func normalizeFolderID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" || id == "0" {
+		return rootFolderID
+	}
+	return id
+}
+
 func (c *Client) listFolders(ctx context.Context, folderID string) ([]Folder, error) {
-	body, err := c.postTask(ctx, "47", url.Values{"folder_id": {folderID}})
+	body, err := c.postTask(ctx, "47", url.Values{"folder_id": {normalizeFolderID(folderID)}})
 	if err != nil {
 		return nil, err
 	}
@@ -322,23 +333,32 @@ func (c *Client) listFolders(ctx context.Context, folderID string) ([]Folder, er
 	for _, raw := range items {
 		var w struct {
 			FolderID   string `json:"folder_id"`
+			FolID      string `json:"fol_id"`
 			FolderName string `json:"folder_name"`
 			Name       string `json:"name"`
 		}
 		if err := json.Unmarshal(raw, &w); err != nil {
 			continue
 		}
+		id := w.FolderID
+		if id == "" {
+			// 实测返回字段是 fol_id，folder_id 只在部分接口里出现。
+			id = w.FolID
+		}
 		name := w.FolderName
 		if name == "" {
 			name = w.Name
 		}
-		out = append(out, Folder{ID: w.FolderID, Name: htmlUnescape(name)})
+		out = append(out, Folder{ID: id, Name: htmlUnescape(name)})
 	}
 	return out, nil
 }
 
 func (c *Client) listFiles(ctx context.Context, folderID string) ([]File, error) {
+	folderID = normalizeFolderID(folderID)
 	var out []File
+	seen := make(map[string]bool)
+	prevFirst := ""
 	for page := 1; page <= 200; page++ {
 		body, err := c.postTask(ctx, "5", url.Values{
 			"folder_id": {folderID},
@@ -351,6 +371,8 @@ func (c *Client) listFiles(ctx context.Context, folderID string) ([]File, error)
 		if err != nil {
 			return nil, err
 		}
+		firstID := ""
+		pageFiles := make([]File, 0, len(items))
 		for _, raw := range items {
 			var w struct {
 				ID      string `json:"id"`
@@ -362,11 +384,17 @@ func (c *Client) listFiles(ctx context.Context, folderID string) ([]File, error)
 			if err := json.Unmarshal(raw, &w); err != nil {
 				continue
 			}
+			if firstID == "" {
+				firstID = w.ID
+			}
+			if w.ID != "" && seen[w.ID] {
+				continue
+			}
 			name := w.NameAll
 			if name == "" {
 				name = w.Name
 			}
-			out = append(out, File{
+			pageFiles = append(pageFiles, File{
 				ID:       w.ID,
 				Name:     htmlUnescape(name),
 				Size:     ParseSizeText(w.Size),
@@ -374,11 +402,51 @@ func (c *Client) listFiles(ctx context.Context, folderID string) ([]File, error)
 				Time:     w.Time,
 			})
 		}
-		if len(items) < 18 {
+		// 实测根目录 page=1/2/3 返回同一页：服务端忽略 page 时要停下，
+		// 否则会重复 200 次，光限流就要 5 分钟。
+		if page > 1 && firstID != "" && firstID == prevFirst {
+			break
+		}
+		prevFirst = firstID
+		for _, f := range pageFiles {
+			if f.ID != "" {
+				seen[f.ID] = true
+			}
+			out = append(out, f)
+		}
+		// 实测 info 是总页数（只有一页时为 1）。
+		if n := totalPages(body); n > 0 && page >= n {
+			break
+		}
+		if len(items) < filePageSize {
 			break
 		}
 	}
 	return out, nil
+}
+
+// filePageSize 是老版蓝奏云单页文件数（实测 18）。
+const filePageSize = 18
+
+// totalPages 解析响应里的 info 字段；实测文件列表接口的 info 是总页数。
+func totalPages(body []byte) int {
+	var env struct {
+		Info json.RawMessage `json:"info"`
+	}
+	if json.Unmarshal(body, &env) != nil || len(env.Info) == 0 {
+		return 0
+	}
+	var n int
+	if json.Unmarshal(env.Info, &n) == nil {
+		return n
+	}
+	var s string
+	if json.Unmarshal(env.Info, &s) == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+			return v
+		}
+	}
+	return 0
 }
 
 // postTask 调用 doupload.php，task 与参数都放在表单里；uid 放查询串（与 C# 版一致）。

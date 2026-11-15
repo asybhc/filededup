@@ -23,7 +23,11 @@ func protect(plain []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
-	return unsafe.Slice(out.Data, out.Size), nil
+	// 必须先拷贝：defer 的 LocalFree 会释放 out.Data 指向的内存，
+	// 直接把 unsafe.Slice 返回给调用方会读到已释放内存。
+	enc := make([]byte, out.Size)
+	copy(enc, unsafe.Slice(out.Data, out.Size))
+	return enc, nil
 }
 
 // unprotect 用 DPAPI（CurrentUser）解密。
@@ -37,5 +41,7 @@ func unprotect(cipher []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
-	return unsafe.Slice(out.Data, out.Size), nil
+	plain := make([]byte, out.Size)
+	copy(plain, unsafe.Slice(out.Data, out.Size))
+	return plain, nil
 }
