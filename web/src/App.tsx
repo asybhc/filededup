@@ -9,6 +9,8 @@ import { SettingsDialog } from "./Settings";
 import { Search } from "./Search";
 import type {
   AppInfo,
+  DedupUndoInfo,
+  DedupUndoResult,
   DeleteMode,
   ExecuteState,
   GroupView,
@@ -165,6 +167,12 @@ export default function App() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [permanentAck, setPermanentAck] = useState(false);
   const [exec, setExec] = useState<ExecuteState>();
+  // 查重侧撤销：只保留最近一次“移入回收站”的执行，跨重启可读。
+  const [undoInfo, setUndoInfo] = useState<DedupUndoInfo>();
+  const [undoResult, setUndoResult] = useState<DedupUndoResult>();
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoConfirm, setUndoConfirm] = useState(false);
+  const [undoNote, setUndoNote] = useState("");
   const [error, setError] = useState("");
   const [detail, setDetail] = useState("");
   const [skipOpen, setSkipOpen] = useState(false);
@@ -555,6 +563,23 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [exec?.running, sessionId]);
 
+  // 进入“完成”步骤后读取撤销记录；读取失败不影响主流程，按“暂无可撤销”展示。
+  useEffect(() => {
+    if (step !== "done") return;
+    let alive = true;
+    api
+      .getDedupUndoInfo()
+      .then((info) => {
+        if (alive) setUndoInfo(info);
+      })
+      .catch(() => {
+        if (alive) setUndoInfo(undefined);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [step, sessionId]);
+
   // 性能自检时的帧率采样（1 秒窗口）。
   useEffect(() => {
     if (!perfActive) return;
@@ -772,6 +797,31 @@ export default function App() {
     }
   }
 
+  async function doDedupUndo() {
+    setUndoConfirm(false);
+    setUndoBusy(true);
+    setUndoNote("");
+    try {
+      const res = await api.undoLastDedup();
+      setUndoResult(res);
+      if (res.binEmpty) {
+        setUndoNote("回收站已被清空，删除的文件无法自动恢复。");
+      } else if (res.failed > 0) {
+        setUndoNote(`有 ${res.failed} 个文件未能恢复，原因见下方逐条说明。`);
+      }
+      const info = await api.getDedupUndoInfo();
+      setUndoInfo(info);
+    } catch (err) {
+      setUndoNote("撤销失败：" + errorText(err));
+      api
+        .getDedupUndoInfo()
+        .then(setUndoInfo)
+        .catch(() => {});
+    } finally {
+      setUndoBusy(false);
+    }
+  }
+
   async function importLicenseFile() {
     setLicenseNote("");
     try {
@@ -834,6 +884,9 @@ export default function App() {
     setGroupsTotal(0);
     setPreview(undefined);
     setExec(undefined);
+    setUndoInfo(undefined);
+    setUndoResult(undefined);
+    setUndoNote("");
     setPerfActive(false);
     setPerfRows([]);
     setError("");
@@ -1319,6 +1372,73 @@ export default function App() {
               </div>
             </div>
             {exec?.error && <div className="banner error">{exec.error}</div>}
+
+            <div className="sectionhead">
+              <h3>撤销上次删除</h3>
+              <span className={`badge ${undoInfo?.available ? "warn" : ""}`}>
+                {undoInfo?.available ? `可撤销 ${undoInfo.trash} 个文件` : "暂无可撤销记录"}
+              </span>
+            </div>
+            {undoInfo?.available ? (
+              <>
+                <p className="hint">
+                  批次时间 {undoInfo.finishedAt ? formatTime(undoInfo.finishedAt) : "未知"} · 删除方式{" "}
+                  {undoInfo.deleteMode === "permanent" ? "永久删除" : "移入回收站"}（只保留最近一次批次）。
+                  {undoInfo.truncated && " 明细只展示前 200 条。"}
+                </p>
+                <div className="skiplist">
+                  {undoInfo.items.map((it) => (
+                    <div className="skiprow" key={it.path}>
+                      <span className="kind">{formatBytes(it.size)}</span>
+                      <div>
+                        <p className="skippath">{it.path}</p>
+                        <p className="hint">
+                          来源目录 {it.dir}
+                          {it.modTime ? ` · 文件修改时间 ${formatTime(it.modTime)}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {undoInfo.permanent > 0 && (
+                  <p className="hint">
+                    另有 {undoInfo.permanent} 个文件为永久删除：
+                    {undoInfo.permanentReason || "永久删除未进入回收站，无法撤销"}。
+                  </p>
+                )}
+                <div className="actions">
+                  <button className="secondary" disabled={undoBusy} onClick={() => setUndoConfirm(true)}>
+                    {undoBusy ? "正在撤销…" : "撤销上次删除（恢复到原路径）"}
+                  </button>
+                </div>
+                <p className="hint">
+                  撤销会逐条检查：目标位置已有同名文件时不覆盖；原目录不存在时先重建目录。
+                  永久删除与已清空的回收站都无法恢复，界面会如实标注失败原因。
+                </p>
+              </>
+            ) : (
+              <p className="hint">
+                真实执行过一次“移入回收站”的删除后，这里会出现最近一次的撤销入口；记录跨重启仍可读取。
+              </p>
+            )}
+            {undoNote && <div className="banner info">{undoNote}</div>}
+            {undoResult && (
+              <p className="hint">
+                上次撤销：恢复 {undoResult.restored} · 失败 {undoResult.failed} · 不可撤销{" "}
+                {undoResult.unrestorable}（共 {undoResult.total} 条）
+              </p>
+            )}
+            {undoResult && undoResult.errors.length > 0 && (
+              <div className="skiplist">
+                {undoResult.errors.map((line, i) => (
+                  <div className="skiprow" key={i}>
+                    <span className="kind kind-warn">原因</span>
+                    <p className="skippath">{line}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="hint">
               执行日志已写入用户配置目录下的 <code>FileDedup/ops</code>。删除后的文件不在结果列表中刷新，建议重新扫描确认。
             </p>
@@ -1384,7 +1504,7 @@ export default function App() {
             </p>
             <p className="hint">
               {deleteMode === "trash"
-                ? "可在系统回收站中恢复，但恢复后不会自动回到本工具的记录里。"
+                ? "移入系统回收站；执行完成后可在本页“撤销上次删除”中恢复到原路径。"
                 : "永久删除不可恢复，也不会进入回收站。"}
             </p>
             {deleteMode === "permanent" && (
@@ -1408,6 +1528,29 @@ export default function App() {
                 onClick={startExecute}
               >
                 确认执行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {undoConfirm && undoInfo?.available && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="modalbodysmall">
+            <h3>确认撤销上次删除</h3>
+            <p>
+              将把 <b>{undoInfo.trash}</b> 个文件从回收站恢复到原路径。
+            </p>
+            <p className="hint">
+              目标位置已有同名文件时会跳过并给出原因，不会覆盖你后来新建的文件；
+              原目录不存在时会先重建目录。此操作无法撤销。
+            </p>
+            <div className="actions">
+              <button className="secondary" onClick={() => setUndoConfirm(false)}>
+                取消
+              </button>
+              <button className="primary" disabled={undoBusy} onClick={doDedupUndo}>
+                确认撤销
               </button>
             </div>
           </div>

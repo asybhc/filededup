@@ -12,6 +12,8 @@ import type {
   LanzouOptions,
   LanzouPlatform,
   LanzouPrepareResult,
+  DedupUndoInfo,
+  DedupUndoResult,
   LanzouStatus,
   LanzouSummary,
   LanzouUploadState,
@@ -982,6 +984,13 @@ export const mock = {
     };
     mockUndo = null;
     return result;
+  },
+  // 浏览器预览没有真实回收站，按“没有可撤销记录”展示；撤销操作如实拒绝。
+  getDedupUndoInfo(): DedupUndoInfo {
+    return { available: false, trash: 0, permanent: 0, items: [], truncated: false };
+  },
+  undoLastDedup(): DedupUndoResult {
+    throw new Error("浏览器预览不支持从回收站撤销，请在桌面版中使用");
   },
   // ---- 授权：浏览器预览没有真实授权，按“试用中”展示，导入操作如实拒绝 ----
   getLicenseState(): LicenseState {

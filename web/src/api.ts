@@ -1,5 +1,7 @@
 import type {
   AppInfo,
+  DedupUndoInfo,
+  DedupUndoResult,
   DeleteMode,
   ExecuteState,
   GroupsPage,
@@ -69,6 +71,8 @@ interface WailsApp {
   ImportOrganizeRules(): Promise<OrganizeRulesImport>;
   GetOrganizeUndoInfo(): Promise<OrganizeUndoInfo>;
   UndoLastOrganize(): Promise<OrganizeUndoResult>;
+  GetDedupUndoInfo(): Promise<DedupUndoInfo>;
+  UndoLastDedup(): Promise<DedupUndoResult>;
   CheckForUpdate(manual: boolean): Promise<UpdateCheckView>;
   InstallUpdate(): Promise<UpdateInstallView>;
   SkipUpdateVersion(version: string): Promise<void>;
@@ -246,6 +250,16 @@ export const api = {
     const b = bridge();
     if (b) return b.UndoLastOrganize();
     return mock.undoLastOrganize();
+  },
+  async getDedupUndoInfo(): Promise<DedupUndoInfo> {
+    const b = bridge();
+    if (b) return b.GetDedupUndoInfo();
+    return mock.getDedupUndoInfo();
+  },
+  async undoLastDedup(): Promise<DedupUndoResult> {
+    const b = bridge();
+    if (b) return b.UndoLastDedup();
+    return mock.undoLastDedup();
   },
   async checkForUpdate(manual: boolean): Promise<UpdateCheckView> {
     const b = bridge();

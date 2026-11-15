@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.5"
+const appVersion = "0.9.6"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -595,12 +595,16 @@ func (a *App) StartExecute(id, deleteMode string, deletePaths []string, confirme
 
 	go func() {
 		defer cancel()
-		exec := &apply.Executor{Trash: platform.Trash}
+		started := time.Now()
+		// 撤销日志包装操作清单：终态照旧写 ops，同时累计本次可撤销的删除动作。
+		undoJ := &dedupUndoJournal{requestID: p.RequestID}
+		exec := &apply.Executor{Trash: platform.Trash, Journal: undoJ}
 		if writer, jerr := openJournal(p.RequestID); jerr == nil {
-			exec.Journal = writer
+			undoJ.sink = writer
 			defer writer.Close()
 		}
 		rep, execErr := exec.Execute(ctx, p, apply.Options{Now: time.Now})
+		undoErr := saveDedupUndo(undoJ, started, time.Now(), mode)
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.executing = false
@@ -627,6 +631,12 @@ func (a *App) StartExecute(id, deleteMode string, deletePaths []string, confirme
 		}
 		if execErr != nil {
 			s.exec.Error = execErr.Error()
+		}
+		if undoErr != nil {
+			if s.exec.Error != "" {
+				s.exec.Error += "；"
+			}
+			s.exec.Error += "撤销记录写入失败：" + undoErr.Error()
 		}
 	}()
 	return nil

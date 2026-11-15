@@ -447,6 +447,42 @@ export interface OrganizeUndoResult {
   errors: string[];
 }
 
+// ---------- 查重侧撤销（对应 cmd/filededup/apply_undo.go） ----------
+
+export interface DedupUndoItem {
+  path: string;
+  dir: string;
+  size: number;
+  modTime?: string;
+}
+
+export interface DedupUndoInfo {
+  available: boolean;
+  requestId?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  deleteMode?: string;
+  /** 可撤销（移入回收站）的条数 */
+  trash: number;
+  /** 永久删除的条数，只统计、不可撤销 */
+  permanent: number;
+  permanentReason?: string;
+  items: DedupUndoItem[];
+  /** 明细超过 200 条时只返回前 200 条 */
+  truncated: boolean;
+}
+
+export interface DedupUndoResult {
+  requestId: string;
+  total: number;
+  restored: number;
+  failed: number;
+  unrestorable: number;
+  binItems: number;
+  binEmpty: boolean;
+  errors: string[];
+}
+
 // ---------- 自动更新（对应 cmd/filededup/update.go） ----------
 
 export type UpdateCheckStatus =
