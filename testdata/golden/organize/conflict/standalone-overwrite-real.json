@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "文档.txt",
+      "size": 15,
+      "sha256": "57fe22b62fa5a80ecf03f9c9f95f8e93b2a3f551cf45905513cbbef290fa4d64",
+      "readonly": false
+    }
+  ]
+}

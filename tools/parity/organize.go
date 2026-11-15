@@ -15,17 +15,13 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	stdimage "image"
 	stdcolor "image/color"
 	stdpng "image/png"
-	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,9 +30,7 @@ import (
 	"time"
 
 	"filededup/internal/engine/organize"
-	"filededup/internal/engine/similar/audio"
-	imgsim "filededup/internal/engine/similar/image"
-	"filededup/internal/platform"
+	"filededup/internal/orgscan"
 )
 
 // orgCorpusEpoch 是语料的固定基准时间，保证 mtime 可复现。
@@ -663,13 +657,8 @@ func runOrganizeScenes(args []string) int {
 
 // ---------------------------------------------------------------- 快照与导出
 
-// orgDumpFile 对齐 OrganizeDump.cs 的 files[] 元素。
-type orgDumpFile struct {
-	Path     string `json:"path"`
-	Size     int64  `json:"size"`
-	SHA256   string `json:"sha256"`
-	Readonly bool   `json:"readonly"`
-}
+// orgDumpFile 对齐 OrganizeDump.cs 的 files[] 元素；与 CLI 共用同一枚举结构。
+type orgDumpFile = orgscan.File
 
 // orgDump 与 OrganizeDump.cs 的 JSON 完全同构。
 type orgDump struct {
@@ -686,152 +675,26 @@ type orgDump struct {
 }
 
 // orgTree 是一次完整枚举的结果（导出用 + 规划器快照用）。
-type orgTree struct {
-	Dirs    []string
-	Files   []orgDumpFile
-	Entries []organize.FileEntry
-}
+type orgTree = orgscan.Tree
 
 // collectOrgTree 枚举 root 下全部目录与文件：相对 '/' 路径、大小、只读、SHA-256。
-func collectOrgTree(root string) (orgTree, error) {
-	t := orgTree{Dirs: []string{}, Files: []orgDumpFile{}, Entries: []organize.FileEntry{}}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if path == root {
-			return nil
-		}
-		// 对齐 B/E.cs B_m_1：重解析点（符号链接/目录联接）不扫描、不跟随、不计数。
-		if platform.IsReparse(path) {
-			if d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		rel, rerr := filepath.Rel(root, path)
-		if rerr != nil {
-			return rerr
-		}
-		relSlash := filepath.ToSlash(rel)
-		info, ierr := d.Info()
-		if ierr != nil {
-			return ierr
-		}
-		if d.IsDir() {
-			t.Dirs = append(t.Dirs, relSlash)
-			return nil
-		}
-		ro, hidden, system := fileFlags(path)
-		sum, herr := orgSHA256(path)
-		if herr != nil {
-			sum = "" // 与 C# 一致：读不到时留空
-		}
-		t.Files = append(t.Files, orgDumpFile{Path: relSlash, Size: info.Size(), SHA256: sum, Readonly: ro})
-		t.Entries = append(t.Entries, organize.FileEntry{
-			Path: relSlash, Size: info.Size(), ModTime: info.ModTime(),
-			Readonly: ro, Hidden: hidden, System: system, SHA256: sum,
-		})
-		return nil
-	})
-	if err != nil {
-		return t, err
-	}
-	sort.Strings(t.Dirs)
-	sort.Slice(t.Files, func(i, j int) bool { return t.Files[i].Path < t.Files[j].Path })
-	return t, nil
-}
-
-func orgSHA256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
+// 实现放在 internal/orgscan，CLI 与对拍工具共用，避免两侧枚举语义漂移。
+func collectOrgTree(root string) (orgTree, error) { return orgscan.Collect(root) }
 
 // ---------------------------------------------------------------- 配置映射
 
-func parseOrgSteps(s string) map[string]bool {
-	set := map[string]bool{}
-	for _, p := range strings.FieldsFunc(s, func(r rune) bool {
-		return r == ',' || r == ';' || r == ' ' || r == '\t'
-	}) {
-		if p = strings.TrimSpace(p); p != "" {
-			set[strings.ToLower(p)] = true
-		}
-	}
-	return set
-}
+func mapOrgConflict(s string) organize.ConflictPolicy { return organize.ParseConflictPolicy(s) }
 
-func mapOrgConflict(s string) organize.ConflictPolicy {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "skip":
-		return organize.ConflictSkip
-	case "rename":
-		return organize.ConflictRename
-	default:
-		return organize.ConflictOverwrite
-	}
-}
+func mapOrgDelete(s string) organize.DeleteMode { return organize.ParseDeleteMode(s) }
 
-func mapOrgDelete(s string) organize.DeleteMode {
-	if strings.EqualFold(strings.TrimSpace(s), "trash") {
-		return organize.DeleteTrash
-	}
-	return organize.DeletePermanent
-}
+func mapOrgKeep(s string) organize.KeepRule { return organize.ParseKeepRule(s) }
 
-func mapOrgKeep(s string) organize.KeepRule {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "newest":
-		return organize.KeepNewest
-	case "oldest":
-		return organize.KeepOldest
-	case "largest":
-		return organize.KeepLargest
-	case "nameshortest":
-		return organize.KeepShortestName
-	default:
-		return organize.KeepShortestPath
-	}
-}
-
-func mapOrgMode(s string) organize.OrganizeMode {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "extension":
-		return organize.ModeExtension
-	case "fixedfolder":
-		return organize.ModeFixedFolder
-	case "keyword":
-		return organize.ModeKeyword
-	case "namefeature":
-		return organize.ModeNameFeature
-	default:
-		return organize.ModeCategory
-	}
-}
+func mapOrgMode(s string) organize.OrganizeMode { return organize.ParseOrganizeMode(s) }
 
 // buildOrgConfig 把 CLI 参数翻译成 organize.Config。
 func buildOrgConfig(o orgOptions, root string) (organize.Config, error) {
 	cfg := organize.DefaultConfig()
-	steps := parseOrgSteps(o.Steps)
-	cfg.Steps = organize.StepSwitches{
-		RenamePrefix:  steps["prefix"],
-		RenameSuffix:  steps["suffix"],
-		SpecialDelete: steps["special"],
-		Readonly:      steps["readonly"],
-		ContentDedup:  steps["content"],
-		ImageDedup:    steps["image"],
-		AudioDedup:    steps["audio"],
-		Organize:      steps["organize"],
-		EmptyDirs:     steps["empty"],
-	}
+	cfg.Steps = organize.ParseSteps(o.Steps)
 	cfg.Order = organize.OrderStandalone
 	if o.Preview {
 		cfg.Order = organize.OrderPreview
@@ -994,7 +857,7 @@ func executeOrgRun(o orgOptions) (orgDump, error) {
 	providers := prepareOrgProviders(tree.Entries, root, cfg)
 	snap := buildOrgSnapshot(root, targetRel, tree)
 	if o.Preview {
-		snap.PreviewPlan = buildOrgPreviewPlan(cfg, snap)
+		snap.PreviewPlan = buildOrgPreviewPlan(cfg, snap, providers)
 	}
 
 	res := organize.Plan(cfg, snap, providers)
@@ -1043,230 +906,18 @@ func buildOrgSnapshot(root, targetRel string, tree orgTree) organize.Snapshot {
 }
 
 // prepareOrgProviders 预计算图片 dHash / 音频时长，并返回规划器所需的 Providers。
+// 实现放在 internal/orgscan，CLI 与对拍工具共用。
 func prepareOrgProviders(entries []organize.FileEntry, root string, cfg organize.Config) organize.Providers {
-	imgHash := map[string]uint64{}
-	audMS := map[string]int64{}
-	for i := range entries {
-		e := &entries[i]
-		abs := filepath.Join(root, filepath.FromSlash(e.Path))
-		if cfg.Steps.ImageDedup && organize.IsImage(e.Path) {
-			if h, ok := imgsim.Hash(abs); ok {
-				e.DHash, e.HasDHash = h, true
-				imgHash[e.Path] = h
-			}
-		}
-		if cfg.Steps.AudioDedup && organize.IsAudio(e.Path) {
-			if sec, ok := audio.Probe(abs); ok {
-				ms := audio.DurationMS(sec)
-				e.AudioMs, e.HasAudio = ms, true
-				audMS[e.Path] = ms
-			}
-		}
-	}
-	return organize.Providers{
-		ContentHash: func(e organize.FileEntry) (string, bool) {
-			if e.SHA256 == "" {
-				return "", false
-			}
-			return e.SHA256, true
-		},
-		ImageHash: func(e organize.FileEntry) (uint64, bool) {
-			h, ok := imgHash[e.Path]
-			return h, ok
-		},
-		AudioMsFn: func(e organize.FileEntry) (int64, bool) {
-			ms, ok := audMS[e.Path]
-			return ms, ok
-		},
-	}
+	return orgscan.PrepareProviders(entries, root, cfg)
 }
 
 // ---------------------------------------------------------------- 预览计划
 
-// orgEligibleEntries 复刻 vfs.list() 的扫描过滤，只做筛选不做排序。
-func orgEligibleEntries(cfg organize.Config, target string, files []organize.FileEntry) []organize.FileEntry {
-	tf := organize.Fold(target)
-	var out []organize.FileEntry
-	for _, e := range files {
-		if tf != "" {
-			fp := organize.Fold(e.Path)
-			if fp == tf || strings.HasPrefix(fp, tf+"/") {
-				continue
-			}
-		}
-		if cfg.SkipHiddenSystem && (e.Hidden || e.System) {
-			continue
-		}
-		if cfg.MinSize > 0 && e.Size < cfg.MinSize {
-			continue
-		}
-		if orgExcluded(cfg.Excludes, e.Path) {
-			continue
-		}
-		out = append(out, e)
-	}
-	organize.SortFilesNTFS(out)
-	return out
-}
-
-func orgExcluded(excludes []string, rel string) bool {
-	dir := organize.ParentRel(rel)
-	for _, ex := range excludes {
-		ex = strings.TrimRight(strings.TrimSpace(ex), `\/`)
-		if ex == "" || strings.ContainsAny(ex, `\:`) {
-			continue
-		}
-		for _, seg := range strings.Split(dir, "/") {
-			if seg != "" && strings.EqualFold(seg, ex) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // buildOrgPreviewPlan 构造“原路径（小写）→ 保留路径（小写）”映射。
 // 组顺序与扫描一致：内容 → 图片 → 音频；同文件命中多组时后者覆盖前者。
-func buildOrgPreviewPlan(cfg organize.Config, snap organize.Snapshot) map[string]string {
-	plan := map[string]string{}
-	items := orgEligibleEntries(cfg, snap.Target, snap.Files)
-
-	if cfg.Steps.ContentDedup {
-		// 按“大小 + SHA-256”分组：同大小但内容不同的文件不能配对；空 hash 不参与。
-		byContent := map[string][]organize.FileEntry{}
-		var keys []string
-		for _, f := range items {
-			if f.SHA256 == "" {
-				continue
-			}
-			key := fmt.Sprintf("%d|%s", f.Size, f.SHA256)
-			if _, ok := byContent[key]; !ok {
-				keys = append(keys, key)
-			}
-			byContent[key] = append(byContent[key], f)
-		}
-		for _, key := range keys {
-			g := byContent[key]
-			if len(g) < 2 {
-				continue
-			}
-			planOrgGroup(plan, g, cfg.KeepRule)
-		}
-	}
-
-	if cfg.Steps.ImageDedup {
-		var imgs []organize.FileEntry
-		for _, f := range items {
-			if f.HasDHash && organize.IsImage(f.Path) {
-				imgs = append(imgs, f)
-			}
-		}
-		keepRule := cfg.ImageKeepRule
-		if keepRule == "" {
-			keepRule = organize.KeepLargest
-		}
-		for _, g := range orgGroupImages(imgs, cfg.ImageThreshold) {
-			if len(g) < 2 {
-				continue
-			}
-			planOrgGroup(plan, g, keepRule)
-		}
-	}
-
-	if cfg.Steps.AudioDedup {
-		tol := int64(cfg.AudioToleranceSec) * 1000
-		byExt := map[string][]organize.FileEntry{}
-		var exts []string
-		for _, f := range items {
-			if !f.HasAudio || !organize.IsAudio(f.Path) {
-				continue
-			}
-			ext := strings.ToLower(organize.WinExt(f.Path))
-			if _, ok := byExt[ext]; !ok {
-				exts = append(exts, ext)
-			}
-			byExt[ext] = append(byExt[ext], f)
-		}
-		for _, ext := range exts {
-			g := byExt[ext]
-			if len(g) < 2 {
-				continue
-			}
-			sort.SliceStable(g, func(i, j int) bool { return g[i].AudioMs < g[j].AudioMs })
-			var groups [][]organize.FileEntry
-			var anchor int64
-			for i, f := range g {
-				if i == 0 || f.AudioMs-anchor > tol {
-					groups = append(groups, []organize.FileEntry{f})
-					anchor = f.AudioMs
-					continue
-				}
-				groups[len(groups)-1] = append(groups[len(groups)-1], f)
-			}
-			for _, grp := range groups {
-				if len(grp) < 2 {
-					continue
-				}
-				planOrgGroup(plan, grp, cfg.KeepRule)
-			}
-		}
-	}
-	return plan
-}
-
-func planOrgGroup(plan map[string]string, group []organize.FileEntry, rule organize.KeepRule) {
-	idx := organize.KeepWinner(group, rule)
-	if idx < 0 {
-		return
-	}
-	keep := organize.Fold(group[idx].Path)
-	for _, f := range group {
-		plan[organize.Fold(f.Path)] = keep
-	}
-}
-
-// orgGroupImages 复刻 A/Q.cs 的锚点贪心 + 组内直径约束。
-func orgGroupImages(list []organize.FileEntry, threshold int) [][]organize.FileEntry {
-	var groups [][]organize.FileEntry
-	var anchors []uint64
-	for _, f := range list {
-		if !f.HasDHash {
-			continue
-		}
-		h := f.DHash
-		placed := false
-		for gi := range groups {
-			if orgHamming(h, anchors[gi]) > threshold {
-				continue
-			}
-			maxD := 0
-			for _, m := range groups[gi] {
-				if d := orgHamming(h, m.DHash); d > maxD {
-					maxD = d
-				}
-			}
-			if maxD <= threshold {
-				groups[gi] = append(groups[gi], f)
-				placed = true
-				break
-			}
-		}
-		if !placed {
-			groups = append(groups, []organize.FileEntry{f})
-			anchors = append(anchors, h)
-		}
-	}
-	return groups
-}
-
-func orgHamming(a, b uint64) int {
-	x := a ^ b
-	n := 0
-	for x != 0 {
-		x &= x - 1
-		n++
-	}
-	return n
+// 生成逻辑与 CLI 共用，见 organize.BuildPreviewPlan。
+func buildOrgPreviewPlan(cfg organize.Config, snap organize.Snapshot, providers organize.Providers) map[string]string {
+	return organize.BuildPreviewPlan(cfg, snap, providers).Map()
 }
 
 func writeOrgDump(path string, dump orgDump) error {
@@ -1696,6 +1347,7 @@ type orgBatchCase struct {
 	PreviewUnion   int     `json:"previewUnion"`
 	PreviewRate    float64 `json:"previewRate"`
 	FirstDiff      string  `json:"firstDiff,omitempty"`
+	Deviation      string  `json:"deviation,omitempty"`
 	Error          string  `json:"error,omitempty"`
 }
 
@@ -1705,6 +1357,7 @@ type orgBatchSummary struct {
 	Work  string         `json:"work"`
 	Total int            `json:"total"`
 	Match int            `json:"match"`
+	Known int            `json:"known"`
 	Cases []orgBatchCase `json:"cases"`
 }
 
@@ -1718,6 +1371,8 @@ func runOrganizeBatch(args []string) int {
 	conflictsFlag := fs.String("conflicts", "overwrite", "冲突策略：overwrite,skip,rename")
 	dryFlag := fs.Bool("dry-run", false, "只跑试运行")
 	matrixFlag := fs.Bool("matrix", false, "展开全部（顺序 × 冲突 × 试运行）组合")
+	goldenFlag := fs.String("golden", "", "基准目录：读取已归档的 C# 结果（CI 用，不需要 --exe）")
+	writeGoldenFlag := fs.String("write-golden", "", "把本次 C# 结果归档到目录（需要 --exe）")
 	outFlag := fs.String("out", "", "summary JSON 路径；缺省 <work>/summary.json")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -1730,14 +1385,34 @@ func runOrganizeBatch(args []string) int {
 		fmt.Fprintln(os.Stderr, "必须指定 --work")
 		return 2
 	}
+	if *goldenFlag != "" && *writeGoldenFlag != "" {
+		fmt.Fprintln(os.Stderr, "--golden 与 --write-golden 不能同时使用")
+		return 2
+	}
 	work, err := filepath.Abs(*workFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "无效的 --work：%v\n", err)
 		return 2
 	}
-	if _, err := os.Stat(*exeFlag); err != nil {
-		fmt.Fprintf(os.Stderr, "C# 可执行文件不可用 %s：%v\n", *exeFlag, err)
-		return 2
+	if *goldenFlag == "" {
+		if _, err := os.Stat(*exeFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "C# 可执行文件不可用 %s：%v\n", *exeFlag, err)
+			return 2
+		}
+	}
+	goldenDir := *goldenFlag
+	if goldenDir != "" {
+		if goldenDir, err = filepath.Abs(goldenDir); err != nil {
+			fmt.Fprintf(os.Stderr, "无效的 --golden：%v\n", err)
+			return 2
+		}
+	}
+	writeGoldenDir := *writeGoldenFlag
+	if writeGoldenDir != "" {
+		if writeGoldenDir, err = filepath.Abs(writeGoldenDir); err != nil {
+			fmt.Fprintf(os.Stderr, "无效的 --write-golden：%v\n", err)
+			return 2
+		}
 	}
 	selected, err := selectOrgScenes(*scenesFlag)
 	if err != nil {
@@ -1770,15 +1445,22 @@ func runOrganizeBatch(args []string) int {
 		for _, order := range orders {
 			for _, conflict := range conflicts {
 				for _, dry := range dryRuns {
-					c := runOrgBatchCase(*exeFlag, work, sc, order, conflict, dry)
+					c := runOrgBatchCase(*exeFlag, work, goldenDir, writeGoldenDir, sc, order, conflict, dry)
 					sum.Cases = append(sum.Cases, c)
 					sum.Total++
-					if c.Result == "MATCH" {
+					switch c.Result {
+					case "MATCH":
 						sum.Match++
+					case "KNOWN":
+						sum.Known++
+					}
+					note := c.FirstDiff
+					if c.Deviation != "" {
+						note = "已登记偏差：" + c.Deviation
 					}
 					fmt.Printf("[%s/%s/%s/dry=%v] %s matched=%d/%d rate=%.2f%% counters=%v preview=%d/%d %.2f%% %s\n",
 						sc.id, order, conflict, dry, c.Result, c.Matched, c.Union, c.FileRate*100,
-						c.CountersMatch, c.PreviewMatched, c.PreviewUnion, c.PreviewRate*100, c.FirstDiff)
+						c.CountersMatch, c.PreviewMatched, c.PreviewUnion, c.PreviewRate*100, note)
 				}
 			}
 		}
@@ -1792,14 +1474,14 @@ func runOrganizeBatch(args []string) int {
 		fmt.Fprintf(os.Stderr, "写入 summary 失败：%v\n", err)
 		return 2
 	}
-	fmt.Printf("organize-batch: %d/%d MATCH，summary=%s\n", sum.Match, sum.Total, outPath)
-	if sum.Match == sum.Total && sum.Total > 0 {
+	fmt.Printf("organize-batch: %d/%d MATCH，%d 条已登记偏差，summary=%s\n", sum.Match, sum.Total, sum.Known, outPath)
+	if sum.Total > 0 && sum.Match+sum.Known == sum.Total {
 		return 0
 	}
 	return 1
 }
 
-func runOrgBatchCase(exe, work string, sc orgScene, order, conflict string, dry bool) orgBatchCase {
+func runOrgBatchCase(exe, work, goldenDir, writeGoldenDir string, sc orgScene, order, conflict string, dry bool) orgBatchCase {
 	c := orgBatchCase{Scene: sc.id, Order: order, Conflict: conflict, DryRun: dry}
 	tag := fmt.Sprintf("%s-%s-%s", order, conflict, boolTag(dry))
 	caseDir := filepath.Join(work, sc.id, tag)
@@ -1840,20 +1522,36 @@ func runOrgBatchCase(exe, work string, sc orgScene, order, conflict string, dry 
 	o.DryRun = dry
 	o.Preview = order == "preview"
 
-	csOut := filepath.Join(caseDir, "cs.json")
-	argsC := []string{"--dump-organize-json", csOut, "--root", csDir, "--target", csTarget}
-	argsC = append(argsC, orgCLIArgs(o)...)
-	// C# 侧工作目录设为语料根：原版“指定文件夹”是相对当前目录解析的
-	// （B/E.cs L1322-1327 直接用 A_1.B），这样两侧相对路径语义一致。
-	if out, code, rerr := runSceneCmd(exe, argsC, csDir); rerr != nil {
-		c.Result = "ERROR"
-		c.Error = fmt.Sprintf("C# 退出码 %d：%s", code, strings.TrimSpace(out))
-		return c
-	}
-	base, err := loadOrgDump(csOut)
-	if err != nil {
-		c.Result, c.Error = "ERROR", "读取 C# 结果失败："+err.Error()
-		return c
+	var base *orgDump
+	if goldenDir != "" {
+		// 基准模式：不运行 C#，直接读归档结果（CI 无 C# 参考实现时使用）。
+		base, err = loadOrgGolden(goldenDir, sc.id, tag)
+		if err != nil {
+			c.Result, c.Error = "ERROR", "读取基准失败："+err.Error()
+			return c
+		}
+	} else {
+		csOut := filepath.Join(caseDir, "cs.json")
+		argsC := []string{"--dump-organize-json", csOut, "--root", csDir, "--target", csTarget}
+		argsC = append(argsC, orgCLIArgs(o)...)
+		// C# 侧工作目录设为语料根：原版“指定文件夹”是相对当前目录解析的
+		// （B/E.cs L1322-1327 直接用 A_1.B），这样两侧相对路径语义一致。
+		if out, code, rerr := runSceneCmd(exe, argsC, csDir); rerr != nil {
+			c.Result = "ERROR"
+			c.Error = fmt.Sprintf("C# 退出码 %d：%s", code, strings.TrimSpace(out))
+			return c
+		}
+		base, err = loadOrgDump(csOut)
+		if err != nil {
+			c.Result, c.Error = "ERROR", "读取 C# 结果失败："+err.Error()
+			return c
+		}
+		if writeGoldenDir != "" {
+			if werr := saveOrgGolden(writeGoldenDir, sc.id, tag, base); werr != nil {
+				c.Result, c.Error = "ERROR", "写入基准失败："+werr.Error()
+				return c
+			}
+		}
 	}
 
 	goOpts := o
@@ -1884,6 +1582,12 @@ func runOrgBatchCase(exe, work string, sc orgScene, order, conflict string, dry 
 	}
 	if len(cmp.Diffs) > 0 {
 		c.FirstDiff = cmp.Diffs[0].String()
+	}
+	if goldenDir != "" && cmp.Result != "MATCH" {
+		if reason, ok := orgGoldenDeviation(sc.id, cmp.Diffs); ok {
+			c.Result = "KNOWN"
+			c.Deviation = reason
+		}
 	}
 	return c
 }

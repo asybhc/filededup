@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 1,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "a.wav",
+      "size": 24044,
+      "sha256": "88b4655580b6923e2c5ef4f503d5fd9e3d54d23b6acd1bdd9113d4caacac5eb4",
+      "readonly": false
+    },
+    {
+      "path": "b.wav",
+      "size": 24044,
+      "sha256": "ab0fc9d617c7bbcb93a4f9d3a94660dee089c6f2ce2e1908f61e439e0631bf04",
+      "readonly": false
+    },
+    {
+      "path": "c.wav",
+      "size": 64044,
+      "sha256": "fddc99624540186d50c57adf847928f76fd8b5fb464782695c4ec2d216532b79",
+      "readonly": false
+    }
+  ],
+  "previewPlan": {
+    "a.wav": "a.wav",
+    "b.wav": "a.wav"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 2,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 1,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果"
+  ],
+  "files": [
+    {
+      "path": "doc.txt",
+      "size": 9,
+      "sha256": "383e515b0f60790d1a079b7b0539755274464f30076ed34cec26b283081bd92c",
+      "readonly": false
+    },
+    {
+      "path": "img_01.png",
+      "size": 11,
+      "sha256": "bec42ba9aa1990ebab917f763732459532e9c3bb02ee94e1dbaee59e7ce7395a",
+      "readonly": false
+    },
+    {
+      "path": "img_02.jpg",
+      "size": 11,
+      "sha256": "315dd5b040abd0bd088ad0a1f786b078043b03a4c7787f98c3a81cc6f27ca6c3",
+      "readonly": false
+    }
+  ]
+}

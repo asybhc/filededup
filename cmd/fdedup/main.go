@@ -21,7 +21,7 @@ import (
 	"filededup/internal/engine/scan"
 )
 
-const version = "0.3.0-m3"
+const version = "0.5.0-m5"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `fdedup %s
@@ -31,6 +31,7 @@ func usage() {
   fdedup scan --root <dir> [--root <dir>...] [选项]
   fdedup plan --scan <result.json> [--permanent] [--dump <plan.json>]
   fdedup apply --plan <plan.json> (--dry-run | --yes) [选项]
+  fdedup organize --root <dir> (--dry-run | --yes) [选项]
   fdedup machine-id [--json]
 
 scan 选项:
@@ -69,6 +70,29 @@ apply 选项:
   --out <file>         执行报告写入文件
   --json               执行报告输出到 stdout
 
+organize 选项:
+  --root <dir>         整理根目录（必填）
+  --target <rel>       整理目标目录（root 下的相对子目录）
+  --steps <list>       启用步骤，默认 prefix,suffix,special,readonly,content,image,audio,organize,empty
+  --mode <m>           category|extension|namefeature|keyword|fixedfolder（默认 category）
+  --keyword/--regex/--fixed  第五步分类参数
+  --conflict <p>       rename|overwrite|skip（默认 rename；skip 会跳过去重删除）
+  --delete <m>         trash|permanent（默认 trash，Windows 走真实回收站）
+  --keep <p>           去重保留规则，默认 pathShortest
+  --image-keep <p> / --image-threshold <n> / --audio-tolerance <n>
+  --protect <words>    保护词；--strength <0|1|2> 垃圾识别强度
+  --min-size <n> / --include-hidden / --exclude <list>  扫描过滤
+  --auto-confirm       与 --confirmed 配合删除清单内的存疑项（否则一律保留）
+  --confirmed <file>   已确认删除清单（每行一个根内相对路径）
+  --hardlink           内容重复文件用硬链接合并（同卷）
+  --release-lock       允许关闭占用文件的程序（可见窗口需 y/N 确认）
+  --preview            现场生成预览计划（先去重后整理）
+  --preview-plan <f>   读取持久化的预览计划 JSON
+  --save-preview <f>   把本次使用的预览计划写入 JSON
+  --dry-run / --yes    二选一；试运行仍会像原版一样创建目标目录
+  --continue-on-error  单条失败后继续执行
+  --out <file> / --json  结果输出
+
 退出码: 0 成功 / 2 参数或输入错误 / 3 执行失败或内部错误 / 4 用户取消
 `, version)
 }
@@ -95,6 +119,8 @@ func main() {
 		os.Exit(runPlan(os.Args[2:]))
 	case "apply":
 		os.Exit(runApply(os.Args[2:]))
+	case "organize":
+		os.Exit(runOrganize(os.Args[2:]))
 	case "machine-id":
 		os.Exit(runMachineID(os.Args[2:]))
 	case "-h", "--help", "help":

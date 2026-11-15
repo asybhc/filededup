@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 2,
+    "specialDeleted": 0,
+    "moved": 7,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 3,
+    "hiddenSkipped": 0,
+    "suspectsKept": 1,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果",
+    "整理结果/数据库",
+    "整理结果/文档"
+  ],
+  "files": [
+    {
+      "path": "1.txt",
+      "size": 10,
+      "sha256": "0a7dfddd15eef3c66dd2359daf00c754898fae600ad1a29bf842bb52e22198b0",
+      "readonly": false
+    },
+    {
+      "path": "Thumbs.db",
+      "size": 11,
+      "sha256": "0da88d59f0ca19f2f097e0d6ddea323f391b065a35d350e6920b491b396b8a42",
+      "readonly": false
+    },
+    {
+      "path": "~$临时.doc",
+      "size": 9,
+      "sha256": "4f597f19b2d2f9cd5456c9dc59b316c2b27922da61b8eb7f296cf6eaa253f06f",
+      "readonly": false
+    },
+    {
+      "path": "副本 - 副本.txt",
+      "size": 9,
+      "sha256": "48973d302931dd963a152088e4b91f45503bd238d390230a8c251010538876aa",
+      "readonly": false
+    },
+    {
+      "path": "新建文本文档.txt",
+      "size": 13,
+      "sha256": "de4f97a25152dc39ff5aaea6fe2f1ae64bdab7ad4dec9490afabae86ad306f13",
+      "readonly": false
+    },
+    {
+      "path": "正常文件.txt",
+      "size": 6,
+      "sha256": "317b32c143692b9939c197f6a5df54f9698df9a4882fe8bf19608968662be4fa",
+      "readonly": false
+    },
+    {
+      "path": "重要资料.txt",
+      "size": 11,
+      "sha256": "996766d20b75e1d20691f6842de01c222017dcb5155dc4bb17fb3ef4e43f4fd0",
+      "readonly": false
+    }
+  ]
+}

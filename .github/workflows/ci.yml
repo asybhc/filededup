@@ -61,3 +61,35 @@ jobs:
 
       - name: parity 工具自检
         run: go test ./tools/parity/ -run . -count=1 -v
+
+  organize-parity:
+    # 整理器对拍矩阵：与 testdata/golden/organize 中归档的 C# 结果逐组比对。
+    # 只在 Windows 跑：hidden 场景依赖 Windows 隐藏属性，且基准是在 Windows 上采集的。
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 整理器对拍（17 场景 × 2 顺序 × 3 冲突 × 2 试运行）
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "organize"
+          go run ./tools/parity organize-batch --golden testdata/golden/organize --work $work --matrix --out (Join-Path $work "summary.json")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $s = Get-Content (Join-Path $work "summary.json") -Raw | ConvertFrom-Json
+          "MATCH=$($s.match) KNOWN=$($s.known) TOTAL=$($s.total)"
+
+      - name: 上传对拍 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: organize-parity-summary
+          path: ${{ runner.temp }}/organize/summary.json
+          if-no-files-found: ignore

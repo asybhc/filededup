@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 6,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果",
+    "整理结果/PDF",
+    "整理结果/其他",
+    "整理结果/压缩包",
+    "整理结果/图片",
+    "整理结果/文档",
+    "整理结果/视频"
+  ],
+  "files": [
+    {
+      "path": "整理结果/PDF/b.pdf",
+      "size": 7,
+      "sha256": "152c9f348a6a3fd9f72656cf5afc58af904334955d2b55bb80248e6ef044f334",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/其他/noext",
+      "size": 9,
+      "sha256": "cfc6cdd35a0c8330a79deebd07527a4dc68890bde0b7c498b336313881160dd0",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/压缩包/e.zip",
+      "size": 7,
+      "sha256": "296f1d9c05bc171d487420ca841bcabcab42484800c979cf7359e25412822744",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/图片/c.jpg",
+      "size": 20,
+      "sha256": "9f5a9284b0eebb3f0c84eb9e61d778228c440088c761660de56e9729c76c7b43",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/文档/a.txt",
+      "size": 7,
+      "sha256": "a5e1505b89b62ae9fdd261ea1de0c0212936909048938ec48fc34337fd230d0c",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/视频/d.mp4",
+      "size": 7,
+      "sha256": "a99144f8e2230de3aaca85d4b7f2c65f62662dd6a429e1932c05707ad9cacb00",
+      "readonly": false
+    }
+  ]
+}

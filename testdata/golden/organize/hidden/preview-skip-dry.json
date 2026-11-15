@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 1,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 5,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果",
+    "整理结果/文档"
+  ],
+  "files": [
+    {
+      "path": "hidden.txt",
+      "size": 6,
+      "sha256": "e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c",
+      "readonly": false
+    },
+    {
+      "path": "visible.txt",
+      "size": 7,
+      "sha256": "d42ef1497900bc6e542c641a896c88694d15069b8a11247f66ba7342b6c21cd9",
+      "readonly": false
+    }
+  ]
+}

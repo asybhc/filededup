@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 2,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 1,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果"
+  ],
+  "files": [
+    {
+      "path": "其他.txt",
+      "size": 8,
+      "sha256": "057b291b590272cc4a18eaff901457ddf124a82309750803a75179b4f798beb3",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/年度总结.txt",
+      "size": 10,
+      "sha256": "8b9896c34414bf4621a9526251cfb0b8418feda9ab50bd2134d611020c79a024",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/报告1.txt",
+      "size": 11,
+      "sha256": "6e4fd2ad31101f43a54326c268319100d91f5343a3bd806aa60258be4dd97184",
+      "readonly": false
+    }
+  ]
+}

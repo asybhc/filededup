@@ -18,9 +18,9 @@ const (
 	errorSharingViolation = syscall.Errno(32)
 	errorLockViolation    = syscall.Errno(33)
 
-	processTerminate              = 0x0001
+	processTerminate               = 0x0001
 	processQueryLimitedInformation = 0x1000
-	synchronize                   = 0x00100000
+	synchronize                    = 0x00100000
 
 	wmClose = 0x0010
 )

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 1,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "img2.png",
+      "size": 442,
+      "sha256": "cc0444af758685eb01b902f3d1d4291a36f195a81b88fa35a62271b1bc84ec23",
+      "readonly": false
+    },
+    {
+      "path": "img3.png",
+      "size": 197,
+      "sha256": "2fca046e84dc6e19bfb29b95aec2b7e572260d558e9da4d1a3d4bc6ec159390e",
+      "readonly": false
+    }
+  ]
+}

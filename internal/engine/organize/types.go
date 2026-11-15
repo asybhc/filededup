@@ -81,25 +81,25 @@ func DefaultStepSwitches() StepSwitches {
 
 // FileEntry 是纯函数层的文件快照条目；Path 为相对根目录的路径（统一 '/'）。
 type FileEntry struct {
-	Path      string
-	Size      int64
-	ModTime   time.Time
-	Readonly  bool
-	Hidden    bool
-	System    bool
-	SHA256    string
-	DHash     uint64
-	HasDHash  bool
-	AudioMs   int64
-	HasAudio  bool
+	Path     string
+	Size     int64
+	ModTime  time.Time
+	Readonly bool
+	Hidden   bool
+	System   bool
+	SHA256   string
+	DHash    uint64
+	HasDHash bool
+	AudioMs  int64
+	HasAudio bool
 }
 
 // Snapshot 是某一时刻的文件系统快照。Target 为整理目标目录（相对根目录，可为空）。
 type Snapshot struct {
-	Root    string
-	Target  string
-	Files   []FileEntry
-	Dirs    []string
+	Root   string
+	Target string
+	Files  []FileEntry
+	Dirs   []string
 	// PreviewPlan 为“有预览计划”时的映射：原路径（小写）→ 保留路径（小写）。
 	PreviewPlan map[string]string
 }
@@ -113,8 +113,8 @@ type Providers struct {
 
 // Config 是整理器配置；字段命名对齐原版语义。
 type Config struct {
-	Order    OrderMode
-	Steps    StepSwitches
+	Order OrderMode
+	Steps StepSwitches
 
 	DryRun        bool
 	Conflict      ConflictPolicy
@@ -127,10 +127,10 @@ type Config struct {
 	SkipHiddenSystem bool     // F
 
 	// 特殊文件删除
-	ProtectWords        string // A_1.C，按 [,，;；\s]+ 拆分，用于跳过改名/特殊判定
-	Strength            int    // B_2，0 低 / 1 中 / 2 高
-	LocalWhitelist      bool   // T.A_2，默认 true
-	AutoDeleteConfirmed bool   // g
+	ProtectWords        string          // A_1.C，按 [,，;；\s]+ 拆分，用于跳过改名/特殊判定
+	Strength            int             // B_2，0 低 / 1 中 / 2 高
+	LocalWhitelist      bool            // T.A_2，默认 true
+	AutoDeleteConfirmed bool            // g
 	ConfirmedKeys       map[string]bool // A_7
 
 	// 去重
@@ -190,20 +190,20 @@ type Action struct {
 
 // Counter 对齐原版 b.E 的计数项。
 type Counter struct {
-	Renamed        int `json:"renamed"`         // A
-	SpecialDeleted int `json:"specialDeleted"`  // 通过删除动作成功的特殊文件数
-	Moved          int `json:"moved"`           // B
-	ConflictSkip   int `json:"conflictSkip"`    // b
-	Readonly       int `json:"readonly"`        // C
-	OrganizeSkip   int `json:"organizeSkip"`    // c
-	ContentDeleted int `json:"contentDeleted"`  // D
-	ImageDeleted   int `json:"imageDeleted"`    // d
-	AudioDeleted   int `json:"audioDeleted"`    // F
-	EmptyDirs      int `json:"emptyDirs"`       // E_f_1
-	Excluded       int `json:"excluded"`        // e
-	HiddenSkipped  int `json:"hiddenSkipped"`   // G
-	SuspectsKept   int `json:"suspectsKept"`    // g
-	HardlinkMerged int `json:"hardlinkMerged"`  // f
+	Renamed        int `json:"renamed"`        // A
+	SpecialDeleted int `json:"specialDeleted"` // 通过删除动作成功的特殊文件数
+	Moved          int `json:"moved"`          // B
+	ConflictSkip   int `json:"conflictSkip"`   // b
+	Readonly       int `json:"readonly"`       // C
+	OrganizeSkip   int `json:"organizeSkip"`   // c
+	ContentDeleted int `json:"contentDeleted"` // D
+	ImageDeleted   int `json:"imageDeleted"`   // d
+	AudioDeleted   int `json:"audioDeleted"`   // F
+	EmptyDirs      int `json:"emptyDirs"`      // E_f_1
+	Excluded       int `json:"excluded"`       // e
+	HiddenSkipped  int `json:"hiddenSkipped"`  // G
+	SuspectsKept   int `json:"suspectsKept"`   // g
+	HardlinkMerged int `json:"hardlinkMerged"` // f
 }
 
 // Add 累加另一个计数器。
@@ -237,9 +237,9 @@ type StepPlan struct {
 
 // Result 是整体规划结果。
 type Result struct {
-	Order      OrderMode  `json:"order"`
-	Steps      []StepPlan `json:"steps"`
-	Counters   Counter    `json:"counters"`
+	Order    OrderMode  `json:"order"`
+	Steps    []StepPlan `json:"steps"`
+	Counters Counter    `json:"counters"`
 }
 
 // StepID 九步的稳定标识。

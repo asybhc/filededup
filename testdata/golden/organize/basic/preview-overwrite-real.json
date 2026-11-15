@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 6,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 3,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 1,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "整理结果",
+    "整理结果/压缩包",
+    "整理结果/图片",
+    "整理结果/文档",
+    "整理结果/镜像"
+  ],
+  "files": [
+    {
+      "path": "整理结果/压缩包/data.zip",
+      "size": 20,
+      "sha256": "447bfdaf24b6f66422546518cf0c9a2c9d38c7c22b312ab9a0be9c5052668b5b",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/图片/logo.png",
+      "size": 197,
+      "sha256": "04b320077606735bedda18a67f66e6bdefe0f382f285b0a7dfb5157e51de62ab",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/文档/guide.md",
+      "size": 16,
+      "sha256": "3ac9a551069c7195db7f4c4686a06600ebe8d0c1ac4e81d04542b9f7b255e152",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/文档/notes.txt",
+      "size": 17,
+      "sha256": "f06e9c1e329d2ee367ee791c61129baf413b935fa7ca73b8d77bf70fdab7427f",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/文档/readme.txt",
+      "size": 13,
+      "sha256": "99b9447564eeb7cfaa6f7b281bc27cae71e409b492f611c5e0f23106dfe28000",
+      "readonly": false
+    },
+    {
+      "path": "整理结果/镜像/empty.bin",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "readonly": false
+    }
+  ]
+}

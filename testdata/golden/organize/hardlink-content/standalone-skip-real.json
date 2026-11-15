@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": false,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 2,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "a.txt",
+      "size": 1024,
+      "sha256": "31071ffffdf6cf58f9fdc7f5f2475de4fe5511e7a4425306bd0245699314b8d5",
+      "readonly": false
+    },
+    {
+      "path": "b.txt",
+      "size": 1024,
+      "sha256": "31071ffffdf6cf58f9fdc7f5f2475de4fe5511e7a4425306bd0245699314b8d5",
+      "readonly": false
+    },
+    {
+      "path": "c.txt",
+      "size": 1024,
+      "sha256": "31071ffffdf6cf58f9fdc7f5f2475de4fe5511e7a4425306bd0245699314b8d5",
+      "readonly": false
+    },
+    {
+      "path": "d.bin",
+      "size": 512,
+      "sha256": "981b8ac0e448c2a01df760648f17ba027d1ed0a9ada17aa4cc74b9694b45d4ad",
+      "readonly": false
+    },
+    {
+      "path": "e.bin",
+      "size": 512,
+      "sha256": "1eac5232727c050943510355b423e62b953a3a1fe99d8cb15f79737b1d81a6bd",
+      "readonly": false
+    },
+    {
+      "path": "unique.txt",
+      "size": 14,
+      "sha256": "f67d4fe330a84949cd29a2b944d7cdebe060bb243eeb18d650dafc01c48e9c84",
+      "readonly": false
+    }
+  ]
+}

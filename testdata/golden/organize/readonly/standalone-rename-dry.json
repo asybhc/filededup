@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 2,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "ro1.txt",
+      "size": 10,
+      "sha256": "0abb9906e657a3679dc1d13bd41964ce9e88ed044c3dda6390b659c82f42e321",
+      "readonly": true
+    },
+    {
+      "path": "ro2.txt",
+      "size": 10,
+      "sha256": "0e12928282f2ab38e981d0aa80f778b37c7d9b298d63b4c717022086892650d0",
+      "readonly": true
+    },
+    {
+      "path": "rw.txt",
+      "size": 8,
+      "sha256": "6ebd0a2e7fabd5c788bb7ea9348dcb165910fd1c8966b9b978ae71fcbd02080d",
+      "readonly": false
+    }
+  ]
+}

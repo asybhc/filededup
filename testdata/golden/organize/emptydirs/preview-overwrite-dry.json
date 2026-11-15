@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 0,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 2,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "a",
+    "a/b",
+    "keep",
+    "keep/withfile",
+    "x",
+    "x/y",
+    "x/y/z"
+  ],
+  "files": [
+    {
+      "path": "keep/withfile/f.txt",
+      "size": 15,
+      "sha256": "0af1d4910fce0bb3687a8a5a4f913ba7bde1884dc4ed6eef43721f821017718c",
+      "readonly": false
+    },
+    {
+      "path": "root.txt",
+      "size": 15,
+      "sha256": "3d4cf597b80720c18395b893161ebb8d961f6a3de22b03170cd82f19057be02c",
+      "readonly": false
+    }
+  ]
+}

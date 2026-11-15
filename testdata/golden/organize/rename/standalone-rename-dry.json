@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 6,
+    "specialDeleted": 0,
+    "moved": 0,
+    "conflictSkip": 0,
+    "readonly": 0,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 0,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [],
+  "files": [
+    {
+      "path": "01 报告.txt",
+      "size": 19,
+      "sha256": "0807094eac8054c5221a9581a90361da57e861843f8738e42c89d6402fbb0a57",
+      "readonly": false
+    },
+    {
+      "path": "01-02-03 记录.txt",
+      "size": 18,
+      "sha256": "310b0c329a8370961eb6f0836f487a9ad2dd12b2a3b555e8943e26dc2d070901",
+      "readonly": false
+    },
+    {
+      "path": "20240102 简介.txt",
+      "size": 18,
+      "sha256": "17a1b5928de28d0bece253f69f77a29751be8e4d47532c8a52435ee10ac8c893",
+      "readonly": false
+    },
+    {
+      "path": "a-3-b.txt",
+      "size": 13,
+      "sha256": "3c8253a44d42d3fa2db2825b8f82f17d2f55bcdc2d4d739c67e8600c1fe80f7d",
+      "readonly": false
+    },
+    {
+      "path": "file - 副本.txt",
+      "size": 13,
+      "sha256": "e44a83a278bb39b237b78f6a7b9e362beb9c73da44cf0450bca22fcfae117e59",
+      "readonly": false
+    },
+    {
+      "path": "trailing",
+      "size": 10,
+      "sha256": "ed1c207acbb5427c6ef15bc859669f75132fda2b9f0a6366c001d433bbbb9316",
+      "readonly": false
+    },
+    {
+      "path": "副本 文档.txt",
+      "size": 18,
+      "sha256": "9f2dc79bce59a4524982526e6eece63bb7b3fdfd145c1130f255e32c38144a8a",
+      "readonly": false
+    },
+    {
+      "path": "无扩展名文件",
+      "size": 13,
+      "sha256": "82382b59ca4fecc86e8d1e1af7f4a50d1006ee79e0fd97ea81ccc9fed94bed7c",
+      "readonly": false
+    }
+  ]
+}

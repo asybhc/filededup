@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "root": "",
+  "target": "",
+  "dryRun": true,
+  "counters": {
+    "renamed": 3,
+    "specialDeleted": 0,
+    "moved": 10,
+    "conflictSkip": 3,
+    "readonly": 1,
+    "organizeSkip": 0,
+    "contentDeleted": 0,
+    "imageDeleted": 0,
+    "audioDeleted": 0,
+    "emptyDirs": 1,
+    "excluded": 0,
+    "hiddenSkipped": 0,
+    "suspectsKept": 0,
+    "hardlinkMerged": 0
+  },
+  "dirs": [
+    "temp",
+    "temp/empty-nested",
+    "temp/empty-nested/deep",
+    "整理结果",
+    "整理结果/图片",
+    "整理结果/文档"
+  ],
+  "files": [
+    {
+      "path": "01 报告.txt",
+      "size": 12,
+      "sha256": "fabfc6f10cee6145affad894bb08d780f55912209f69972a54331322e6010c9e",
+      "readonly": false
+    },
+    {
+      "path": "20240101 报告.txt",
+      "size": 10,
+      "sha256": "bd8f0d815a7c087f03ff4ad057115c634fed4f71c9581eaa0c9d2e53ad3f7003",
+      "readonly": false
+    },
+    {
+      "path": "a.txt",
+      "size": 1200,
+      "sha256": "d9621d5bb915d72b251ebb37e768bc2d5e58b7f59a412f1d36830e34b1df64a1",
+      "readonly": false
+    },
+    {
+      "path": "b.txt",
+      "size": 1200,
+      "sha256": "d9621d5bb915d72b251ebb37e768bc2d5e58b7f59a412f1d36830e34b1df64a1",
+      "readonly": false
+    },
+    {
+      "path": "img1.png",
+      "size": 197,
+      "sha256": "04b320077606735bedda18a67f66e6bdefe0f382f285b0a7dfb5157e51de62ab",
+      "readonly": false
+    },
+    {
+      "path": "img2.png",
+      "size": 197,
+      "sha256": "04b320077606735bedda18a67f66e6bdefe0f382f285b0a7dfb5157e51de62ab",
+      "readonly": false
+    },
+    {
+      "path": "report - 副本.txt",
+      "size": 12,
+      "sha256": "460c341558fbad47690234ff9454ffbceb9690e390f6cfda4daa1a5e0bcd98e0",
+      "readonly": false
+    },
+    {
+      "path": "temp/important.txt",
+      "size": 15,
+      "sha256": "4d130505cd53d4f435d05e0132973df2446fe4ee71d1e1c607ce5da879f78d71",
+      "readonly": false
+    },
+    {
+      "path": "temp/ro.txt",
+      "size": 14,
+      "sha256": "6943eb483933120967ccebd7df7870477602470a3ae784d9805b22a5ed6fe5e2",
+      "readonly": true
+    },
+    {
+      "path": "temp/新建文本文档.txt",
+      "size": 10,
+      "sha256": "f422caf6a108cf9d52e0ecc2b82dbc1898adfe2858feaa07697db88ee9d4dd37",
+      "readonly": false
+    }
+  ]
+}
