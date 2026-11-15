@@ -580,8 +580,15 @@ export default function App() {
   }
 
   async function cancelScan() {
+    // 本地先置为 cancelling：按钮立即变灰，不等下一次 300ms 轮询。
+    // 若取消失败，轮询会把状态刷回 running，界面自愈。
+    const markCancelling = () =>
+      setScan((prev) => (prev && prev.phase === "running" ? { ...prev, phase: "cancelling" } : prev));
+    markCancelling();
     try {
       await api.cancelScan(sessionId);
+      // 等待期间轮询可能写回 running，成功后补一次。
+      markCancelling();
     } catch (err) {
       setError(errorText(err));
     }

@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -62,6 +63,31 @@ func updateStatePath() (string, error) {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
 	return filepath.Join(dir, "FileDedup", "update-state.json"), nil
+}
+
+// updateCacheDir 返回安装包缓存目录（与下载时使用的目录一致）。
+func updateCacheDir() (string, error) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("无法定位缓存目录：%w", err)
+	}
+	return filepath.Join(cache, "FileDedup", "updates"), nil
+}
+
+// pruneUpdateCache 清理旧安装包与残留临时文件：只保留最近 2 个，失败只记日志。
+func pruneUpdateCache() {
+	dir, err := updateCacheDir()
+	if err != nil {
+		log.Printf("清理更新缓存失败：%v", err)
+		return
+	}
+	res, err := update.PruneCache(dir, 2)
+	if err != nil {
+		log.Printf("清理更新缓存部分失败：%v", err)
+	}
+	if res.Removed > 0 {
+		log.Printf("清理更新缓存：删除 %d 个文件，释放 %d 字节", res.Removed, res.Freed)
+	}
 }
 
 func loadUpdateState() updateCheckState {
@@ -216,11 +242,11 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
 
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := updateCacheDir()
 	if err != nil {
-		return UpdateInstallView{}, fmt.Errorf("安装已取消：无法定位缓存目录：%w", err)
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
-	pkg, err := update.DownloadAsset(ctx, &http.Client{Timeout: 10 * time.Minute}, asset, filepath.Join(cacheDir, "FileDedup", "updates"))
+	pkg, err := update.DownloadAsset(ctx, &http.Client{Timeout: 10 * time.Minute}, asset, cacheDir)
 	if err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
@@ -237,6 +263,9 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 	if err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
+	// 安装成功后再清一次缓存：旧安装包与残留临时文件随之删除。
+	// 备份的 .old 仍由旧进程映像占用，删不掉，留到下次启动的 update.Cleanup 处理。
+	pruneUpdateCache()
 	if a.ctx != nil {
 		go func() {
 			time.Sleep(1200 * time.Millisecond)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -295,4 +296,60 @@ func mustJSON(t *testing.T, v interface{}) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestPruneCacheKeepsNewest(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, age time.Duration) string {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mt := time.Now().Add(-age)
+		if err := os.Chtimes(p, mt, mt); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	old := write("fdedup-ui-0.7.0.exe", 72*time.Hour)
+	mid := write("fdedup-ui-0.8.0.exe", 24*time.Hour)
+	newest := write("fdedup-ui-0.8.1.exe", time.Hour)
+	part := write("fdedup-ui-0.8.1.exe.part", 10*time.Minute)
+	oldCopy := write("fdedup-ui.exe.old", 20*time.Minute)
+	newCopy := write("fdedup-ui.exe.new", 5*time.Minute)
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := PruneCache(dir, 2)
+	if err != nil {
+		t.Fatalf("PruneCache 返回错误：%v", err)
+	}
+	if res.Kept != 2 || res.Removed != 4 {
+		t.Fatalf("统计不符：Kept=%d Removed=%d Freed=%d", res.Kept, res.Removed, res.Freed)
+	}
+	for _, p := range []string{old, part, oldCopy, newCopy} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s 应被删除", filepath.Base(p))
+		}
+	}
+	for _, p := range []string{mid, newest} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("%s 应保留", filepath.Base(p))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sub")); err != nil {
+		t.Fatal("子目录不应被删除")
+	}
+}
+
+func TestPruneCacheMissingDir(t *testing.T) {
+	res, err := PruneCache(filepath.Join(t.TempDir(), "nope"), 2)
+	if err != nil {
+		t.Fatalf("目录不存在应返回 nil 错误，实际 %v", err)
+	}
+	if res.Removed != 0 || res.Kept != 0 {
+		t.Fatalf("目录不存在不应有统计：%+v", res)
+	}
 }

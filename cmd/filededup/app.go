@@ -26,7 +26,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.8.0"
+const appVersion = "0.8.1"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -188,6 +188,8 @@ func (a *App) startup(ctx context.Context) {
 			log.Printf("更新残留清理失败：%v", err)
 		}
 	}
+	// 清掉旧安装包与下载残留，只保留最近两个包。
+	pruneUpdateCache()
 	// 首次启动创建试用记录；之后每次启动更新“最后见到”时间，用于检测回拨。
 	if err := auth.TouchTrial(); err != nil {
 		log.Printf("试用记录更新失败：%v", err)
