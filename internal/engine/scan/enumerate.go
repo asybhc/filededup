@@ -27,6 +27,25 @@ func enumerate(ctx context.Context, req model.Request, d deps) ([]fileEntry, []m
 
 	var files []fileEntry
 	var skipped []model.Skip
+	var enumerated, enumeratedBytes int64
+
+	report := func() {
+		if d.progress == nil {
+			return
+		}
+		d.progress(Progress{Phase: "enumerate", Files: enumerated, Bytes: enumeratedBytes})
+	}
+	addFile := func(e fileEntry) {
+		files = append(files, e)
+		enumerated++
+		if e.size > 0 {
+			enumeratedBytes += e.size
+		}
+		// 大目录也按固定间隔上报，避免只在目录结束时刷新。
+		if enumerated%256 == 0 {
+			report()
+		}
+	}
 
 	for _, root := range req.Roots {
 		info, err := os.Stat(root)
@@ -101,14 +120,14 @@ func enumerate(ctx context.Context, req model.Request, d deps) ([]fileEntry, []m
 					if excluded(path, patterns) || ti.Size() < req.MinSize {
 						continue
 					}
-					files = append(files, fileEntry{path: path, size: ti.Size(), modTime: ti.ModTime()})
+					addFile(fileEntry{path: path, size: ti.Size(), modTime: ti.ModTime()})
 					continue
 				}
 
 				// 先取 FileInfo：Windows 属性随目录枚举一起返回，hidden 判定不再额外系统调用。
 				fi, err := d.stat(path, de)
 				if err != nil {
-					files = append(files, fileEntry{path: path, size: -1})
+					addFile(fileEntry{path: path, size: -1})
 					skipped = append(skipped, sizeSkipFor(path, err))
 					continue
 				}
@@ -118,9 +137,17 @@ func enumerate(ctx context.Context, req model.Request, d deps) ([]fileEntry, []m
 				if excluded(path, patterns) || fi.Size() < req.MinSize {
 					continue
 				}
-				files = append(files, fileEntry{path: path, size: fi.Size(), modTime: fi.ModTime()})
+				addFile(fileEntry{path: path, size: fi.Size(), modTime: fi.ModTime()})
 			}
 		}
+	}
+	if d.progress != nil {
+		d.progress(Progress{
+			Phase:           "enumerate",
+			Files:           enumerated,
+			Bytes:           enumeratedBytes,
+			EnumerationDone: true,
+		})
 	}
 	return files, skipped, nil
 }

@@ -1,6 +1,9 @@
-// Package main 是桌面壳入口。M5 接入 Wails v2（WebView2/WKWebView/WebKitGTK）。
+//go:build !desktop
+
+// Package main 是桌面壳入口。桌面版需要 -tags desktop 构建（Wails v2）。
 //
-// 当前为 M0 占位：只输出说明，不包含 UI 依赖，保证三平台 CI 可编译。
+// 默认（无 tag）分支只保留命令行提示，保证三平台 CI 的 go build ./... 不引入
+// WebKitGTK/WebView2 依赖。
 package main
 
 import (
@@ -10,6 +13,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintf(os.Stderr, "filededup 桌面壳尚未接入（M5 计划：Wails v2），当前平台 %s/%s。\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(os.Stderr, "这是无 GUI 构建。桌面版请先在 web/ 执行 npm run build，然后用 -tags desktop 构建（当前平台 %s/%s）。\n", runtime.GOOS, runtime.GOARCH)
 	os.Exit(1)
 }

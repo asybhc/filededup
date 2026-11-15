@@ -23,6 +23,21 @@ import (
 // （与 C# 一致，C# 只看属性），其他平台用 "." 前缀。
 type Options struct {
 	HiddenFile func(path string, info fs.FileInfo) bool
+	// Progress 是只读进度回调（枚举与哈希两个阶段）。为 nil 时不产生任何额外开销。
+	// 回调可能来自多个哈希 worker，实现方需自行保证并发安全。
+	Progress func(Progress)
+}
+
+// Progress 描述扫描进度。计数只增不减，供 UI 显示，不参与结果与对拍。
+type Progress struct {
+	Phase           string `json:"phase"` // enumerate | hash
+	Files           int64  `json:"files"`
+	Bytes           int64  `json:"bytes"`
+	HashTargets     int64  `json:"hashTargets"`
+	HashDone        int64  `json:"hashDone"`
+	HashBytes       int64  `json:"hashBytes"`
+	HashTotalBytes  int64  `json:"hashTotalBytes"`
+	EnumerationDone bool   `json:"enumerationDone"`
 }
 
 // Run 执行一次只读精确扫描。被取消时返回已完成的部分结果与 context.Canceled。
@@ -32,9 +47,10 @@ func Run(ctx context.Context, req model.Request) (*model.Result, error) {
 
 // deps 是测试注入点；生产路径全部走零值默认实现。
 type deps struct {
-	hidden func(string, fs.FileInfo) bool
-	stat   func(path string, de fs.DirEntry) (fs.FileInfo, error)
-	open   func(string) (io.ReadCloser, error)
+	hidden   func(string, fs.FileInfo) bool
+	stat     func(path string, de fs.DirEntry) (fs.FileInfo, error)
+	open     func(string) (io.ReadCloser, error)
+	progress func(Progress)
 }
 
 func defaultDeps(opts Options) deps {
@@ -43,7 +59,8 @@ func defaultDeps(opts Options) deps {
 		hidden = platformHidden
 	}
 	return deps{
-		hidden: hidden,
+		hidden:   hidden,
+		progress: opts.Progress,
 		stat: func(path string, de fs.DirEntry) (fs.FileInfo, error) {
 			if de != nil {
 				return de.Info()
@@ -84,7 +101,7 @@ func run(ctx context.Context, req model.Request, d deps) (*model.Result, error) 
 	var results []hashResult
 	var stats hashStats
 	if req.Exact {
-		results, stats, err = hashAll(ctx, files, cache, workers, d.open)
+		results, stats, err = hashAll(ctx, files, cache, workers, d.open, d.progress)
 		if err != nil {
 			// 取消：返回部分结果，由调用方决定是否落盘。
 			res := buildResult(req, files, results, skipped, stats, workers, started)
@@ -235,7 +252,7 @@ type hashResult struct {
 
 // hashAll 对同尺寸桶（成员数 >= 2）计算 SHA-256。返回与 files 等长的结果切片。
 func hashAll(ctx context.Context, files []fileEntry, cache *hashCache, workers int,
-	open func(string) (io.ReadCloser, error)) ([]hashResult, hashStats, error) {
+	open func(string) (io.ReadCloser, error), progress func(Progress)) ([]hashResult, hashStats, error) {
 	results := make([]hashResult, len(files))
 
 	buckets := make(map[int64][]int, len(files))
@@ -254,6 +271,52 @@ func hashAll(ctx context.Context, files []fileEntry, cache *hashCache, workers i
 	sort.Ints(targets)
 	if len(targets) == 0 {
 		return results, hashStats{}, nil
+	}
+
+	var totalBytes int64
+	for _, idx := range targets {
+		if files[idx].size > 0 {
+			totalBytes += files[idx].size
+		}
+	}
+	var totalFiles int64
+	var enumeratedBytes int64
+	for _, f := range files {
+		if f.size > 0 {
+			enumeratedBytes += f.size
+		}
+		totalFiles++
+	}
+
+	// 进度上报节流：每 100ms 一次，最后一笔强制上报。多 worker 共享，用互斥保护。
+	var progressMu sync.Mutex
+	var progressDone, progressBytes int64
+	var lastReport time.Time
+	report := func(done, bytes int64) {
+		if progress == nil {
+			return
+		}
+		progressMu.Lock()
+		progressDone += done
+		progressBytes += bytes
+		now := time.Now()
+		final := progressDone >= int64(len(targets))
+		if !final && now.Sub(lastReport) < 100*time.Millisecond {
+			progressMu.Unlock()
+			return
+		}
+		lastReport = now
+		p := Progress{
+			Phase:          "hash",
+			Files:          totalFiles,
+			Bytes:          enumeratedBytes,
+			HashTargets:    int64(len(targets)),
+			HashDone:       progressDone,
+			HashBytes:      progressBytes,
+			HashTotalBytes: totalBytes,
+		}
+		progressMu.Unlock()
+		progress(p)
 	}
 
 	var counter int64
@@ -287,15 +350,18 @@ func hashAll(ctx context.Context, files []fileEntry, cache *hashCache, workers i
 			key := cacheKey(f)
 			if h, ok := cache.get(key); ok {
 				results[idx] = hashResult{hash: h, cached: true}
+				report(1, 0)
 				continue
 			}
 			h, n, err := hashFile(ctx, f.path, buf, open)
 			if err != nil {
 				results[idx] = hashResult{err: err, skipped: true}
+				report(1, 0)
 				continue
 			}
 			cache.put(key, h)
 			results[idx] = hashResult{hash: h, bytes: n}
+			report(1, n)
 		}
 	}
 	if workers > len(targets) {
