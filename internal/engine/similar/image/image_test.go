@@ -282,8 +282,16 @@ func TestHashLargeDownscaleGDIPlus(t *testing.T) {
 		{[]string{"build", "appicon.png"}, "011397970f2b2b03"},
 		{[]string{"frontend", "src", "assets", "images", "logo-universal.png"}, "63431f1f1f1f1f3c"},
 	}
+	missing := 0
 	for _, c := range cases {
 		path := filepath.Join(append([]string{"..", "..", "..", "..", "testdata", "out", "uispike"}, c.parts...)...)
+		if _, err := os.Stat(path); err != nil {
+			// testdata/out 被 .gitignore 忽略，CI 上必然缺样本；缺样本时只能跳过，
+			// 不能把“没跑”算成“通过”。本地导出样本后仍会逐位比对。
+			missing++
+			t.Logf("样本不在仓库，跳过：%s", path)
+			continue
+		}
 		fp, ok := Compute(path)
 		if !ok {
 			t.Fatalf("%s 应能解码", path)
@@ -291,6 +299,9 @@ func TestHashLargeDownscaleGDIPlus(t *testing.T) {
 		if got := Hex(fp.Hash); got != c.want {
 			t.Errorf("%s 指纹 = %s, want %s（须与 C# 基线一致）", path, got, c.want)
 		}
+	}
+	if missing == len(cases) {
+		t.Skipf("%d 个样本均不在仓库（testdata/out 被忽略）", missing)
 	}
 }
 

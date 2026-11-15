@@ -1,7 +1,6 @@
 package scan
 
 import (
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -32,7 +31,12 @@ func excluded(path string, patterns []string) bool {
 		return false
 	}
 	slashPath := strings.ToLower(strings.ReplaceAll(path, `\`, "/"))
-	dir := strings.ToLower(strings.ReplaceAll(filepath.Dir(path), `\`, "/"))
+	dir := slashPath
+	if i := strings.LastIndex(dir, "/"); i >= 0 {
+		dir = dir[:i]
+	} else {
+		dir = ""
+	}
 	var comps []string
 	if dir != "" && dir != "." {
 		comps = strings.Split(strings.Trim(dir, "/"), "/")

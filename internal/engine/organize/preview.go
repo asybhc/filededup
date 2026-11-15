@@ -257,7 +257,7 @@ func validatePreviewPath(p string) error {
 	if strings.TrimSpace(p) == "" {
 		return fmt.Errorf("为空")
 	}
-	if filepath.IsAbs(p) || filepath.VolumeName(p) != "" ||
+	if filepath.IsAbs(p) || filepath.VolumeName(p) != "" || windowsDrivePath(p) ||
 		strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) {
 		return fmt.Errorf("必须是根目录内的相对路径：%q", p)
 	}
@@ -266,4 +266,14 @@ func validatePreviewPath(p string) error {
 		return fmt.Errorf("逃逸根目录：%q", p)
 	}
 	return nil
+}
+
+// windowsDrivePath 识别 "C:..." / "C:\..." 形式。预览计划可能在另一个平台生成，
+// 因此在 Unix 上也要拒绝 Windows 绝对路径，而不是等执行时才失败。
+func windowsDrivePath(p string) bool {
+	if len(p) < 2 || p[1] != ':' {
+		return false
+	}
+	c := p[0]
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 }

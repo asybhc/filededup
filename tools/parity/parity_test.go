@@ -7,13 +7,18 @@ import (
 	"testing"
 )
 
+// parityCorpusRoot 是扫描对拍夹具的绝对根；用 TempDir 之外的固定子目录即可，
+// 只要求“绝对”且带盘符/前导分隔符，避免把 Windows 路径写死。
+var parityCorpusRoot = filepath.Join(os.TempDir(), "corpus")
+
 func sampleResult() map[string]any {
+	corpus := func(name string) string { return filepath.Join(parityCorpusRoot, name) }
 	return map[string]any{
 		"schemaVersion": 1,
 		"requestId":     "r1",
 		"request": map[string]any{
 			"exact":           true,
-			"roots":           []string{`F:\corpus`},
+			"roots":           []string{parityCorpusRoot},
 			"excludes":        []string{},
 			"keepPolicy":      "pathShortest",
 			"imageKeepPolicy": "largest",
@@ -38,11 +43,11 @@ func sampleResult() map[string]any {
 				"id":          "exact:aaa",
 				"kind":        "exact",
 				"key":         "aaa",
-				"keep":        `F:\corpus\a.txt`,
+				"keep":        corpus("a.txt"),
 				"reclaimable": 10,
 				"members": []any{
 					map[string]any{
-						"path":      `F:\corpus\a.txt`,
+						"path":      corpus("a.txt"),
 						"size":      10,
 						"modTime":   "2024-01-01T00:00:00Z",
 						"hash":      "aaa",
@@ -50,7 +55,7 @@ func sampleResult() map[string]any {
 						"deletable": false,
 					},
 					map[string]any{
-						"path":      `F:\corpus\b.txt`,
+						"path":      corpus("b.txt"),
 						"size":      10,
 						"modTime":   "2024-01-01T00:01:00Z",
 						"hash":      "aaa",
@@ -90,8 +95,8 @@ func runScanCompare(t *testing.T, base, cand map[string]any, ignore map[string]b
 	if err != nil {
 		t.Fatalf("load cand: %v", err)
 	}
-	nb := normalizeScan(br, `F:\corpus`)
-	nc := normalizeScan(cr, `F:\corpus`)
+	nb := normalizeScan(br, parityCorpusRoot)
+	nc := normalizeScan(cr, parityCorpusRoot)
 	d := newDiffer(0)
 	compareScan(d, nb, nc, ignore)
 	return d.finish("scan", len(nb.Groups), len(nc.Groups))

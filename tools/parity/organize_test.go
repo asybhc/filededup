@@ -31,11 +31,18 @@ func orgManifest(t *testing.T, root string) []string {
 }
 
 // makeTreeWritable 在清理前去掉只读位，避免 Windows 上 TempDir 清理失败。
+// 不跟随符号链接：Unix 上 os.Chmod 会作用到链接目标，把 outside 目录改坏；
+// 目录保留可进入权限（0755），否则 TempDir 自身无法递归删除。
 func makeTreeWritable(root string) {
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err == nil && info != nil && !info.IsDir() {
-			_ = os.Chmod(path, 0o644)
+		if err != nil || info == nil || info.Mode()&os.ModeSymlink != 0 {
+			return nil
 		}
+		perm := os.FileMode(0o644)
+		if info.IsDir() {
+			perm = 0o755
+		}
+		_ = os.Chmod(path, perm)
 		return nil
 	})
 }

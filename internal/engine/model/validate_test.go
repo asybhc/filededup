@@ -1,15 +1,22 @@
 package model_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"filededup/internal/engine/model"
 )
 
+// absRoot 返回当前平台上的绝对路径，避免测试夹具把 Windows 盘符写死。
+func absRoot(parts ...string) string {
+	return filepath.Join(append([]string{os.TempDir(), "corpus"}, parts...)...)
+}
+
 func TestDefaultRequestValid(t *testing.T) {
 	r := model.DefaultRequest()
-	r.Roots = []string{`C:\corpus`}
+	r.Roots = []string{absRoot()}
 	if err := r.Validate(); err != nil {
 		t.Fatalf("默认扫描请求应合法: %v", err)
 	}
@@ -41,7 +48,7 @@ func TestRequestValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := model.DefaultRequest()
-			r.Roots = []string{`C:\corpus`}
+			r.Roots = []string{absRoot()}
 			tc.mutate(&r)
 			err := r.Validate()
 			if err == nil {
@@ -55,7 +62,7 @@ func TestRequestValidation(t *testing.T) {
 }
 
 func TestDefaultOrganizeRequestValid(t *testing.T) {
-	r := model.DefaultOrganizeRequest(`C:\corpus`, `C:\corpus\out`)
+	r := model.DefaultOrganizeRequest(absRoot(), absRoot("out"))
 	if err := r.Validate(); err != nil {
 		t.Fatalf("默认整理请求应合法: %v", err)
 	}
@@ -90,7 +97,7 @@ func TestOrganizeValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := model.DefaultOrganizeRequest(`C:\corpus`, `C:\corpus\out`)
+			r := model.DefaultOrganizeRequest(absRoot(), absRoot("out"))
 			tc.mutate(&r)
 			err := r.Validate()
 			if err == nil {
