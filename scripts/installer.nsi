@@ -9,7 +9,7 @@
 ;   - 版本号由打包脚本通过 /DAPP_VERSION=... 注入，避免与代码里的版本漂移。
 ;
 ; 用法（不要直接双击）：
-;   makensis /DAPP_VERSION=0.8.0 /DAPP_VERSION4=0.8.0.0 ^
+;   makensis /DAPP_VERSION=<版本> /DAPP_VERSION4=<四段版本> ^
 ;            /DSRC_EXE=<绝对路径>\fdedup-ui.exe /DOUT_FILE=<绝对路径>\Setup.exe scripts\installer.nsi
 
 Unicode true
@@ -17,11 +17,13 @@ Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
+; 版本号只能由打包脚本注入（唯一来源是 cmd/filededup/app.go 的 appVersion），
+; 这里不提供默认值，避免脚本与代码出现两个版本源。
 !ifndef APP_VERSION
-  !define APP_VERSION "0.8.0"
+  !error "必须通过 /DAPP_VERSION=... 注入版本号（由 build-installer.ps1 从 app.go 读取）"
 !endif
 !ifndef APP_VERSION4
-  !define APP_VERSION4 "0.8.0.0"
+  !error "必须通过 /DAPP_VERSION4=... 注入四段版本号"
 !endif
 !ifndef SRC_EXE
   !define SRC_EXE "..\bin\fdedup-ui.exe"
@@ -34,7 +36,7 @@ Unicode true
 !define APP_NAME "文件去重 Go"
 !define APP_ID "FileDedupGo"
 !define APP_EXE "fdedup-ui.exe"
-!define APP_PUBLISHER "FileDedup"
+!define APP_PUBLISHER "一杯好茶"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
 !define APP_REG_KEY "Software\${APP_ID}"
 
@@ -53,7 +55,7 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"
-VIAddVersionKey "LegalCopyright" ""
+VIAddVersionKey "LegalCopyright" "Copyright © 一杯好茶"
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"

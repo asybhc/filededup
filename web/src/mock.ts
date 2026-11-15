@@ -24,6 +24,8 @@ import type {
   SettingsResult,
   SkippedPage,
   UISettings,
+  UpdateCheckView,
+  UpdateInstallView,
 } from "./types";
 
 const SAMPLE_ROOT = "D:\\示例素材\\照片与视频";
@@ -194,6 +196,12 @@ function mockDefaultSettings(): UISettings {
       hardlink: false,
       continueOnError: false,
     },
+    update: {
+      manifestUrl: "",
+      checkMode: "auto",
+      intervalHours: 18,
+      skippedVersion: "",
+    },
   };
 }
 
@@ -211,6 +219,7 @@ function readSettings(): UISettings {
         ...(parsed.organize ?? {}),
         steps: { ...def.organize.steps, ...(parsed.organize?.steps ?? {}) },
       },
+      update: { ...def.update, ...(parsed.update ?? {}) },
     };
   } catch {
     return def;
@@ -530,6 +539,54 @@ export const mock = {
     return { settings: readSettings(), path: "localStorage:" + SETTINGS_KEY, warning: undefined };
   },
   saveSettings(s: UISettings): void {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  },
+  checkForUpdate(manual: boolean): UpdateCheckView {
+    const s = readSettings();
+    const currentVersion = "0.8.0";
+    if (!s.update.manifestUrl.trim()) {
+      return {
+        status: "disabled",
+        message: "未配置更新源。填写清单地址后才会检查更新。",
+        currentVersion,
+      };
+    }
+    if (!manual && s.update.checkMode !== "auto") {
+      return { status: "manual", message: "当前为手动检查模式。", currentVersion };
+    }
+    const latestVersion = "0.9.0";
+    if (s.update.skippedVersion === latestVersion) {
+      return {
+        status: "skipped",
+        message: `已跳过版本 ${latestVersion}。`,
+        currentVersion,
+        latestVersion,
+        skippedVersion: s.update.skippedVersion,
+      };
+    }
+    return {
+      status: "available",
+      message: `发现新版本 ${latestVersion}（浏览器预览为合成结果）。`,
+      currentVersion,
+      latestVersion,
+      notes: "浏览器预览不会真的下载或替换程序。",
+      assetName: "fdedup-ui.exe",
+      assetSize: 12932608,
+      sourceUrl: s.update.manifestUrl,
+      checkedAt: new Date().toISOString(),
+    };
+  },
+  installUpdate(): UpdateInstallView {
+    throw new Error("浏览器预览不能安装更新，请在桌面版中使用。");
+  },
+  skipUpdateVersion(version: string): void {
+    const s = readSettings();
+    s.update.skippedVersion = version;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  },
+  clearSkippedUpdateVersion(): void {
+    const s = readSettings();
+    s.update.skippedVersion = "";
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   },
   getOrganizeMeta(): OrganizeMeta {

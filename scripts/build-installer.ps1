@@ -20,7 +20,14 @@ try {
     $m = Select-String -Path $appGo -Pattern 'const appVersion = "([^"]+)"' | Select-Object -First 1
     if (-not $m) { throw "未能从 $appGo 解析 appVersion" }
     $version = $m.Matches[0].Groups[1].Value
-    $version4 = "$version.0"
+    if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?') {
+        throw "appVersion 不是 1–4 段数字版本：$version"
+    }
+    if ($Matches[4]) {
+        $version4 = "$($Matches[1]).$($Matches[2]).$($Matches[3]).$($Matches[4])"
+    } else {
+        $version4 = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
+    }
 
     if (-not $SkipBuild) {
         & (Join-Path $PSScriptRoot "build-desktop.ps1")
@@ -34,6 +41,12 @@ try {
     $exeBytes = [IO.File]::ReadAllBytes($exe)
     if ([Text.Encoding]::ASCII.GetString($exeBytes).Contains("will not build without the correct build tags")) {
         throw "bin/fdedup-ui.exe 是 Wails stub（缺 production tag），拒绝打包"
+    }
+
+    # 版本资源必须与 app.go 一致，防止复用旧 exe 打出错版本安装包。
+    $exeVI = (Get-Item $exe).VersionInfo
+    if ($exeVI.FileVersion -ne $version4) {
+        throw "bin/fdedup-ui.exe 的 FileVersion=$($exeVI.FileVersion)，期望 $version4：请重新执行 build-desktop.ps1"
     }
 
     # makensis：优先显式参数，其次用户级便携版全路径，最后 PATH。

@@ -130,6 +130,23 @@ code {
   background: var(--warn-weak);
 }
 
+.update-badge {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  font-family: inherit;
+}
+
+.update-badge:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.update-badge.has-update {
+  color: #fff;
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
 .stepper {
   display: flex;
   gap: 8px;

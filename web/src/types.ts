@@ -162,10 +162,18 @@ export interface OrganizeSettings {
   continueOnError: boolean;
 }
 
+export interface UpdateSettings {
+  manifestUrl: string;
+  checkMode: "auto" | "manual";
+  intervalHours: number;
+  skippedVersion: string;
+}
+
 export interface UISettings {
   schemaVersion: number;
   scan: ScanSettings;
   organize: OrganizeSettings;
+  update: UpdateSettings;
 }
 
 export interface SettingsResult {
@@ -321,4 +329,37 @@ export interface OrganizeUndoResult {
   skipped: number;
   unrestorable: number;
   errors: string[];
+}
+
+// ---------- 自动更新（对应 cmd/filededup/update.go） ----------
+
+export type UpdateCheckStatus =
+  | "disabled"
+  | "manual"
+  | "throttled"
+  | "uptodate"
+  | "available"
+  | "skipped";
+
+export interface UpdateCheckView {
+  status: UpdateCheckStatus;
+  message?: string;
+  currentVersion: string;
+  latestVersion?: string;
+  notes?: string;
+  releasedAt?: string;
+  assetName?: string;
+  assetSize?: number;
+  sourceUrl?: string;
+  checkedAt?: string;
+  skippedVersion?: string;
+}
+
+export interface UpdateInstallView {
+  version: string;
+  exePath: string;
+  backupPath: string;
+  size: number;
+  sha256: string;
+  restarting: boolean;
 }

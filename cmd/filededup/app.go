@@ -21,6 +21,7 @@ import (
 	"filededup/internal/engine/scan"
 	"filededup/internal/logx"
 	"filededup/internal/platform"
+	"filededup/internal/update"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -167,6 +168,8 @@ type App struct {
 	orgJobs  map[string]*organizeJob
 	// undoMu 串行化“撤销上次整理”，避免并发回滚同一份记录。
 	undoMu sync.Mutex
+	// updateMu 串行化安装更新，避免并发下载/替换。
+	updateMu sync.Mutex
 }
 
 func NewApp() *App {
@@ -179,6 +182,12 @@ func currentPlatform() string {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// 上次更新若在替换中途中断，这里把 .old 恢复或清理掉。
+	if exe, err := os.Executable(); err == nil {
+		if err := update.Cleanup(exe); err != nil {
+			log.Printf("更新残留清理失败：%v", err)
+		}
+	}
 	// 首次启动创建试用记录；之后每次启动更新“最后见到”时间，用于检测回拨。
 	if err := auth.TouchTrial(); err != nil {
 		log.Printf("试用记录更新失败：%v", err)

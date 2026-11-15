@@ -31,6 +31,9 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/filededup/organize.go` | 整理器门面：两套顺序、九步规划、试运行/真实执行、存疑项确认 |
 | `cmd/filededup/organize_undo.go` | 最近一次整理的撤销记录落盘与回滚接口 |
 | `cmd/filededup/organize_rules.go` | 整理规则导入导出（版本化 JSON、未知键与非法值校验） |
+| `cmd/filededup/update.go` | 自动更新门面：检查、验签、下载、替换回滚、跳过版本 |
+| `internal/update/` | 清单解析与验签、下载校验、替换与清理 |
+| `cmd/fdedup-update-sign/` | 更新签名工具（私钥只在仓库外使用） |
 | `cmd/filededup/main_desktop.go` | Wails 入口（`//go:build desktop`） |
 | `cmd/filededup/license.go` | 授权门面：状态查询、机器码、导入许可证 |
 | `cmd/filededup/app_smoke_test.go` | 后端接线冒烟测试（`-tags desktop`） |
@@ -119,7 +122,12 @@ powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedu
 ```
 
 - `build-desktop.ps1` 是 exe 的唯一入口；`build-installer.ps1` 先调用它，并在打包前再校验一次产物不是 stub。
-- 版本号只在 `cmd/filededup/app.go` 的 `appVersion` 维护；打包脚本从中读取，前端版本见 `web/package.json`，两处需同步。
+- 版本号只在 `cmd/filededup/app.go` 的 `appVersion` 维护，**这是唯一来源**：
+  - `build-desktop.ps1` 从中读取并生成 Windows 版本资源（`.syso`，构建后立即删除，不提交）；
+  - `build-installer.ps1` 从中读取并以 `/DAPP_VERSION`、`/DAPP_VERSION4` 注入 NSIS，未注入时 `installer.nsi` 直接报错；
+  - 前端版本由 `GetAppInfo` 返回，`web/package.json` 的 `0.0.0` 只是占位，不参与发布版本。
+- exe 版本资源包含 CompanyName（一杯好茶）、ProductName（一杯好茶.文件整理 Go）、FileVersion/ProductVersion（四段版本）；
+  构建后脚本会读取 `VersionInfo` 校验，不一致直接失败。
 - 安装包（[scripts/installer.nsi](../scripts/installer.nsi)）：
   - NSIS 3.x，`RequestExecutionLevel user`，**只写 HKCU**，不需要管理员权限。
   - 安装到 `%LOCALAPPDATA%\Programs\FileDedupGo`；快捷方式为开始菜单“文件去重 Go”文件夹 + 桌面。
@@ -128,6 +136,63 @@ powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedu
   - 卸载删除安装目录、快捷方式与上述两个注册表项；**保留** `%AppData%\FileDedup`（设置、许可证）与
     `%AppData%\FileDedupTool`（与 C# 版共用的试用记录），避免卸载后重装被当成新用户重置试用。
 - `makensis` 查找顺序：`-Makensis` 参数 > `C:\Users\chong.YUJIANG\.tools\nsis-3.13\makensis.exe` > PATH。
+
+## 自动更新
+
+- 入口：顶栏“检查更新”；有新版时按钮显示“有更新 vX”。更新源默认为空，**留空不检查**。
+- 配置（`ui-settings.json` 的 `update` 段）：`manifestUrl`、`checkMode`（`auto` / `manual`）、
+  `intervalHours`（1–720，默认 18）、`skippedVersion`。启动后按间隔自动检查一次，有更新只点亮入口，不主动弹窗。
+- 信任链（全部失败即拒绝，没有“忽略签名继续”的开关）：
+  1. 清单签名：Ed25519（更新专用密钥，与许可证密钥分开），签名覆盖除顶层 `signature` 外的全部字段；
+  2. 包签名：Ed25519，覆盖包的 SHA-256 摘要；
+  3. 下载后校验长度与 SHA-256，再校验包签名；
+  4. `Replace` 前再次校验安装包，复制出 `.new` 后再校验一次。
+- 清单格式（`schemaVersion: 1`、`kind: "filededup.update.manifest"`）：
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "filededup.update.manifest",
+  "version": "0.8.1",
+  "releasedAt": "2026-11-15T00:00:00+08:00",
+  "notes": "更新说明",
+  "assets": [
+    {
+      "name": "fdedup-ui.exe",
+      "os": "windows",
+      "arch": "amd64",
+      "url": "https://example.com/fdedup-ui-0.8.1.exe",
+      "size": 13021696,
+      "sha256": "…64 位十六进制…",
+      "signature": "…base64url…"
+    }
+  ],
+  "signature": "…base64url…"
+}
+```
+
+- 签发（私钥在仓库外，默认路径 `%USERPROFILE%\.tools\filededup-update-key\update.key`）：
+
+```powershell
+go run ./cmd/fdedup-update-sign genkey -out "$env:USERPROFILE\.tools\filededup-update-key\update.key"
+go run ./cmd/fdedup-update-sign make-manifest -key <私钥> -version 0.8.1 `
+  -file bin\fdedup-ui.exe -url https://example.com/fdedup-ui-0.8.1.exe -out bin\update.json
+go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
+```
+
+- 替换与回滚：当前 exe 改名为 `.old` → 安装包复制为 `.new` 并校验 → 原子改名为正式 exe → 启动新程序；
+  启动失败则删除新文件并把 `.old` 改回。成功后的 `.old` 在下次启动 `Cleanup` 时删除；若 exe 缺失则用 `.old` 恢复。
+- 跳过此版本：写入 `skippedVersion`，相同版本的后续检查直接标为“已跳过”，界面可“取消跳过”。
+
+验证状态（如实区分）：
+
+| 环节 | 验证方式 |
+| --- | --- |
+| 真实密钥生成、清单签名、内置公钥验签、HTTP 取清单、下载、长度/摘要/包签名校验 | **实测**：`FILEDEDUP_UPDATE_KEY=… go test ./internal/update -run TestEmbeddedKeyEndToEnd` |
+| 临时目录中的替换、启动失败回滚、`.old` 清理/恢复 | **实测**：`TestReplaceAndRollback`、`TestCleanupRestoresMissingExe` |
+| 篡改清单、未知字段、错误公钥、摘要不符、非法 asset、版本比较 | 单元测试 |
+| 真实安装目录下对运行中 exe 的“下载→替换→重启”完整流程 | **未实测**，需在真机点一次“下载并安装”验证 |
+| macOS / Linux 自更新 | **未实测**；目前只按单文件可执行程序替换实现，未处理 .app 包与代码签名 |
 
 ## 大目录性能
 
@@ -158,9 +223,10 @@ powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedu
 
 - 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
   九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细 / 仅规划 / 存疑项逐条确认或驳回 /
-  最近一次整理撤销 / 规则导入导出）、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控）。
+  最近一次整理撤销 / 规则导入导出）、自动更新（ed25519 清单与安装包验签、长度与 SHA-256 校验、备份与回滚、跳过版本）、
+  exe 与安装包版本资源、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控）。
 - 未实现：
-  - 全局：系统托盘、自动更新、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史。
+  - 全局：系统托盘、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史。
 
 ## 已知限制
 
@@ -176,13 +242,21 @@ powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedu
    **只做了交叉编译与 `go vet` 验证，没有在真机运行过**；Windows 端仍是唯一经过真机验证的平台。
 7. 旧 ECDSA 许可证只做了算法与格式层面的单元测试（临时密钥 + 合成 payload/P1363 签名），**没有用真实签发的旧许可证样本验证**：
    历史私钥不在手边，无法生成真样本。
-8. 便携版与安装包里的 exe 没有内嵌版本资源（右键属性看不到版本号），版本号在安装包资源与界面“关于”里显示。
+8. exe 与安装包均内嵌版本资源（FileVersion/ProductVersion 为四段，如 `0.8.0.0`；界面显示三段 `0.8.0`）。
+   版本资源在构建时由 `app.go` 的 `appVersion` 生成，`.syso` 不提交。
+9. 更新签名私钥保存在仓库外（`%USERPROFILE%\.tools\filededup-update-key\update.key`），客户端只内置公钥；
+   私钥一旦泄露需要换钥并重新发布客户端，内置公钥不支持远程轮换。
+10. 自动更新的“下载→验签→替换→重启”在临时目录与本地 HTTP 服务上实测通过；
+   但**没有在真实安装目录里对运行中的 exe 走完整一次**，这一步需要真机点“下载并安装”复核。
+11. macOS / Linux 的自更新按单文件可执行程序替换实现，未处理 `.app` 包、代码签名与权限提升，**未真机验证**。
 
 ## 版本号
 
 Go 版走自己的序列，当前 `0.8.0`：
 
-- 上一版是 `0.7.0`，本版补齐整理器的存疑项逐条确认、最近一次整理撤销与规则导入导出，按语义化版本升次版本号；
+- 上一版是 `0.7.0`，本版补齐整理器三项（存疑项逐条确认、最近一次整理撤销、规则导入导出）、
+  自动更新与 exe/安装包版本资源，按语义化版本升次版本号；
 - 同时补上 Linux / macOS 的回收站、机器码与单实例实现（交叉编译与 `go vet` 通过，未真机运行）；
-- 仍是 `0.x`：整理器的撤销范围有限（删除与硬链接替换不可恢复），macOS / Linux 未做真机验证，不足以标 1.0；
+- 仍是 `0.x`：整理器撤销范围有限（删除与硬链接替换不可恢复），自动更新未在真实安装目录完整走一次，
+  macOS / Linux 未做真机验证，不足以标 1.0；
 - 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.8.0` 为准）。

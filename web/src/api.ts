@@ -18,6 +18,8 @@ import type {
   SettingsResult,
   SkippedPage,
   UISettings,
+  UpdateCheckView,
+  UpdateInstallView,
 } from "./types";
 import { mock } from "./mock";
 
@@ -41,6 +43,10 @@ interface WailsApp {
   ImportOrganizeRules(): Promise<OrganizeRulesImport>;
   GetOrganizeUndoInfo(): Promise<OrganizeUndoInfo>;
   UndoLastOrganize(): Promise<OrganizeUndoResult>;
+  CheckForUpdate(manual: boolean): Promise<UpdateCheckView>;
+  InstallUpdate(): Promise<UpdateInstallView>;
+  SkipUpdateVersion(version: string): Promise<void>;
+  ClearSkippedUpdateVersion(): Promise<void>;
   GetLicenseState(): Promise<LicenseState>;
   GetMachineCode(): Promise<string>;
   ImportLicenseFile(): Promise<LicenseState>;
@@ -154,6 +160,26 @@ export const api = {
     const b = bridge();
     if (b) return b.UndoLastOrganize();
     return mock.undoLastOrganize();
+  },
+  async checkForUpdate(manual: boolean): Promise<UpdateCheckView> {
+    const b = bridge();
+    if (b) return b.CheckForUpdate(manual);
+    return mock.checkForUpdate(manual);
+  },
+  async installUpdate(): Promise<UpdateInstallView> {
+    const b = bridge();
+    if (b) return b.InstallUpdate();
+    return mock.installUpdate();
+  },
+  async skipUpdateVersion(version: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.SkipUpdateVersion(version);
+    mock.skipUpdateVersion(version);
+  },
+  async clearSkippedUpdateVersion(): Promise<void> {
+    const b = bridge();
+    if (b) return b.ClearSkippedUpdateVersion();
+    mock.clearSkippedUpdateVersion();
   },
   async getLicenseState(): Promise<LicenseState> {
     const b = bridge();

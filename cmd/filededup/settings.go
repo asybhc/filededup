@@ -59,11 +59,21 @@ type OrganizeSettings struct {
 	ContinueOnError bool          `json:"continueOnError"`
 }
 
+// UpdateSettings 是自动更新的持久化选项。
+// ManifestURL 默认为空：为空时不检查更新，填了才启用。
+type UpdateSettings struct {
+	ManifestURL    string `json:"manifestUrl"`
+	CheckMode      string `json:"checkMode"`
+	IntervalHours  int    `json:"intervalHours"`
+	SkippedVersion string `json:"skippedVersion"`
+}
+
 // UISettings 是整份配置。
 type UISettings struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	Scan          ScanSettings     `json:"scan"`
 	Organize      OrganizeSettings `json:"organize"`
+	Update        UpdateSettings   `json:"update"`
 }
 
 // SettingsResult 把“加载结果 + 提示”一起返回，界面可如实展示警告。
@@ -97,6 +107,10 @@ func DefaultSettings() UISettings {
 			AudioTolerance:  2,
 			Strength:        1,
 			Excludes:        []string{},
+		},
+		Update: UpdateSettings{
+			CheckMode:     "auto",
+			IntervalHours: 18,
 		},
 	}
 }
@@ -150,6 +164,12 @@ func LoadSettings() (UISettings, string) {
 		if err := json.Unmarshal(v, &out.Organize); err != nil {
 			out.Organize = def.Organize
 			warns = append(warns, "organize 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["update"]; ok {
+		if err := json.Unmarshal(v, &out.Update); err != nil {
+			out.Update = def.Update
+			warns = append(warns, "update 段无法解析，已整体使用默认值")
 		}
 	}
 
@@ -208,6 +228,15 @@ func normalizeSettings(s *UISettings, def UISettings) {
 	if s.Organize.MinSize < 0 {
 		s.Organize.MinSize = 0
 	}
+
+	s.Update.ManifestURL = strings.TrimSpace(s.Update.ManifestURL)
+	if s.Update.CheckMode != "manual" {
+		s.Update.CheckMode = "auto"
+	}
+	if s.Update.IntervalHours <= 0 || s.Update.IntervalHours > 720 {
+		s.Update.IntervalHours = def.Update.IntervalHours
+	}
+	s.Update.SkippedVersion = strings.TrimSpace(s.Update.SkippedVersion)
 }
 
 func validKeepPolicy(s string) bool {
@@ -246,6 +275,7 @@ func SaveSettings(s UISettings) error {
 		put("schemaVersion", s.SchemaVersion),
 		put("scan", s.Scan),
 		put("organize", s.Organize),
+		put("update", s.Update),
 	} {
 		if err != nil {
 			return err

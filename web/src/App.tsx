@@ -17,6 +17,8 @@ import type {
   ScanState,
   SkipView,
   UISettings,
+  UpdateCheckView,
+  UpdateSettings,
 } from "./types";
 
 const MB = 1024 * 1024;
@@ -32,6 +34,15 @@ const KIND_LABELS: Record<string, string> = {
   exact: "内容相同",
   image: "相似图片",
   audio: "相似音频",
+};
+
+const UPDATE_STATUS_LABELS: Record<string, string> = {
+  disabled: "未配置更新源",
+  manual: "手动检查模式",
+  throttled: "检查间隔未到",
+  uptodate: "已是最新",
+  available: "有新版本",
+  skipped: "已跳过此版本",
 };
 
 type Step = "pick" | "scan" | "results" | "preview" | "done";
@@ -154,6 +165,20 @@ export default function App() {
   const [licenseNote, setLicenseNote] = useState("");
   const licenseStop = Boolean(license && !license.canApply);
 
+  // 自动更新：更新源默认留空，只有配置后才检查。
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckView>();
+  const [updateNote, setUpdateNote] = useState("");
+  const [installArmed, setInstallArmed] = useState(false);
+  const [updateForm, setUpdateForm] = useState<UpdateSettings>({
+    manifestUrl: "",
+    checkMode: "auto",
+    intervalHours: 18,
+    skippedVersion: "",
+  });
+  const autoChecked = useRef(false);
+
   // 启动时恢复设置：缺键由后端补默认值，坏文件只给提示不回退到崩溃。
   useEffect(() => {
     let alive = true;
@@ -179,6 +204,7 @@ export default function App() {
         }));
         setDeleteMode(s.scan.deleteMode);
         setExcludesText((s.scan.excludes || []).join(" "));
+        setUpdateForm(s.update);
         setSettingsReady(true);
       })
       .catch((err) => {
@@ -226,6 +252,136 @@ export default function App() {
     settingsRef.current = merged;
     setSettings(merged);
     api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+  };
+
+  // 启动后按配置自动检查一次；有更新只点亮入口，不主动弹窗。
+  useEffect(() => {
+    if (!settingsReady || autoChecked.current) return;
+    autoChecked.current = true;
+    const cfg = settingsRef.current?.update;
+    if (!cfg || !cfg.manifestUrl.trim()) return;
+    api
+      .checkForUpdate(false)
+      .then((v) => {
+        if (v.status === "available") setUpdateCheck(v);
+      })
+      .catch(() => undefined);
+  }, [settingsReady]);
+
+  const persistUpdate = async (next: UpdateSettings) => {
+    setUpdateForm(next);
+    const base = settingsRef.current;
+    if (!base) return;
+    const merged: UISettings = { ...base, update: next };
+    settingsRef.current = merged;
+    setSettings(merged);
+    await api.saveSettings(merged);
+  };
+
+  const runCheck = async (manual: boolean) => {
+    setUpdateBusy(true);
+    if (manual) setUpdateNote("正在检查更新…");
+    try {
+      const v = await api.checkForUpdate(manual);
+      setUpdateCheck(v);
+      if (v.message) setUpdateNote(v.message);
+    } catch (err) {
+      setUpdateCheck(undefined);
+      setUpdateNote("检查失败：" + errorText(err));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const openUpdate = () => {
+    setUpdateOpen(true);
+    setInstallArmed(false);
+    setUpdateNote("");
+    void runCheck(true);
+  };
+
+  const saveAndCheck = async () => {
+    const url = updateForm.manifestUrl.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      setUpdateNote("更新源必须是 http:// 或 https:// 地址。");
+      return;
+    }
+    const interval = Math.min(720, Math.max(1, Number(updateForm.intervalHours) || 18));
+    const next: UpdateSettings = { ...updateForm, manifestUrl: url, intervalHours: interval };
+    setUpdateBusy(true);
+    setUpdateNote("正在保存并检查…");
+    try {
+      await persistUpdate(next);
+      const v = await api.checkForUpdate(true);
+      setUpdateCheck(v);
+      setUpdateNote(v.message || "检查完成。");
+    } catch (err) {
+      setUpdateCheck(undefined);
+      setUpdateNote("检查失败：" + errorText(err));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const skipLatest = async () => {
+    const v = updateCheck?.latestVersion;
+    if (!v) return;
+    setUpdateBusy(true);
+    try {
+      await api.skipUpdateVersion(v);
+      setUpdateForm((prev) => ({ ...prev, skippedVersion: v }));
+      const base = settingsRef.current;
+      if (base) {
+        const merged: UISettings = { ...base, update: { ...base.update, skippedVersion: v } };
+        settingsRef.current = merged;
+        setSettings(merged);
+      }
+      setUpdateCheck((prev) => (prev ? { ...prev, status: "skipped", message: `已跳过版本 ${v}。` } : prev));
+      setUpdateNote(`已跳过版本 ${v}，后续检查不再提示。`);
+    } catch (err) {
+      setUpdateNote("跳过版本失败：" + errorText(err));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const clearSkipped = async () => {
+    setUpdateBusy(true);
+    try {
+      await api.clearSkippedUpdateVersion();
+      setUpdateForm((prev) => ({ ...prev, skippedVersion: "" }));
+      const base = settingsRef.current;
+      if (base) {
+        const merged: UISettings = { ...base, update: { ...base.update, skippedVersion: "" } };
+        settingsRef.current = merged;
+        setSettings(merged);
+      }
+      setUpdateNote("已取消跳过版本。");
+      setUpdateCheck(undefined);
+    } catch (err) {
+      setUpdateNote("取消跳过失败：" + errorText(err));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const installLatest = async () => {
+    if (!installArmed) {
+      setInstallArmed(true);
+      return;
+    }
+    setUpdateBusy(true);
+    setUpdateNote("正在下载、验签并替换程序，请勿关闭窗口…");
+    try {
+      const r = await api.installUpdate();
+      setUpdateNote(`已更新到 ${r.version}，程序即将重启。备份：${r.backupPath}`);
+    } catch (err) {
+      // 浏览器预览会在这里直接给出“不能安装”的明确原因。
+      setUpdateNote("安装已取消：" + errorText(err));
+      setInstallArmed(false);
+    } finally {
+      setUpdateBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -548,6 +704,13 @@ export default function App() {
             {licenseLabel(license)}
           </button>
           <span className="badge">v{info.version || "—"}</span>
+          <button
+            className={`badge update-badge ${updateCheck?.status === "available" ? "has-update" : ""}`}
+            title="检查更新（清单与安装包均验签）"
+            onClick={openUpdate}
+          >
+            {updateCheck?.status === "available" ? `有更新 v${updateCheck.latestVersion}` : "检查更新"}
+          </button>
           <span className="badge">{info.platform || "—"}</span>
         </div>
       </header>
@@ -1077,6 +1240,104 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {updateOpen && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="modalbodysmall">
+            <h3>软件更新</h3>
+            <dl className="licenseinfo">
+              <dt>当前版本</dt>
+              <dd>v{info.version || "—"}</dd>
+              <dt>更新源</dt>
+              <dd className="break">{updateForm.manifestUrl || "未配置（不检查）"}</dd>
+              <dt>检查模式</dt>
+              <dd>{updateForm.checkMode === "auto" ? `自动，每 ${updateForm.intervalHours} 小时` : "手动"}</dd>
+              <dt>跳过版本</dt>
+              <dd>{updateForm.skippedVersion || "—"}</dd>
+              {updateCheck && (
+                <>
+                  <dt>检查结果</dt>
+                  <dd>{UPDATE_STATUS_LABELS[updateCheck.status] ?? updateCheck.status}</dd>
+                </>
+              )}
+            </dl>
+
+            <label className="field">
+              <span>更新清单地址（留空则不检查）</span>
+              <input
+                value={updateForm.manifestUrl}
+                placeholder="https://example.com/filededup/update.json"
+                onChange={(e) => setUpdateForm((prev) => ({ ...prev, manifestUrl: e.target.value }))}
+              />
+            </label>
+            <label className="field">
+              <span>检查模式</span>
+              <select
+                value={updateForm.checkMode}
+                onChange={(e) => setUpdateForm((prev) => ({ ...prev, checkMode: e.target.value as "auto" | "manual" }))}
+              >
+                <option value="auto">自动检查</option>
+                <option value="manual">仅手动检查</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>检查间隔（小时，1–720）</span>
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={updateForm.intervalHours}
+                onChange={(e) => setUpdateForm((prev) => ({ ...prev, intervalHours: Number(e.target.value) }))}
+              />
+            </label>
+
+            <div className="actions">
+              <button disabled={updateBusy} onClick={() => void saveAndCheck()}>
+                保存并立即检查
+              </button>
+              {updateForm.skippedVersion && (
+                <button className="secondary" disabled={updateBusy} onClick={() => void clearSkipped()}>
+                  取消跳过 {updateForm.skippedVersion}
+                </button>
+              )}
+              <button className="secondary" onClick={() => setUpdateOpen(false)}>
+                关闭
+              </button>
+            </div>
+
+            {updateCheck?.status === "available" && (
+              <>
+                <div className="banner warn" role="status">
+                  <span>
+                    发现新版本 v{updateCheck.latestVersion}
+                    {updateCheck.assetSize ? `（${formatBytes(updateCheck.assetSize)}）` : ""}
+                    {updateCheck.releasedAt ? ` · ${updateCheck.releasedAt}` : ""}
+                  </span>
+                </div>
+                {updateCheck.notes && <p className="hint">{updateCheck.notes}</p>}
+                <div className="actions">
+                  <button className="secondary" disabled={updateBusy} onClick={() => void skipLatest()}>
+                    跳过此版本
+                  </button>
+                  <button className="danger" disabled={updateBusy} onClick={() => void installLatest()}>
+                    {installArmed ? "确认覆盖当前程序并重启" : "下载并安装"}
+                  </button>
+                </div>
+                {installArmed && (
+                  <p className="hint warn">
+                    将下载安装包并覆盖当前程序；替换前会备份为 .old，长度、SHA-256、清单签名或包签名任一不符都会拒绝安装并回滚。
+                  </p>
+                )}
+              </>
+            )}
+
+            {updateNote && <p className="hint">{updateNote}</p>}
+            <p className="hint">
+              清单与安装包都必须通过内置的更新专用 Ed25519 公钥验签，并校验长度与 SHA-256；失败一律拒绝安装，没有“忽略签名继续”的选项。
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1177,11 +1438,12 @@ function FeatureStatus() {
         <span className="kind kind-keep">已接通</span>{" "}
         目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
         九步整理（试运行/真实执行/存疑项确认/最近一次撤销/规则导入导出）、
+        自动更新（Ed25519 清单与安装包验签、备份与回滚）、
         Ed25519 许可证导入与状态显示、旧版 ECDSA 许可证只读兼容、试用期（PBKDF2 + 双存储 + 回拨检测）
       </p>
       <p>
         <span className="kind kind-warn">未实现</span>{" "}
-        系统托盘、自动更新、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史
+        系统托盘、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史
       </p>
     </div>
   );
