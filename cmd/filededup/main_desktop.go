@@ -12,13 +12,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-// main 是 Wails 桌面入口。需要先构建前端：
+// main 是 Wails 桌面入口。需要先构建前端，然后走固定脚本：
 //
 //	cd web && npm install && npm run build
-//	go build -tags desktop -o bin/fdedup-ui.exe ./cmd/filededup
+//	powershell -File scripts/build-desktop.ps1
 //
-// 不构建桌面版（CI 的三平台 go build ./...）时走 main.go 的无 GUI 分支，
-// 避免 Linux 上引入 WebKitGTK 的 cgo 依赖。
+// 脚本固定 `desktop,production` 两个 tag 并加上 `-H windowsgui`：
+// 只带 desktop 会编入 Wails 的 missing-tags stub（运行只弹框、不开窗），
+// 不加 windowsgui 则会先出现控制台黑窗。
 func main() {
 	app := NewApp()
 	err := wails.Run(&options.App{

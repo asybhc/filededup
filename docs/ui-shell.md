@@ -6,10 +6,16 @@
 
 ```powershell
 cd web && npm install && npm run build      # 产出 web/dist
-cd .. && go build -tags desktop -o bin/fdedup-ui.exe ./cmd/filededup
+cd .. && powershell -File scripts/build-desktop.ps1
 ./bin/fdedup-ui.exe
 ```
 
+- 桌面版**必须**带 `desktop,production` 两个 tag 并用 GUI 子系统构建。只带 `desktop` 时，Wails 的
+  [app_default_windows.go](https://github.com/wailsapp/wails/blob/v2.17.1/internal/app/app_default_windows.go)
+  会被编进产物，运行后只弹 “Wails applications will not build without the correct build tags” 对话框，
+  不会创建窗口；不加 `-H windowsgui` 还会先出现控制台黑窗。这两点都不再是环境问题。
+- `scripts/build-desktop.ps1` 固定 tag 与子系统，并在构建后校验：产物不含上述 stub 文案、PE Subsystem=2、打印字节数与 SHA-256。
+  构建桌面版只走这个脚本，不要直接用 `go build -tags desktop`。
 - 不带 `desktop` tag 时，`cmd/filededup` 只有一个占位 main，三平台 CI 的 `go build ./...` 不会引入 WebView2 / WebKitGTK。
 - 前端产物通过模块根的 `assets_desktop.go`（`//go:embed all:web/dist`）嵌入，因为 `go:embed` 不能引用上级目录。
 - 浏览器预览：`cd web && npm run dev`，然后打开 `http://localhost:5173/`。
@@ -111,7 +117,8 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
 
 ## 已知限制
 
-1. 桌面窗口在无桌面会话的自动化环境里无法弹出（官方 Wails 模板同样表现），桌面显示由人工复核；
+1. 桌面窗口在自动化会话里不做人工交互验证，桌面显示由用户复核；已确认 production 构建的进程能稳定存活并创建标题为
+   “文件去重 FileDedup”的窗口（此前“环境承载不了窗口、3 秒退出”的结论来自缺少 `production` tag 的 stub，已作废）。
    后端用 `go test -tags desktop -run "TestAppSmoke|TestSettingsTolerance|TestOrganizeJob" ./cmd/filededup` 覆盖真实目录的扫描→预览→执行闭环、设置容错与整理执行。
 2. 结果列表一次性载入全部组（分页 500 逐步拉取），超大结果集的内存占用未单独测量。
 3. 预览只展示前 200 条动作样例，完整计划在执行时才交给执行器。

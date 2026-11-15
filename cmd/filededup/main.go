@@ -13,6 +13,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintf(os.Stderr, "这是无 GUI 构建。桌面版请先在 web/ 执行 npm run build，然后用 -tags desktop 构建（当前平台 %s/%s）。\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(os.Stderr, "这是无 GUI 构建。桌面版请先在 web/ 执行 npm run build，再运行 scripts/build-desktop.ps1（当前平台 %s/%s）。\n", runtime.GOOS, runtime.GOARCH)
 	os.Exit(1)
 }
