@@ -13,6 +13,8 @@ import type {
   DedupUndoResult,
   DeleteMode,
   ExecuteState,
+  ExportFormat,
+  ExportResult,
   GroupView,
   KeepPolicy,
   LanzouSettings,
@@ -173,6 +175,11 @@ export default function App() {
   const [undoBusy, setUndoBusy] = useState(false);
   const [undoConfirm, setUndoConfirm] = useState(false);
   const [undoNote, setUndoNote] = useState("");
+  // 查重结果导出：HTML/CSV 写到本地，成功后就地显示路径。
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportNote, setExportNote] = useState("");
+  const [exportError, setExportError] = useState("");
+  const [exportResult, setExportResult] = useState<ExportResult>();
   const [error, setError] = useState("");
   const [detail, setDetail] = useState("");
   const [skipOpen, setSkipOpen] = useState(false);
@@ -797,6 +804,22 @@ export default function App() {
     }
   }
 
+  async function doExport(format: ExportFormat) {
+    setExportBusy(true);
+    setExportNote("");
+    setExportError("");
+    try {
+      const res = await api.exportResults(sessionId, format);
+      setExportResult(res);
+      setExportNote(`已导出 ${format.toUpperCase()}：${res.path}`);
+    } catch (err) {
+      setExportResult(undefined);
+      setExportError("导出失败：" + errorText(err));
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   async function doDedupUndo() {
     setUndoConfirm(false);
     setUndoBusy(true);
@@ -887,6 +910,10 @@ export default function App() {
     setUndoInfo(undefined);
     setUndoResult(undefined);
     setUndoNote("");
+    setExportBusy(false);
+    setExportNote("");
+    setExportError("");
+    setExportResult(undefined);
     setPerfActive(false);
     setPerfRows([]);
     setError("");
@@ -1164,6 +1191,17 @@ export default function App() {
                   重新扫描
                 </button>
                 <button
+                  className="secondary"
+                  onClick={() => doExport("html")}
+                  disabled={perfActive || !sessionId || exportBusy}
+                  title="导出包含分组、成员、大小、保留策略与扫描参数的报告"
+                >
+                  导出 HTML
+                </button>
+                <button className="secondary" onClick={() => doExport("csv")} disabled={perfActive || !sessionId || exportBusy}>
+                  导出 CSV
+                </button>
+                <button
                   className="primary"
                   onClick={openPreview}
                   disabled={perfActive || rows.length === 0 || deleteSel.size === 0}
@@ -1184,6 +1222,21 @@ export default function App() {
                 查看跳过项
               </button>
             </div>
+
+            {exportNote && (
+              <p className="hint">
+                {exportNote}
+                {exportResult ? (
+                  <>
+                    {" "}
+                    <button className="link" onClick={() => api.revealPath(exportResult.path)}>
+                      在资源管理器中显示
+                    </button>
+                  </>
+                ) : null}
+              </p>
+            )}
+            {exportError && <p className="hint warn">{exportError}</p>}
 
             {perfActive && (
               <div className="banner perf">
@@ -1886,6 +1939,7 @@ function FeatureStatus() {
       <p>
         <span className="kind kind-keep">已接通</span>{" "}
         目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
+        查重结果导出（HTML/CSV）、
         九步整理（试运行/真实执行/存疑项确认/最近一次撤销/规则导入导出）、
         自动更新（Ed25519 清单与安装包验签、备份与回滚）、
         Ed25519 许可证导入与状态显示、旧版 ECDSA 许可证只读兼容、试用期（PBKDF2 + 双存储 + 回拨检测）

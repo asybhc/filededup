@@ -483,6 +483,24 @@ export interface DedupUndoResult {
   errors: string[];
 }
 
+// ---------- 查重结果导出（对应 cmd/filededup/export.go） ----------
+
+export type ExportFormat = "html" | "csv";
+
+export interface ExportResult {
+  /** 导出文件的绝对路径 */
+  path: string;
+  /** 导出目录（默认“文档”目录，不存在时用用户主目录） */
+  dir: string;
+  format: ExportFormat;
+  groups: number;
+  members: number;
+  reclaimableBytes: number;
+  scanStartedAt: string;
+  /** 导出文件自身大小（字节） */
+  bytes: number;
+}
+
 // ---------- 自动更新（对应 cmd/filededup/update.go） ----------
 
 export type UpdateCheckStatus =

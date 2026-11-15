@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"context"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +30,47 @@ func TestExcludedBareName(t *testing.T) {
 	for p, want := range cases {
 		if got := excluded(p, patterns); got != want {
 			t.Errorf("excluded(%q)=%v want %v", p, got, want)
+		}
+	}
+}
+
+func TestIsToolReportName(t *testing.T) {
+	cases := map[string]bool{
+		`C:\Users\a\Documents\dedup-report-20261116-153000.html`: true,
+		`C:\Users\a\Documents\DEDUP-REPORT-20261116-153000.CSV`:  true,
+		`/home/a/dedup-report-20261116-153000.csv`:               true,
+		`C:\a\dedup-report-20261116-153000.txt`:                  false,
+		`C:\a\my-dedup-report-20261116-153000.html`:              false,
+		`C:\a\upload-report-20261116-153000.csv`:                 false,
+		`C:\a\dedup-report.html`:                                 false,
+	}
+	for p, want := range cases {
+		if got := isToolReportName(p); got != want {
+			t.Errorf("isToolReportName(%q)=%v want %v", p, got, want)
+		}
+	}
+}
+
+// 导出报告必须被扫描忽略：否则用户扫描导出目录时会把报告本身当候选。
+func TestScanSkipsToolReports(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "a.txt", "duplicate-content")
+	writeFile(t, root, "b.txt", "duplicate-content")
+	writeFile(t, root, "dedup-report-20261116-153000.html", "<html>same</html>")
+	writeFile(t, root, "dedup-report-20261116-153000.csv", "<html>same</html>")
+
+	res, err := Run(context.Background(), testRequest(t, root))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Groups) != 1 {
+		t.Fatalf("应只有 1 个普通重复组，实际 %d 组", len(res.Groups))
+	}
+	for _, g := range res.Groups {
+		for _, m := range g.Members {
+			if strings.Contains(strings.ToLower(m.Path), "dedup-report-") {
+				t.Fatalf("报告文件不应参与查重：%s", m.Path)
+			}
 		}
 	}
 }

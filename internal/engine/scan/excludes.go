@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -21,6 +22,17 @@ func splitExcludes(raw []string) []string {
 		}
 	}
 	return out
+}
+
+// isToolReportName 判断文件是否为本工具导出的查重报告。
+// 这类文件由本工具写出，不应在后续扫描中被当成待处理文件（否则用户扫描
+// 导出目录时，报告本身也会参与查重与删除）。
+func isToolReportName(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	if !strings.HasPrefix(base, "dedup-report-") {
+		return false
+	}
+	return strings.HasSuffix(base, ".html") || strings.HasSuffix(base, ".csv")
 }
 
 // excluded 判断文件是否命中排除项。语义与 C# A/Y.cs#A_m_1 一致：

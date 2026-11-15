@@ -14,6 +14,8 @@ import type {
   LanzouPrepareResult,
   DedupUndoInfo,
   DedupUndoResult,
+  ExportFormat,
+  ExportResult,
   LanzouStatus,
   LanzouSummary,
   LanzouUploadState,
@@ -991,6 +993,10 @@ export const mock = {
   },
   undoLastDedup(): DedupUndoResult {
     throw new Error("浏览器预览不支持从回收站撤销，请在桌面版中使用");
+  },
+  // 浏览器预览没有本地写盘能力，导出如实拒绝，避免伪造“已导出”。
+  exportResults(_format: ExportFormat): ExportResult {
+    throw new Error("浏览器预览不支持导出到本地文件，请在桌面版中使用");
   },
   // ---- 授权：浏览器预览没有真实授权，按“试用中”展示，导入操作如实拒绝 ----
   getLicenseState(): LicenseState {

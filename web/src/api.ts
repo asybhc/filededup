@@ -4,6 +4,8 @@ import type {
   DedupUndoResult,
   DeleteMode,
   ExecuteState,
+  ExportFormat,
+  ExportResult,
   GroupsPage,
   LanzouListing,
   LanzouOptions,
@@ -54,6 +56,7 @@ interface WailsApp {
   PreviewPlan(id: string, deleteMode: DeleteMode, deletePaths: string[]): Promise<PlanPreview>;
   StartExecute(id: string, deleteMode: DeleteMode, deletePaths: string[], confirmed: boolean): Promise<void>;
   GetExecuteState(id: string): Promise<ExecuteState>;
+  ExportResults(id: string, format: ExportFormat): Promise<ExportResult>;
   GetSettings(): Promise<SettingsResult>;
   SaveSettings(s: UISettings): Promise<void>;
   SaveAIKey(key: string): Promise<void>;
@@ -159,6 +162,11 @@ export const api = {
     const b = bridge();
     if (b) return b.GetExecuteState(id);
     return mock.getExecuteState();
+  },
+  async exportResults(id: string, format: ExportFormat): Promise<ExportResult> {
+    const b = bridge();
+    if (b) return b.ExportResults(id, format);
+    return mock.exportResults(format);
   },
   async getSettings(): Promise<SettingsResult> {
     const b = bridge();

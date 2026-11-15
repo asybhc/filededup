@@ -117,7 +117,7 @@ func enumerate(ctx context.Context, req model.Request, d deps) ([]fileEntry, []m
 					if !req.IncludeHidden && hidden(path, ti) {
 						continue
 					}
-					if excluded(path, patterns) || ti.Size() < req.MinSize {
+					if excluded(path, patterns) || isToolReportName(path) || ti.Size() < req.MinSize {
 						continue
 					}
 					addFile(fileEntry{path: path, size: ti.Size(), modTime: ti.ModTime()})
@@ -134,7 +134,7 @@ func enumerate(ctx context.Context, req model.Request, d deps) ([]fileEntry, []m
 				if !req.IncludeHidden && hidden(path, fi) {
 					continue
 				}
-				if excluded(path, patterns) || fi.Size() < req.MinSize {
+				if excluded(path, patterns) || isToolReportName(path) || fi.Size() < req.MinSize {
 					continue
 				}
 				addFile(fileEntry{path: path, size: fi.Size(), modTime: fi.ModTime()})
