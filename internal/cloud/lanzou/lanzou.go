@@ -356,7 +356,7 @@ func BuildReport(folderID, folderName, localDir string, items []Item, sum Summar
 		LocalDir:      localDir,
 		Summary:       sum,
 		Items:         items,
-		Note: "登录与上传链路未用真实账号联调；结果以服务端返回原文为准。" +
+		Note: "结果以服务端返回原文为准；服务端拒绝的文件格式会按失败原样记录。" +
 			"分享创建不在本功能范围（服务端接口不可用），需要分享请在网页端手动操作。",
 	}
 }

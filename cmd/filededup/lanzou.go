@@ -39,6 +39,18 @@ import (
 // duplicateDirName 是云端重复文件的本地收纳目录，与 C# 版常量一致。
 const duplicateDirName = "网盘重复文件"
 
+// isUploadReportName 判断是否是本功能生成的报告文件（upload-report-*.json/.csv）。
+func isUploadReportName(name string) bool {
+	if !strings.HasPrefix(name, "upload-report-") {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".json", ".csv":
+		return true
+	}
+	return false
+}
+
 // LanzouStatus 是登录态快照。永远不返回完整 Cookie。
 type LanzouStatus struct {
 	LoggedIn       bool   `json:"loggedIn"`
@@ -297,6 +309,10 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 			continue
 		}
 		path := filepath.Join(localDir, e.Name())
+		if isUploadReportName(e.Name()) {
+			// 报告就写在本地目录里，不能把上一批的报告当成待上传文件。
+			continue
+		}
 		fi, err := e.Info()
 		if err != nil {
 			items = append(items, lanzou.Item{
@@ -523,11 +539,15 @@ dispatch:
 		p.state.Done++
 	}
 	items := append([]lanzou.Item(nil), p.state.Items...)
-	sum := p.state.Summary
-	p.state.Phase = "done"
+	// 预检阶段已经统计过重复/超大/缓存，上传阶段处理重复项时会再记一次；
+	// 以最终 items 为准重建汇总，避免重复计数。
+	sum := lanzou.Summary{}
+	for _, it := range items {
+		sum.Add(it.Kind)
+	}
+	p.state.Summary = sum
 	p.state.FinishedAt = time.Now().Format(time.RFC3339)
 	p.state.Active = nil
-	p.running = false
 	p.mu.Unlock()
 
 	if err := cache.Save(); err != nil {
@@ -543,6 +563,9 @@ dispatch:
 		p.state.ReportJSON = jsonPath
 		p.state.ReportCSV = csvPath
 	}
+	// 报告路径要在 done 之前写好：否则前端一看到 done 就读状态，会拿到空的报告路径。
+	p.state.Phase = "done"
+	p.running = false
 	p.mu.Unlock()
 }
 

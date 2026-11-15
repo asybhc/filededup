@@ -265,9 +265,10 @@ func TestUpload(t *testing.T) {
 			return
 		}
 		gotTask.Store(r.PostFormValue("task"))
+		// 实测字段名：目录参数是 folder_id，文件部件是 upload_file。
 		gotFolder.Store(r.PostFormValue("folder_id"))
 		gotName.Store(r.PostFormValue("name"))
-		f, _, err := r.FormFile("file")
+		f, _, err := r.FormFile("upload_file")
 		if err != nil {
 			t.Errorf("FormFile: %v", err)
 			return

@@ -321,7 +321,7 @@ func normalizeFolderID(id string) string {
 }
 
 func (c *Client) listFolders(ctx context.Context, folderID string) ([]Folder, error) {
-	body, err := c.postTask(ctx, "47", url.Values{"folder_id": {normalizeFolderID(folderID)}})
+	body, err := c.postTaskAllowEmpty(ctx, "47", url.Values{"folder_id": {normalizeFolderID(folderID)}}, true)
 	if err != nil {
 		return nil, err
 	}
@@ -449,8 +449,35 @@ func totalPages(body []byte) int {
 	return 0
 }
 
+// isEmptyFolderResponse 判断 task=47 的响应是不是「空子目录」。
+// 实测空子目录返回 {"zt":2,"info":[{...目录自身信息...}],"text":[]}，
+// 与登录失效（zt=9）和参数错误（zt=2 且 info 为空）不同。
+func isEmptyFolderResponse(body []byte) bool {
+	var env struct {
+		Info json.RawMessage `json:"info"`
+		Text json.RawMessage `json:"text"`
+	}
+	if json.Unmarshal(body, &env) != nil {
+		return false
+	}
+	text := strings.TrimSpace(string(env.Text))
+	if text != "[]" && text != "null" && text != "" {
+		return false
+	}
+	var infos []json.RawMessage
+	if json.Unmarshal(env.Info, &infos) != nil {
+		return false
+	}
+	return len(infos) > 0
+}
+
 // postTask 调用 doupload.php，task 与参数都放在表单里；uid 放查询串（与 C# 版一致）。
 func (c *Client) postTask(ctx context.Context, task string, values url.Values) ([]byte, error) {
+	return c.postTaskAllowEmpty(ctx, task, values, false)
+}
+
+// postTaskAllowEmpty 在 allowEmpty 为真时把「空子目录」的 zt=2 当作成功返回。
+func (c *Client) postTaskAllowEmpty(ctx context.Context, task string, values url.Values, allowEmpty bool) ([]byte, error) {
 	if err := c.throttle(ctx); err != nil {
 		return nil, &APIError{Op: "列目录", Detail: err.Error()}
 	}
@@ -468,6 +495,9 @@ func (c *Client) postTask(ctx context.Context, task string, values url.Values) (
 		return nil, &APIError{Op: "列目录", Status: res.status, Detail: truncate(string(res.body), 200)}
 	}
 	if zt := ztOf(res.body); zt != 1 {
+		if allowEmpty && zt == 2 && isEmptyFolderResponse(res.body) {
+			return res.body, nil
+		}
 		e := &APIError{Op: "列目录", Status: res.status, Detail: truncate(string(res.body), 300)}
 		if zt == 9 {
 			e.Hint = "登录态已失效，请重新登录或粘贴新的 Cookie"
@@ -499,7 +529,7 @@ func (c *Client) Upload(ctx context.Context, localPath, folderID string, progres
 		return UploadResult{}, ErrTooLarge
 	}
 	if strings.TrimSpace(folderID) == "" {
-		folderID = "0"
+		folderID = rootFolderID
 	}
 	name := filepath.Base(localPath)
 
@@ -546,14 +576,14 @@ func (c *Client) uploadOnce(ctx context.Context, localPath, name, folderID strin
 			mw.Close()
 			pw.CloseWithError(werr)
 		}()
+		// 实测：html5up.php 的目标目录字段是 folder_id，文件部件必须叫 upload_file。
+		// 用 folder_id_bb_n 不会报错，但文件会落到根目录；文件部件叫 file 则返回「请选择需要上传的文件」。
 		fields := [][2]string{
 			{"task", "1"},
-			{"folder_id", folderID},
 			{"id", "WU_FILE_0"},
+			{"folder_id", folderID},
 			{"name", name},
 			{"type", "application/octet-stream"},
-			{"lastModifiedDate", info.ModTime().Format("Mon Jan 02 2006 15:04:05 GMT-0700")},
-			{"size", strconv.FormatInt(info.Size(), 10)},
 		}
 		for _, f := range fields {
 			if werr = mw.WriteField(f[0], f[1]); werr != nil {
@@ -561,7 +591,7 @@ func (c *Client) uploadOnce(ctx context.Context, localPath, name, folderID strin
 			}
 		}
 		var part io.Writer
-		part, werr = mw.CreateFormFile("file", name)
+		part, werr = mw.CreateFormFile("upload_file", name)
 		if werr != nil {
 			return
 		}
