@@ -1,0 +1,6 @@
+# 源码与夹具统一用 LF 落盘，避免 Windows 上 core.autocrlf=true 把检出内容转成 CRLF，
+# 进而让 CI 的 gofmt -l 把所有文件都判为未格式化。
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

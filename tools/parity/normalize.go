@@ -44,17 +44,24 @@ func loadPlan(path string) (*model.Plan, error) {
 }
 
 // relPath 把绝对路径转为相对语料根的 "/" 分隔 NFC 路径；无法相对化时原样返回。
+// 统一先转成 "/" 形式再比较：对拍夹具里会出现 F:\corpus 这类 Windows 路径，
+// 在 Linux/macOS 上 filepath.Rel 不认反斜杠，会把两侧都当普通文件名而无法相对化。
 func relPath(p, root string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return ""
 	}
+	slash := func(s string) string {
+		return strings.ReplaceAll(filepath.ToSlash(s), `\`, "/")
+	}
+	p = slash(p)
 	if root != "" {
-		if rel, err := filepath.Rel(root, p); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-			p = rel
+		r := strings.TrimRight(slash(strings.TrimSpace(root)), "/")
+		if r != "" && len(p) > len(r) && strings.HasPrefix(p, r+"/") {
+			p = p[len(r)+1:]
 		}
 	}
-	return norm.NFC.String(filepath.ToSlash(p))
+	return norm.NFC.String(p)
 }
 
 type normMember struct {
