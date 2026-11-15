@@ -16,6 +16,7 @@ import (
 
 	"filededup/internal/auth"
 	"filededup/internal/cloud/lanzou"
+	"filededup/internal/cloud/lanzouyou"
 	"filededup/internal/engine/apply"
 	"filededup/internal/engine/model"
 	"filededup/internal/engine/plan"
@@ -27,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.2"
+const appVersion = "0.9.3"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -172,11 +173,13 @@ type App struct {
 	// updateMu 串行化安装更新，避免并发下载/替换。
 	updateMu sync.Mutex
 
-	// lanzouMu 保护蓝奏云客户端与预检结果；lanzouPreps 里是尚未上传完的批次。
-	lanzouMu     sync.Mutex
-	lanzouClient *lanzou.Client
-	lanzouSource string
-	lanzouPreps  map[string]*lanzouPrepare
+	// lanzouMu 保护蓝奏云/蓝奏优享客户端与预检结果；lanzouPreps 里是尚未上传完的批次。
+	lanzouMu       sync.Mutex
+	lanzouClient   *lanzou.Client
+	lanzouSource   string
+	youxiangClient *lanzouyou.Client
+	youxiangSource string
+	lanzouPreps    map[string]*lanzouPrepare
 
 	// quitting 由托盘“退出”置位：OnBeforeClose 据此放行，不再最小化到托盘。
 	quittingMu sync.Mutex

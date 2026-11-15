@@ -1,6 +1,6 @@
 # 桌面 UI 外壳（Wails v2 + React/TS）
 
-当前版本：`0.9.2`（Go 版独立版本序列，从 `0.6.0-ui` 起算；见文末“版本号”）。功能范围见“已接通 / 未实现”。
+当前版本：`0.9.3`（Go 版独立版本序列，从 `0.6.0-ui` 起算；见文末“版本号”）。功能范围见“已接通 / 未实现”。
 
 ## 构建与运行
 
@@ -39,8 +39,9 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/filededup/organize_undo.go` | 最近一次整理的撤销记录落盘与回滚接口 |
 | `cmd/filededup/organize_rules.go` | 整理规则导入导出（版本化 JSON、未知键与非法值校验） |
 | `cmd/filededup/update.go` | 自动更新门面：检查、验签、下载、替换回滚、跳过版本 |
-| `cmd/filededup/lanzou.go` | 蓝奏云门面：登录态、目录浏览、上传预检、上传执行与报告 |
-| `internal/cloud/lanzou/` | 蓝奏云老版协议：挑战登录、列目录、上传、去重规则、DPAPI 凭据、上传缓存、报告 |
+| `cmd/filededup/lanzou.go` | 双网盘门面：平台选择、登录态、目录浏览、上传预检、上传执行与报告 |
+| `internal/cloud/lanzou/` | 蓝奏云老版协议：挑战登录、列目录、上传、去重规则、DPAPI 凭据、上传缓存、报告（优享复用其类型与报告） |
+| `internal/cloud/lanzouyou/` | 蓝奏优享（ilanzou）协议：appToken 登录、列目录、七牛表单/分片上传、结果轮询、DPAPI 凭据 |
 | `internal/update/` | 清单解析与验签、下载校验、替换与清理 |
 | `cmd/fdedup-update-sign/` | 更新签名工具（私钥只在仓库外使用） |
 | `cmd/filededup/main_desktop.go` | Wails 入口（`//go:build desktop`） |
@@ -50,7 +51,7 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/fdedup-keygen/` | 离线签发工具（密钥与私钥操作只在仓库外进行） |
 | `web/src/App.tsx` | 模块切换与查重五步状态机 |
 | `web/src/Organizer.tsx` | 九步整理页 |
-| `web/src/Lanzou.tsx` | 蓝奏云上传页（登录、浏览、预检、上传进度、报告） |
+| `web/src/Lanzou.tsx` | 双网盘上传页（平台选择、登录、浏览、预检、上传进度、报告） |
 | `web/src/Settings.tsx` | 设置对话框（外观 / 窗口与托盘 / 定时任务 / AI / 日志） |
 | `web/src/api.ts` | Wails 桥 / 浏览器 mock 分派 |
 | `web/src/components/VirtualList.tsx` | 固定行高虚拟滚动 |
@@ -179,9 +180,21 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
   成功导入后仍沿用当前根目录。
 - 轮询：`GetOrganizeState` 400ms 一次，返回阶段（枚举 / 规划 / 执行）、每步动作数与计数、存疑项、前 200 条动作样例、执行统计与失败明细。
 
-## 蓝奏云上传（一期）
+## 蓝奏云 / 蓝奏优享双网盘上传
 
-一期范围与 C# 版对等：老版蓝奏云（`pc.woozooo.com` / `accounts.woozooo.com`）。优享版、网盘查重、分享创建都不在本期。
+页面顶部可选「蓝奏云（老版协议）」与「蓝奏优享（ilanzou）」。平台选择只记在浏览器 `localStorage`
+（键 `filededup.lanzou.platform`），不写入 `ui-settings.json`：旧设置文件不需要新增键，也不会因为回退版本丢失。
+两种网盘各自独立登录、各自保存凭据与上传缓存（缓存键带平台前缀），切换网盘不会退出另一种的登录态。
+网盘查重（三期）与分享创建仍不在本功能内。
+
+**升级行为（老用户会看到什么）**：首次进入仍默认「蓝奏云（老版协议）」，原 `lanzou.bin` 凭据与
+`upload-cache.json` 缓存路径、键格式（除新增平台前缀）继续可用，无需重新登录。新增的优享凭据单独存
+`youxiang.bin`，不会覆盖老版凭据。开始上传的授权门控从「执行删除（apply）」改为「网盘上传（cloud）」：
+标准版此前能走到开始上传的路径，现在会被后端拒绝并给出带机器码的原因，登录与预检仍可用。
+
+### 蓝奏云（老版协议）
+
+与 C# 版对等：`pc.woozooo.com` / `accounts.woozooo.com`。以下联调结论均来自 0.8.2。
 
 **联调状态**：登录、列目录、预检与**真实上传**都已用真实账号联调通过（0.8.2）。上传联调在账号里建
 `test-<日期>-<时间>` 临时目录（本次 `test-20261115-185649`，目录 ID `14253921`），只在该目录内操作，
@@ -242,11 +255,44 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
   **与 C# 版差异**：C# 键含 MD5，这里不额外整文件读取，内容变了但大小与修改时间没变会误判，可用「强制重传」绕过。
 - **去重规则**：名字 `Trim` 后 `OrdinalIgnoreCase` 相等，且 `|本地 - 云端| <= max(2048, 本地/100)`；云端大小解析失败（`-1`）一律不匹配。
   缓存优先于云端判重：已经传过的文件不会被移动。重复项不上传，本地文件移动到上传目录**旁边**的「网盘重复文件」，重名追加序号不覆盖。
-- **两道闸**：预检只读（不动本地文件）；开始上传要求后端 `confirmed=true`、设置里 `disclaimerAccepted=true`，并通过 `FeatureApply` 授权门控。
+- **两道闸**：预检只读（不动本地文件）；开始上传要求后端 `confirmed=true`、设置里 `disclaimerAccepted=true`，并通过 `FeatureCloud` 授权门控
+  （0.9.3 起从 `FeatureApply` 改为 `FeatureCloud`，与「专业版：网盘上传」的功能划分一致；标准版开始上传会被拒绝并给出带机器码的原因，登录与预检仍可用）。
 - **错误透传**：`APIError` 原样带出操作名、HTTP 状态码、服务端 `zt/info` 或 `code/msg` 与响应片段，不包装成「网络错误」，不假装成功。
 - **结果分类**（沿用 C# 七种 + 汇总行）：上传成功、秒传、缓存跳过、超过 100 MiB 跳过、云端重复（本地已移动）、已取消、失败。
 - **报告**：结束后在上传目录写 `upload-report-<yyyyMMdd-HHmmss>.json` 与同名 `.csv`（UTF-8 BOM，带引号转义），
   界面提供「打开报告」与「打开网页端」。分享创建不在本功能内，需要分享请到网页端手动操作。
+
+### 蓝奏优享（ilanzou）
+
+协议字段来自对官方 Windows 客户端的静态分析（C# 反编译 `c/m.cs`、`B/F.cs` 与字符串表 XOR 解密），
+**没有真实优享账号做过联调**；只保证编译、包内 `httptest` 单测与本地可验证部分。
+
+- **凭据**：账号密码只用于登录请求，换取 `appToken`；落盘 `%AppData%\FileDedup\lanzou\youxiang.bin`，
+  与老版 `lanzou.bin` 分开，DPAPI（CurrentUser）加密，界面只显示账号后四位。优享用 appToken 而非 Cookie，
+  因此「粘贴 Cookie 登录」与「从 C# 版导入」在优享平台下不显示（后端也会明确拒绝，不会静默失败）。
+- **协议（已按字段实现）**：
+  - 基地址 `https://api.ilanzou.com`；每个 API 追加公共查询
+    `uuid / devType=6 / devCode / devModel=chrome / devVersion=131 / appVersion / timestamp / extra=2`，登录后追加 `appToken`。
+  - 登录 `POST /unproved/login`，body `{"loginName","loginPwd"}` → `data.appToken`；
+    账号信息 `GET /proved/user/account/map` → `data.map.userId/account`（同时用于校验登录态）。
+  - 目录 `GET /proved/record/folder/list?offset=<页码≥1>&limit=60&folderId=<id>&type=0`，文件同形但用 `file/list`；
+    读 `data.totalPage` 翻页，`fileType==2` 按目录处理，文件 `fileSize` 单位是 KB，展示时 ×1024。
+  - 上传令牌 `POST /proved/7n/getUpToken`，body `{"fileName","fileSize":<KB>,"folderId","md5","type":1}` → `data.upToken`；
+    `upToken=="-1"` 表示秒传，`data.map.fileId` 即既有文件 ID。
+  - ≤ 8 MiB 走七牛表单 `POST https://upload.qiniup.com/`（字段 `token`、`key`、`file`）；
+    > 8 MiB 走七牛分片：初始化 `/buckets/wpanstore-lanzou/objects/<urlsafe-base64(objectKey)>/uploads`，
+    分片 `PUT .../uploads/<uploadId>/<n>` 带 `Content-MD5`，合并 `POST .../uploads/<uploadId>`（JSON `parts`）。
+  - 结果 `GET /unproved/7n/results?tokenList=<token>&tokenTime=<yyyy-MM-dd HH:mm:ss>` 轮询，`status==1` 视为成功。
+  - objectKey：`storage/files/<年>/<月>/<日>/<账号或 0>/<unixMilli>_<guid32>.gz`。
+- **行为**：登录后列目录、切换目录、只读预检（本机缓存 + 云端同名同大小判定）、上传、取消、结束写报告。
+  优享不设 100 MiB 本地跳过；**不支持创建云端目录**，需要新目录请先在网页端创建。
+  报告 kind 为 `filededup.lanzouyou.upload-report`，平台字段 `lanzou-youxiang`。
+- **未验证项（不作结论）**：
+  1. 分片上传的分片 URL 是否真的包含 `uploadId`：C# 反编译片段里没有，本实现按七牛公开协议补上，需真机确认。
+  2. objectKey 的 base64 用 URL-safe 变体（C# 片段为标准 base64），以服务端接受为准。
+  3. 优享对文件名/扩展名、单文件体积、并发与请求频率的限制未实测；目前沿用并发 1–5、间隔 1000–2000ms。
+  4. 秒传的 `data.map.fileId` 与结果轮询 `data.list[].status` 只做了合成响应单测，未接真实账号。
+  5. 账号容量 / VIP 字段只用于校验登录态与展示，不参与上传判定。
 
 ## 授权与试用
 
@@ -412,8 +458,9 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
 
 - 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
   九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细 / 仅规划 / 存疑项逐条确认或驳回 /
-  最近一次整理撤销 / 规则导入导出）、蓝奏云上传一期（老版登录 / Cookie 降级 / C# 凭据导入 / 目录浏览 / 只读预检 /
-  并发上传与取消 / 云端同名同大小去重 / 七类结果与汇总 / 报告导出，**登录、预检与上传均已用真实账号实测**）、
+  最近一次整理撤销 / 规则导入导出）、双网盘上传（蓝奏云老版：登录 / Cookie 降级 / C# 凭据导入 / 目录浏览 / 只读预检 /
+  并发上传与取消 / 云端同名同大小去重 / 七类结果与汇总 / 报告导出，**登录、预检与上传均已用真实账号实测**；
+  蓝奏优享：appToken 登录 / 列目录 / 预检 / 七牛表单与分片上传 / 结果轮询 / 报告，**未用真实账号联调**）、
   自动更新（ed25519 清单与安装包验签、长度与 SHA-256 校验、备份与回滚、跳过版本、安装包缓存清理）、
   exe 与安装包版本资源、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控、
   标准版 / 专业版功能集与未解锁说明）、设置面板（AI 配置与 DPAPI 密钥、关闭行为、托盘、定时任务、日志保留天数）、
@@ -421,7 +468,7 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
   扩展名与大小过滤、服务端排序、分页 + 虚拟渲染、定位与打开、可取消）。
 - 未实现：
   - 全局：自定义保留项、查重侧执行撤销、撤销历史、定时任务执行删除或整理（当前只读扫描）。
-  - 蓝奏云：优享版（二期）、网盘查重（三期，原版默认只列不删、删除需二次确认）、分享创建（C# 版没有、服务端接口不可用）。
+  - 蓝奏云：网盘查重（三期，原版默认只列不删、删除需二次确认）、优享创建云端目录、分享创建（C# 版没有、服务端接口不可用）。
   - AI 分析：设置项与密钥存储已就绪，分析调用在 `0.9.x` 后续块接入。
 
 ## 已知限制
@@ -447,7 +494,7 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
 11. macOS / Linux 的自更新按单文件可执行程序替换实现，未处理 `.app` 包、代码签名与权限提升，**未真机验证**。
 12. 蓝奏云上传一期已用真实账号做过**上传联调**（临时 `test-` 目录，跑完删文件删目录并核对根目录回到 19/18）：
     正常上传、云端重复+本地移动、>100 MiB 跳过、缓存跳过、失败重试、中途取消、报告落盘都实测通过。
-    **仍未覆盖**：秒传（服务端没有返回秒传）、账号密码登录、限流 429、优享版与分享创建。
+    **仍未覆盖**：秒传（服务端没有返回秒传）、账号密码登录、限流 429、分享创建。
     协议实测修正：根目录 `folder_id` 必须传 `-1`（传 `0` 返回 `{"zt":2}`），文件夹 ID 字段是 `fol_id`；
     上传目录字段是 `folder_id`、文件部件必须叫 `upload_file`；子目录为空时 `task=47` 返回 `zt=2` 但带目录自身 info；
     文件列表 `page` 会被服务端忽略、`info` 是总页数，已按此停止翻页。
@@ -462,10 +509,13 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
 17. 本地搜索：引擎单测覆盖子串、通配符、扩展名/大小过滤、排除目录、上限截断、取消、排序与多根目录；
     **未在数十万文件的真实大目录上测过耗时与内存**，也未人工验证滚动到底部的按页加载、定位/打开按钮在真实
     Explorer 中的表现。搜索索引不落盘是刻意取舍，见「本地搜索」章节。
+18. 蓝奏优享：登录、账号、目录、表单/分片上传、秒传与结果轮询只有 `httptest` 合成响应单测，
+    **没有真实优享账号联调**；分片 URL 是否含 `uploadId`、objectKey 用 URL-safe base64、服务端限制与 429 行为
+    都未验证，详见「蓝奏优享（ilanzou）」的未验证项。界面平台切换、优享下隐藏 Cookie/导入入口也未做人工点击验证。
 
 ## 版本号
 
-Go 版走自己的序列，当前 `0.9.2`：
+Go 版走自己的序列，当前 `0.9.3`：
 
 - `0.7.0` 补齐整理器三项（存疑项逐条确认、最近一次整理撤销、规则导入导出）；
 - `0.8.0` 加自动更新与 exe/安装包版本资源，并按语义化版本升次版本号；
@@ -478,5 +528,7 @@ Go 版走自己的序列，当前 `0.9.2`：
 - `0.9.1` 设置面板与托盘、日夜主题、定时任务（只读扫描）：新增 `ai/window/schedule/logs` 四段设置，
   AI 密钥 DPAPI 存储（仅显后四位）、关闭到托盘、Win32 托盘菜单、跟随系统的深浅色；
 - `0.9.2` 本地搜索：多根目录、子串/通配符、扩展名与大小过滤、服务端排序、分页 + 虚拟渲染、定位打开、取消；
+- `0.9.3` 双网盘：新增蓝奏优享（ilanzou）登录、列目录、预检、七牛表单/分片上传与报告，平台选择与独立凭据/缓存；
+  开始上传的授权门控从 `FeatureApply` 改为 `FeatureCloud`；优享未接真实账号，存疑项列入「未验证项」；
 - 仍是 `0.x`：整理器撤销范围有限（删除与硬链接替换不可恢复），macOS / Linux 未做真机验证，不足以标 1.0；
-- 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.9.2` 为准）。
+- 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.9.3` 为准）。

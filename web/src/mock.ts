@@ -10,6 +10,7 @@ import type {
   LanzouItem,
   LanzouListing,
   LanzouOptions,
+  LanzouPlatform,
   LanzouPrepareResult,
   LanzouStatus,
   LanzouSummary,
@@ -483,20 +484,30 @@ const LANZOU_CREDENTIAL_PATH = "浏览器预览：不写本机凭据（合成数
 
 let lanzouSeq = 0;
 
-let lanzouStatus: LanzouStatus = {
-  loggedIn: false,
-  account: "",
-  platform: "lanzou",
-  source: "none",
-  credentialPath: LANZOU_CREDENTIAL_PATH,
-  supportsDpapi: false,
+const lanzouStatuses: Record<LanzouPlatform, LanzouStatus> = {
+  lanzou: {
+    loggedIn: false,
+    account: "",
+    platform: "lanzou",
+    source: "none",
+    credentialPath: LANZOU_CREDENTIAL_PATH,
+    supportsDpapi: false,
+  },
+  youxiang: {
+    loggedIn: false,
+    account: "",
+    platform: "youxiang",
+    source: "none",
+    credentialPath: LANZOU_CREDENTIAL_PATH,
+    supportsDpapi: false,
+  },
 };
 
-function lanzouLoggedStatus(source: LanzouStatus["source"], message: string): LanzouStatus {
+function lanzouLoggedStatus(platform: LanzouPlatform, source: LanzouStatus["source"], message: string): LanzouStatus {
   return {
     loggedIn: true,
     account: "****1234",
-    platform: "lanzou",
+    platform,
     source,
     credentialPath: LANZOU_CREDENTIAL_PATH,
     supportsDpapi: false,
@@ -544,6 +555,7 @@ const LANZOU_LISTINGS: Record<string, LanzouListing> = {
 
 interface MockLanzouBatch {
   id: string;
+  platform: LanzouPlatform;
   localDir: string;
   folderId: string;
   folderName: string;
@@ -655,6 +667,7 @@ function lanzouStateOf(b: MockLanzouBatch): LanzouUploadState {
 
   return {
     batchId: b.id,
+    platform: b.platform,
     phase,
     folderId: b.folderId,
     folderName: b.folderName,
@@ -992,38 +1005,40 @@ export const mock = {
     throw new Error("浏览器预览不支持导入许可证，请在桌面版操作");
   },
 
-  // ---- 蓝奏云（合成数据）：登录态只存在内存里，不写本机凭据 ----
-  lanzouStatus(): LanzouStatus {
-    return { ...lanzouStatus };
+  // ---- 蓝奏云/蓝奏优享（合成数据）：登录态只存在内存里，不写本机凭据 ----
+  lanzouStatus(platform: LanzouPlatform): LanzouStatus {
+    return { ...lanzouStatuses[platform] };
   },
-  lanzouLogin(username: string, password: string): LanzouStatus {
-    if (!username.trim() || !password) throw new Error("请输入蓝奏云账号和密码");
-    lanzouStatus = lanzouLoggedStatus("login", "浏览器预览为合成数据，未连接蓝奏云。");
-    return { ...lanzouStatus };
+  lanzouLogin(platform: LanzouPlatform, username: string, password: string): LanzouStatus {
+    if (!username.trim() || !password) throw new Error("请输入账号和密码");
+    lanzouStatuses[platform] = lanzouLoggedStatus(platform, "login", "浏览器预览为合成数据，未连接网盘。");
+    return { ...lanzouStatuses[platform] };
   },
-  lanzouUseCookie(raw: string): LanzouStatus {
+  lanzouUseCookie(platform: LanzouPlatform, raw: string): LanzouStatus {
+    if (platform === "youxiang") throw new Error("蓝奏优享使用 appToken 登录，不支持粘贴 Cookie");
     if (!raw.trim()) throw new Error("粘贴的 Cookie 为空");
-    lanzouStatus = lanzouLoggedStatus("cookie", "浏览器预览为合成数据：Cookie 未校验、未保存。");
-    return { ...lanzouStatus };
+    lanzouStatuses[platform] = lanzouLoggedStatus(platform, "cookie", "浏览器预览为合成数据：Cookie 未校验、未保存。");
+    return { ...lanzouStatuses[platform] };
   },
-  lanzouImportCSharp(): LanzouStatus {
-    lanzouStatus = lanzouLoggedStatus("import", "浏览器预览为合成数据：C# 版登录态未真正读取。");
-    return { ...lanzouStatus };
+  lanzouImportCSharp(platform: LanzouPlatform): LanzouStatus {
+    if (platform === "youxiang") throw new Error("蓝奏优享暂不支持从 C# 版导入登录态");
+    lanzouStatuses[platform] = lanzouLoggedStatus(platform, "import", "浏览器预览为合成数据：C# 版登录态未真正读取。");
+    return { ...lanzouStatuses[platform] };
   },
-  lanzouLogout(): LanzouStatus {
-    lanzouStatus = {
+  lanzouLogout(platform: LanzouPlatform): LanzouStatus {
+    lanzouStatuses[platform] = {
       loggedIn: false,
       account: "",
-      platform: "lanzou",
+      platform,
       source: "none",
       credentialPath: LANZOU_CREDENTIAL_PATH,
       supportsDpapi: false,
     };
     lanzouBatch = null;
-    return { ...lanzouStatus };
+    return { ...lanzouStatuses[platform] };
   },
-  lanzouBrowse(folderID: string): LanzouListing {
-    if (!lanzouStatus.loggedIn) throw new Error("尚未登录蓝奏云，请先登录或粘贴 Cookie");
+  lanzouBrowse(platform: LanzouPlatform, folderID: string): LanzouListing {
+    if (!lanzouStatuses[platform].loggedIn) throw new Error("尚未登录网盘，请先登录");
     const id = folderID.trim() || LANZOU_ROOT_ID;
     const listing = LANZOU_LISTINGS[id];
     if (!listing) return { folderId: id, folders: [], files: [] };
@@ -1034,7 +1049,7 @@ export const mock = {
     };
   },
   lanzouPrepare(opts: LanzouOptions): LanzouPrepareResult {
-    if (!lanzouStatus.loggedIn) throw new Error("尚未登录蓝奏云，请先登录或粘贴 Cookie");
+    if (!lanzouStatuses[opts.platform].loggedIn) throw new Error("尚未登录网盘，请先登录");
     const localDir = opts.localDir.trim() || SAMPLE_ROOT;
     const folderId = opts.folderId.trim() || LANZOU_ROOT_ID;
     const folderName = opts.folderName.trim() || (folderId === LANZOU_ROOT_ID ? "根目录" : folderId);
@@ -1060,6 +1075,7 @@ export const mock = {
     lanzouSeq++;
     lanzouBatch = {
       id: `mock-lanzou-${lanzouSeq}`,
+      platform: opts.platform,
       localDir,
       folderId,
       folderName,
@@ -1082,6 +1098,7 @@ export const mock = {
     }
     return {
       batchId: lanzouBatch.id,
+      platform: opts.platform,
       folderId,
       folderName,
       localDir,
@@ -1118,8 +1135,12 @@ export const mock = {
     b.canceled = true;
     b.cancelAt = Date.now();
   },
-  lanzouOpenWeb(): void {
-    window.open("https://pc.woozooo.com/mydisk.php", "_blank", "noopener");
+  lanzouOpenWeb(platform: LanzouPlatform): void {
+    window.open(
+      platform === "youxiang" ? "https://www.ilanzou.com/" : "https://pc.woozooo.com/mydisk.php",
+      "_blank",
+      "noopener",
+    );
   },
   lanzouOpenReport(_batchId: string): void {
     throw new Error("浏览器预览没有真实报告文件，请在桌面版中打开。");

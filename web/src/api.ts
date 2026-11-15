@@ -5,6 +5,7 @@ import type {
   GroupsPage,
   LanzouListing,
   LanzouOptions,
+  LanzouPlatform,
   LanzouPrepareResult,
   LanzouStatus,
   LanzouUploadState,
@@ -76,17 +77,17 @@ interface WailsApp {
   GetMachineCode(): Promise<string>;
   ImportLicenseFile(): Promise<LicenseState>;
   ImportLicenseText(text: string): Promise<LicenseState>;
-  LanzouStatus(): Promise<LanzouStatus>;
-  LanzouLogin(username: string, password: string): Promise<LanzouStatus>;
-  LanzouUseCookie(raw: string): Promise<LanzouStatus>;
-  LanzouImportCSharp(): Promise<LanzouStatus>;
-  LanzouLogout(): Promise<LanzouStatus>;
-  LanzouBrowse(folderID: string): Promise<LanzouListing>;
+  LanzouStatus(platform: LanzouPlatform): Promise<LanzouStatus>;
+  LanzouLogin(platform: LanzouPlatform, username: string, password: string): Promise<LanzouStatus>;
+  LanzouUseCookie(platform: LanzouPlatform, raw: string): Promise<LanzouStatus>;
+  LanzouImportCSharp(platform: LanzouPlatform): Promise<LanzouStatus>;
+  LanzouLogout(platform: LanzouPlatform): Promise<LanzouStatus>;
+  LanzouBrowse(platform: LanzouPlatform, folderID: string): Promise<LanzouListing>;
   LanzouPrepare(opts: LanzouOptions): Promise<LanzouPrepareResult>;
   LanzouStartUpload(batchId: string, confirmed: boolean): Promise<void>;
   LanzouUploadState(batchId: string): Promise<LanzouUploadState>;
   LanzouCancelUpload(batchId: string): Promise<void>;
-  LanzouOpenWeb(): Promise<void>;
+  LanzouOpenWeb(platform: LanzouPlatform): Promise<void>;
   LanzouOpenReport(batchId: string): Promise<void>;
   LanzouPickDirectory(): Promise<string>;
   LanzouAcceptDisclaimer(): Promise<void>;
@@ -287,36 +288,36 @@ export const api = {
     return mock.importLicenseText(text);
   },
 
-  // ---- 蓝奏云上传：编译可用的门面，真实列表/上传需账号联调 ----
-  async lanzouStatus(): Promise<LanzouStatus> {
+  // ---- 蓝奏云/蓝奏优享上传：编译可用的门面，真实列表/上传需账号联调 ----
+  async lanzouStatus(platform: LanzouPlatform): Promise<LanzouStatus> {
     const b = bridge();
-    if (b) return b.LanzouStatus();
-    return mock.lanzouStatus();
+    if (b) return b.LanzouStatus(platform);
+    return mock.lanzouStatus(platform);
   },
-  async lanzouLogin(username: string, password: string): Promise<LanzouStatus> {
+  async lanzouLogin(platform: LanzouPlatform, username: string, password: string): Promise<LanzouStatus> {
     const b = bridge();
-    if (b) return b.LanzouLogin(username, password);
-    return mock.lanzouLogin(username, password);
+    if (b) return b.LanzouLogin(platform, username, password);
+    return mock.lanzouLogin(platform, username, password);
   },
-  async lanzouUseCookie(raw: string): Promise<LanzouStatus> {
+  async lanzouUseCookie(platform: LanzouPlatform, raw: string): Promise<LanzouStatus> {
     const b = bridge();
-    if (b) return b.LanzouUseCookie(raw);
-    return mock.lanzouUseCookie(raw);
+    if (b) return b.LanzouUseCookie(platform, raw);
+    return mock.lanzouUseCookie(platform, raw);
   },
-  async lanzouImportCSharp(): Promise<LanzouStatus> {
+  async lanzouImportCSharp(platform: LanzouPlatform): Promise<LanzouStatus> {
     const b = bridge();
-    if (b) return b.LanzouImportCSharp();
-    return mock.lanzouImportCSharp();
+    if (b) return b.LanzouImportCSharp(platform);
+    return mock.lanzouImportCSharp(platform);
   },
-  async lanzouLogout(): Promise<LanzouStatus> {
+  async lanzouLogout(platform: LanzouPlatform): Promise<LanzouStatus> {
     const b = bridge();
-    if (b) return b.LanzouLogout();
-    return mock.lanzouLogout();
+    if (b) return b.LanzouLogout(platform);
+    return mock.lanzouLogout(platform);
   },
-  async lanzouBrowse(folderID: string): Promise<LanzouListing> {
+  async lanzouBrowse(platform: LanzouPlatform, folderID: string): Promise<LanzouListing> {
     const b = bridge();
-    if (b) return b.LanzouBrowse(folderID);
-    return mock.lanzouBrowse(folderID);
+    if (b) return b.LanzouBrowse(platform, folderID);
+    return mock.lanzouBrowse(platform, folderID);
   },
   async lanzouPrepare(opts: LanzouOptions): Promise<LanzouPrepareResult> {
     const b = bridge();
@@ -338,10 +339,10 @@ export const api = {
     if (b) return b.LanzouCancelUpload(batchId);
     mock.lanzouCancelUpload(batchId);
   },
-  async lanzouOpenWeb(): Promise<void> {
+  async lanzouOpenWeb(platform: LanzouPlatform): Promise<void> {
     const b = bridge();
-    if (b) return b.LanzouOpenWeb();
-    mock.lanzouOpenWeb();
+    if (b) return b.LanzouOpenWeb(platform);
+    mock.lanzouOpenWeb(platform);
   },
   async lanzouOpenReport(batchId: string): Promise<void> {
     const b = bridge();

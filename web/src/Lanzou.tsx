@@ -10,6 +10,7 @@ import type {
   LanzouItemKind,
   LanzouListing,
   LanzouOptions,
+  LanzouPlatform,
   LanzouPrepareResult,
   LanzouSettings,
   LanzouStatus,
@@ -21,11 +22,27 @@ const KIND_LABELS: Record<LanzouItemKind, string> = {
   success: "上传成功",
   instant: "秒传",
   cached: "缓存跳过",
-  "skipped-large": "超过 100 MiB 跳过",
+  "skipped-large": "超过单文件上限跳过",
   duplicate: "云端重复（本地已移动）",
   canceled: "已取消",
   failed: "失败",
 };
+
+const PLATFORM_LABELS: Record<LanzouPlatform, string> = {
+  lanzou: "蓝奏云（老版协议）",
+  youxiang: "蓝奏优享",
+};
+
+// 平台选择只影响界面，不写入 ui-settings.json，避免旧版读取设置时出现未知键。
+const PLATFORM_STORAGE_KEY = "filededup.lanzou.platform";
+
+function loadPlatform(): LanzouPlatform {
+  try {
+    return localStorage.getItem(PLATFORM_STORAGE_KEY) === "youxiang" ? "youxiang" : "lanzou";
+  } catch {
+    return "lanzou";
+  }
+}
 
 // 复用现有 kind 徽标配色：成功绿、跳过灰、超限黄、重复蓝、失败红。
 const KIND_CLASS: Record<LanzouItemKind, string> = {
@@ -55,13 +72,15 @@ const PHASE_LABELS: Record<string, string> = {
   failed: "失败",
 };
 
-const DISCLAIMER_POINTS = [
-  "遵守蓝奏云使用条款，不上传违法、侵权或违反服务条款的内容。",
-  "仅在本机用 DPAPI（CurrentUser）加密保存登录状态 Cookie，不保存密码、不写明文日志。",
-  "网盘重复只做同名同大小判定，不读取网盘文件内容。",
-  "云端重复的本地文件会移动到上传目录旁的「网盘重复文件」文件夹。",
-  "分享创建不在本功能内，请到蓝奏云网页端手动操作。",
-];
+function disclaimerPoints(platform: LanzouPlatform): string[] {
+  return [
+    `遵守${PLATFORM_LABELS[platform]}使用条款，不上传违法、侵权或违反服务条款的内容。`,
+    `仅在本机用 DPAPI（CurrentUser）加密保存登录态，不保存密码、不写明文日志。`,
+    "网盘重复只做同名同大小判定，不读取网盘文件内容。",
+    "云端重复的本地文件会移动到上传目录旁的「网盘重复文件」文件夹。",
+    "分享创建不在本功能内，请到网盘网页端手动操作。",
+  ];
+}
 
 function defaultLanzouSettings(): LanzouSettings {
   return {
@@ -133,6 +152,7 @@ export function Lanzou({
   licenseHint?: string;
 }) {
   const [cfg, setCfg] = useState<LanzouSettings>(() => initial ?? defaultLanzouSettings());
+  const [platform, setPlatform] = useState<LanzouPlatform>(() => loadPlatform());
   const [status, setStatus] = useState<LanzouStatus>();
   const [statusError, setStatusError] = useState("");
   const [username, setUsername] = useState("");
@@ -162,10 +182,20 @@ export function Lanzou({
     return () => window.clearTimeout(timer);
   }, [cfg]);
 
+  // 记住平台选择；只在浏览器本地，不进入 ui-settings.json。
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLATFORM_STORAGE_KEY, platform);
+    } catch {
+      // localStorage 不可用时静默忽略，仅影响下次默认选中项。
+    }
+  }, [platform]);
+
   useEffect(() => {
     let alive = true;
+    setStatusError("");
     api
-      .lanzouStatus()
+      .lanzouStatus(platform)
       .then((st) => {
         if (alive) setStatus(st);
       })
@@ -175,15 +205,15 @@ export function Lanzou({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [platform]);
 
-  // 已登录时恢复上次浏览的云端目录；仅启动时触发一次。
+  // 已登录时恢复上次浏览的云端目录；仅启动/切换平台时触发一次。
   useEffect(() => {
     if (!status?.loggedIn || !shouldRestoreRef.current) return;
     let alive = true;
     const id = cfg.lastFolderId || "0";
     api
-      .lanzouBrowse(id)
+      .lanzouBrowse(platform, id)
       .then((l) => {
         shouldRestoreRef.current = false;
         if (!alive) return;
@@ -204,7 +234,7 @@ export function Lanzou({
     };
     // 只恢复一次，后续浏览位置由用户点击控制。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.loggedIn]);
+  }, [status?.loggedIn, platform]);
 
   // 上传期间每 400ms 轮询进度；结束（done/failed）后自动停。
   useEffect(() => {
@@ -245,6 +275,25 @@ export function Lanzou({
     setPolling(false);
   }
 
+  // 切换网盘：清空会话态，避免把老版的登录态/目录/批次带到优享。
+  function switchPlatform(next: LanzouPlatform) {
+    if (next === platform) return;
+    setPlatform(next);
+    setStatus(undefined);
+    setStatusError("");
+    setNotice("");
+    setError("");
+    setUsername("");
+    setPassword("");
+    setCookie("");
+    setCookieOpen(false);
+    setListing(undefined);
+    setBrowseError("");
+    setPath([{ id: "0", name: "根目录" }]);
+    shouldRestoreRef.current = true;
+    resetBatch();
+  }
+
   async function afterLogin(st: LanzouStatus) {
     shouldRestoreRef.current = false;
     setStatus(st);
@@ -255,7 +304,7 @@ export function Lanzou({
     setCookieOpen(false);
     if (st.message) setNotice(st.message);
     try {
-      const l = await api.lanzouBrowse("0");
+      const l = await api.lanzouBrowse(platform, "0");
       setListing(l);
       setBrowseError("");
       patch({ lastFolderId: "0", lastFolderName: "" });
@@ -269,7 +318,7 @@ export function Lanzou({
     setNotice("");
     setBusy("login");
     try {
-      const st = await api.lanzouLogin(username.trim(), password);
+      const st = await api.lanzouLogin(platform, username.trim(), password);
       setPassword("");
       await afterLogin(st);
     } catch (err) {
@@ -284,7 +333,7 @@ export function Lanzou({
     setNotice("");
     setBusy("cookie");
     try {
-      const st = await api.lanzouUseCookie(cookie);
+      const st = await api.lanzouUseCookie(platform, cookie);
       await afterLogin(st);
     } catch (err) {
       setError(errorText(err));
@@ -298,7 +347,7 @@ export function Lanzou({
     setNotice("");
     setBusy("import");
     try {
-      const st = await api.lanzouImportCSharp();
+      const st = await api.lanzouImportCSharp(platform);
       await afterLogin(st);
     } catch (err) {
       setError(errorText(err));
@@ -312,7 +361,7 @@ export function Lanzou({
     setNotice("");
     setBusy("logout");
     try {
-      const st = await api.lanzouLogout();
+      const st = await api.lanzouLogout(platform);
       setStatus(st);
       resetBatch();
       setListing(undefined);
@@ -348,7 +397,7 @@ export function Lanzou({
     setBusy("browse");
     setBrowseError("");
     try {
-      const l = await api.lanzouBrowse(target.id);
+      const l = await api.lanzouBrowse(platform, target.id);
       setListing(l);
       setPath(next);
       resetBatch();
@@ -364,7 +413,7 @@ export function Lanzou({
     setBusy("browse");
     setBrowseError("");
     try {
-      const l = await api.lanzouBrowse(folder.id);
+      const l = await api.lanzouBrowse(platform, folder.id);
       setListing(l);
       setPath((prev) => [...prev, folder]);
       resetBatch();
@@ -383,6 +432,7 @@ export function Lanzou({
     setBusy("prepare");
     try {
       const opts: LanzouOptions = {
+        platform,
         localDir: cfg.lastLocalDir,
         folderId: target.id,
         folderName: target.id === "0" ? "" : target.name,
@@ -446,6 +496,7 @@ export function Lanzou({
       await api.lanzouStartUpload(batchId, true);
       setUpload({
         batchId,
+        platform,
         phase: "running",
         folderId: prepare.folderId,
         folderName: prepare.folderName,
@@ -495,7 +546,7 @@ export function Lanzou({
   async function openWeb() {
     setError("");
     try {
-      await api.lanzouOpenWeb();
+      await api.lanzouOpenWeb(platform);
     } catch (err) {
       setError(errorText(err));
     }
@@ -513,11 +564,31 @@ export function Lanzou({
     <div className="orgpage lanzoupage">
       <section className="card">
         <div className="sectionhead">
-          <h2>蓝奏云上传（老版协议）</h2>
+          <h2>{platform === "youxiang" ? "蓝奏优享上传" : "蓝奏云上传（老版协议）"}</h2>
           <span className={`badge ${status?.loggedIn ? "ok" : "warn"}`}>
             {status?.loggedIn ? `已登录 · ${status.account || "掩码未返回"}` : "未登录"}
           </span>
         </div>
+
+        <div className="formgrid">
+          <label>
+            <span>网盘类型</span>
+            <select
+              value={platform}
+              disabled={running || busy !== ""}
+              onChange={(e) => switchPlatform(e.target.value as LanzouPlatform)}
+            >
+              <option value="lanzou">蓝奏云（老版协议，单文件 ≤ 100 MiB）</option>
+              <option value="youxiang">蓝奏优享（ilanzou，分片上传）</option>
+            </select>
+          </label>
+        </div>
+        <p className="hint">
+          两种网盘各自独立登录、各自保存凭据与上传缓存；切换网盘不会退出另一种的登录态。
+          {platform === "youxiang"
+            ? " 优享不支持 Cookie 登录、从 C# 版导入与创建云端目录。"
+            : ""}
+        </p>
 
         <div className="chips">
           <span className="chip">
@@ -541,15 +612,23 @@ export function Lanzou({
         </p>
         <p className="hint">
           {status?.supportsDpapi
-            ? "登录状态 Cookie 仅在本机用 DPAPI（CurrentUser）加密保存，不保存密码，也不写明文日志。"
+            ? "登录态仅在本机用 DPAPI（CurrentUser）加密保存，不保存密码，也不写明文日志。"
             : "是否为 DPAPI 加密以本机后端返回为准；界面不假设凭据已加密。"}
         </p>
 
         <div className="banner perf" role="status">
-          <span>
-            <b>未联调声明</b>：登录成功后的真实目录列表、上传与云端判重都需要蓝奏账号验证。
-            本页只保证编译、单测与本地可验证部分。分享创建不在本功能内，请到网页端手动操作。
-          </span>
+          {platform === "youxiang" ? (
+            <span>
+              <b>未联调声明</b>：优享协议字段来自对官方客户端的静态分析，登录、列目录、上传与判重都需要真实优享账号验证；
+              分片上传的 URL 形态等存疑项已列在 <code>docs/ui-shell.md</code> 的「未验证项」，不作结论。
+              分享创建不在本功能内，请到网页端手动操作。
+            </span>
+          ) : (
+            <span>
+              <b>未联调声明</b>：登录成功后的真实目录列表、上传与云端判重都需要蓝奏账号验证。
+              本页只保证编译、单测与本地可验证部分。分享创建不在本功能内，请到网页端手动操作。
+            </span>
+          )}
         </div>
 
         {statusError && <div className="banner error">{statusError}</div>}
@@ -572,7 +651,7 @@ export function Lanzou({
 
         <div className="formgrid">
           <label>
-            <span>蓝奏云账号</span>
+            <span>{platform === "youxiang" ? "蓝奏优享账号" : "蓝奏云账号"}</span>
             <input
               value={username}
               autoComplete="username"
@@ -600,18 +679,22 @@ export function Lanzou({
           >
             {busy === "login" ? "正在登录…" : "登录"}
           </button>
-          <button className="secondary" disabled={busy === "import"} onClick={() => void doImportCSharp()}>
-            {busy === "import" ? "正在导入…" : "从 C# 版导入"}
-          </button>
+          {platform === "lanzou" && (
+            <button className="secondary" disabled={busy === "import"} onClick={() => void doImportCSharp()}>
+              {busy === "import" ? "正在导入…" : "从 C# 版导入"}
+            </button>
+          )}
           <button className="secondary" disabled={busy === "logout" || !status?.loggedIn} onClick={() => void doLogout()}>
             {busy === "logout" ? "正在退出…" : "退出登录"}
           </button>
-          <button className="link" onClick={() => setCookieOpen((v) => !v)}>
-            {cookieOpen ? "收起 Cookie 登录" : "粘贴 Cookie 登录"}
-          </button>
+          {platform === "lanzou" && (
+            <button className="link" onClick={() => setCookieOpen((v) => !v)}>
+              {cookieOpen ? "收起 Cookie 登录" : "粘贴 Cookie 登录"}
+            </button>
+          )}
         </div>
 
-        {cookieOpen && (
+        {cookieOpen && platform === "lanzou" && (
           <>
             <label className="field">
               <span>请求头 Cookie（整段粘贴；只用于登录，不写日志）</span>
@@ -653,7 +736,11 @@ export function Lanzou({
           </button>
         </div>
         <p className="hint">
-          只上传该目录下的文件（不含子目录）；超过 100 MiB 的文件在预检阶段跳过。预检会读取云端当前目录做同名同大小判定。
+          只上传该目录下的文件（不含子目录）；
+          {platform === "lanzou"
+            ? "超过 100 MiB 的文件在预检阶段跳过。"
+            : "优享按分片上传，不设 100 MiB 上限。"}
+          预检会读取云端当前目录做同名同大小判定。
         </p>
 
         {!status?.loggedIn ? (
@@ -789,7 +876,7 @@ export function Lanzou({
         <div className="disclaimer">
           <p className="disclaimer-title">勾选即表示你已阅读并同意：</p>
           <ul>
-            {DISCLAIMER_POINTS.map((line) => (
+            {disclaimerPoints(platform).map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
@@ -836,7 +923,9 @@ export function Lanzou({
             <span className="chip">文件总数 <b>{prepare.total}</b></span>
             <span className="chip">待上传 <b>{prepare.uploadable}</b></span>
             <span className="chip">云端重复 <b>{prepare.duplicates}</b></span>
-            <span className="chip">超 100 MiB <b>{prepare.skippedLarge}</b></span>
+            {platform === "lanzou" && (
+              <span className="chip">超 100 MiB <b>{prepare.skippedLarge}</b></span>
+            )}
             <span className="chip">缓存跳过 <b>{prepare.cached}</b></span>
           </div>
 
@@ -889,7 +978,7 @@ export function Lanzou({
               <span>成功 <b>{summary.success}</b></span>
               <span>秒传 <b>{summary.instant}</b></span>
               <span>缓存跳过 <b>{summary.cached}</b></span>
-              <span>超限跳过 <b>{summary.skippedLarge}</b></span>
+              {summary.skippedLarge > 0 && <span>超限跳过 <b>{summary.skippedLarge}</b></span>}
               <span>云端重复 <b>{summary.duplicate}</b></span>
               <span>已取消 <b>{summary.canceled}</b></span>
               <span className={summary.failed ? "red" : ""}>失败 <b>{summary.failed}</b></span>
@@ -937,12 +1026,16 @@ export function Lanzou({
       <div className="features">
         <h3>本页功能状态（如实标注）</h3>
         <p>
-          <span className="kind kind-keep">已接通</span> 账号密码登录、粘贴 Cookie 登录、从 C# 版导入、退出登录、
-          DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（超 100 MiB / 本机缓存 / 云端同名同大小判定）、
-          并发与请求间隔设置、上传进度轮询与取消、结果报告与逐条错误原文
+          <span className="kind kind-keep">已接通</span>{" "}
+          {platform === "youxiang"
+            ? "账号密码登录、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、分片上传、进度轮询与取消、结果报告与逐条错误原文"
+            : "账号密码登录、粘贴 Cookie 登录、从 C# 版导入、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（超 100 MiB / 本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、上传进度轮询与取消、结果报告与逐条错误原文"}
         </p>
         <p>
-          <span className="kind kind-warn">未联调</span> 登录成功后的真实目录列表、真实上传与云端判重命中都需要蓝奏账号验证；
+          <span className="kind kind-warn">未联调</span>{" "}
+          {platform === "youxiang"
+            ? "真实优享账号的登录、列目录、上传与判重尚未联调；分片上传 URL 等存疑项见 docs/ui-shell.md 的「未验证项」。"
+            : "登录成功后的真实目录列表、真实上传与云端判重命中都需要蓝奏账号验证。"}
           分享创建不在本功能内，请到网页端手动操作。
         </p>
       </div>

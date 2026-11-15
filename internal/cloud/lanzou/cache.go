@@ -70,11 +70,19 @@ func LoadUploadCache() *UploadCache {
 
 // Key 生成本机缓存键。路径先转绝对路径并 Clean，避免同一文件不同写法重复入库。
 func (c *UploadCache) Key(folderID, localPath string, size, modTime int64) string {
+	return c.KeyFor(PlatformLanzou, folderID, localPath, size, modTime)
+}
+
+// KeyFor 按平台生成本机缓存键，避免蓝奏云与蓝奏优享互相命中。
+func (c *UploadCache) KeyFor(platform, folderID, localPath string, size, modTime int64) string {
 	abs := localPath
 	if a, err := filepath.Abs(localPath); err == nil {
 		abs = a
 	}
-	return PlatformLanzou + "|" + folderID + "|" + filepath.Clean(abs) + "|" +
+	if platform == "" {
+		platform = PlatformLanzou
+	}
+	return platform + "|" + folderID + "|" + filepath.Clean(abs) + "|" +
 		strconv.FormatInt(size, 10) + "|" + strconv.FormatInt(modTime, 10)
 }
 

@@ -71,6 +71,9 @@ func NewClient(creds Credentials, interval time.Duration) *Client {
 // Credentials 返回当前登录态。
 func (c *Client) Credentials() Credentials { return c.creds }
 
+// MaxUploadSize 返回单文件上限（100 MiB），与 C# 版一致。
+func (c *Client) MaxUploadSize() int64 { return MaxUploadSize }
+
 // SetCredentials 更新登录态（粘贴 Cookie 后复用同一个客户端）。
 func (c *Client) SetCredentials(creds Credentials) { c.creds = creds }
 

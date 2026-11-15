@@ -517,6 +517,7 @@ export interface LanzouListing {
 }
 
 export interface LanzouOptions {
+  platform: LanzouPlatform;
   localDir: string;
   folderId: string;
   folderName: string;
@@ -524,6 +525,9 @@ export interface LanzouOptions {
   intervalMs: number;
   forceReupload: boolean;
 }
+
+// 网盘平台：lanzou = 老版蓝奏云，youxiang = 蓝奏优享。
+export type LanzouPlatform = "lanzou" | "youxiang";
 
 export type LanzouItemKind =
   | "pending"
@@ -559,6 +563,7 @@ export interface LanzouSummary {
 
 export interface LanzouPrepareResult {
   batchId: string;
+  platform: LanzouPlatform;
   folderId: string;
   folderName: string;
   localDir: string;
@@ -575,6 +580,7 @@ export type LanzouPhase = "prepared" | "running" | "cancelling" | "done" | "fail
 
 export interface LanzouUploadState {
   batchId: string;
+  platform: LanzouPlatform;
   phase: LanzouPhase;
   folderId: string;
   folderName: string;

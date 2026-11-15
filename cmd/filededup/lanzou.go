@@ -32,12 +32,53 @@ import (
 
 	"filededup/internal/auth"
 	"filededup/internal/cloud/lanzou"
+	"filededup/internal/cloud/lanzouyou"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // duplicateDirName 是云端重复文件的本地收纳目录，与 C# 版常量一致。
 const duplicateDirName = "网盘重复文件"
+
+// 网盘平台标识：前端传 "lanzou" 或 "youxiang"，缺省按老版蓝奏云处理。
+const (
+	cloudPlatformLanzou   = "lanzou"
+	cloudPlatformYouxiang = "youxiang"
+)
+
+// cloudClient 是蓝奏云与蓝奏优享的公共能力，上传编排只依赖这一个接口。
+type cloudClient interface {
+	Listing(ctx context.Context, folderID string) (lanzou.Listing, error)
+	Upload(ctx context.Context, localPath, folderID string, progress func(sent, total int64)) (lanzou.UploadResult, error)
+	SetInterval(d time.Duration)
+	MaxUploadSize() int64
+}
+
+// normalizeCloudPlatform 把前端/设置里的平台写法归一。
+func normalizeCloudPlatform(platform string) string {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case cloudPlatformYouxiang, "lanzou-youxiang", "lanzouyou", "优享":
+		return cloudPlatformYouxiang
+	default:
+		return cloudPlatformLanzou
+	}
+}
+
+// platformLabel 用于报告与提示文案。
+func platformLabel(platform string) string {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return "蓝奏优享"
+	}
+	return "蓝奏云"
+}
+
+// reportPlatform 返回报告里的平台标识。
+func reportPlatform(platform string) string {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return lanzou.PlatformYouxiang
+	}
+	return lanzou.PlatformLanzou
+}
 
 // isUploadReportName 判断是否是本功能生成的报告文件（upload-report-*.json/.csv）。
 func isUploadReportName(name string) bool {
@@ -65,6 +106,7 @@ type LanzouStatus struct {
 
 // LanzouOptions 是一次预检的参数。
 type LanzouOptions struct {
+	Platform      string `json:"platform"` // lanzou | youxiang，空按 lanzou
 	LocalDir      string `json:"localDir"`
 	FolderID      string `json:"folderId"`
 	FolderName    string `json:"folderName"`
@@ -76,6 +118,7 @@ type LanzouOptions struct {
 // LanzouPrepareResult 是预检结果；此时还没有动任何本地文件。
 type LanzouPrepareResult struct {
 	BatchID      string        `json:"batchId"`
+	Platform     string        `json:"platform"`
 	FolderID     string        `json:"folderId"`
 	FolderName   string        `json:"folderName"`
 	LocalDir     string        `json:"localDir"`
@@ -91,6 +134,7 @@ type LanzouPrepareResult struct {
 // LanzouUploadState 是上传进度与最终结果；界面按 400ms 轮询。
 type LanzouUploadState struct {
 	BatchID    string          `json:"batchId"`
+	Platform   string          `json:"platform"`
 	Phase      string          `json:"phase"` // prepared | running | cancelling | done | failed
 	FolderID   string          `json:"folderId"`
 	FolderName string          `json:"folderName"`
@@ -114,6 +158,7 @@ type LanzouUploadState struct {
 type lanzouPrepare struct {
 	mu         sync.Mutex
 	id         string
+	platform   string
 	folderID   string
 	folderName string
 	localDir   string
@@ -141,10 +186,13 @@ func (p *lanzouPrepare) snapshot() LanzouUploadState {
 	return st
 }
 
-// LanzouStatus 返回当前登录态。
-func (a *App) LanzouStatus() LanzouStatus {
+// LanzouStatus 返回指定平台的登录态。platform 为空按老版蓝奏云处理。
+func (a *App) LanzouStatus(platform string) LanzouStatus {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return a.youxiangStatus()
+	}
 	st := LanzouStatus{
-		Platform:      lanzou.PlatformLanzou,
+		Platform:      cloudPlatformLanzou,
 		Source:        "none",
 		SupportsDPAPI: lanzou.SupportsProtection(),
 	}
@@ -184,82 +232,166 @@ func (a *App) LanzouStatus() LanzouStatus {
 	return st
 }
 
-// LanzouLogin 用账号密码登录，成功后加密保存 Cookie。
+// youxiangStatus 返回蓝奏优享登录态快照。
+func (a *App) youxiangStatus() LanzouStatus {
+	st := LanzouStatus{
+		Platform:      cloudPlatformYouxiang,
+		Source:        "none",
+		SupportsDPAPI: lanzou.SupportsProtection(),
+	}
+	if path, err := lanzouyou.CredentialPath(); err == nil {
+		st.CredentialPath = path
+	}
+	a.lanzouMu.Lock()
+	client := a.youxiangClient
+	source := a.youxiangSource
+	a.lanzouMu.Unlock()
+	if client != nil {
+		creds := client.Credentials()
+		st.LoggedIn = creds.Valid()
+		st.Account = creds.MaskedAccount()
+		if source != "" {
+			st.Source = source
+		}
+		if !creds.SavedAt.IsZero() {
+			st.SavedAt = creds.SavedAt.Format(time.RFC3339)
+		}
+		return st
+	}
+	creds, err := lanzouyou.LoadCredentials()
+	if err != nil {
+		st.Message = "读取本机登录态失败：" + err.Error()
+		return st
+	}
+	if creds == nil {
+		return st
+	}
+	st.LoggedIn = true
+	st.Account = creds.MaskedAccount()
+	st.Source = "local"
+	if !creds.SavedAt.IsZero() {
+		st.SavedAt = creds.SavedAt.Format(time.RFC3339)
+	}
+	return st
+}
+
+// LanzouLogin 用账号密码登录，成功后加密保存登录态。
 //
 // 密码只用于这一次请求，不落盘、不写日志。
-func (a *App) LanzouLogin(username, password string) (LanzouStatus, error) {
+func (a *App) LanzouLogin(platform, username, password string) (LanzouStatus, error) {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return a.youxiangLogin(username, password)
+	}
 	interval := time.Duration(a.lanzouIntervalMS()) * time.Millisecond
 	client := lanzou.NewClient(lanzou.Credentials{}, interval)
 	creds, err := client.Login(a.context(), username, password)
 	if err != nil {
-		return a.LanzouStatus(), err
+		return a.LanzouStatus(cloudPlatformLanzou), err
 	}
 	client.SetCredentials(creds)
 	if err := lanzou.SaveCredentials(creds); err != nil {
-		return a.LanzouStatus(), fmt.Errorf("登录成功，但保存登录态失败：%w", err)
+		return a.LanzouStatus(cloudPlatformLanzou), fmt.Errorf("登录成功，但保存登录态失败：%w", err)
 	}
 	a.setLanzouClient(client, "login")
 
-	st := a.LanzouStatus()
+	st := a.LanzouStatus(cloudPlatformLanzou)
 	if err := client.Validate(a.context()); err != nil {
 		st.Message = "登录成功，但校验目录失败（Cookie 可能仍可用于上传）：" + err.Error()
 	}
 	return st, nil
 }
 
-// LanzouUseCookie 用粘贴的 Cookie 登录（降级路径）。
-func (a *App) LanzouUseCookie(raw string) (LanzouStatus, error) {
+// youxiangLogin 用账号密码换取优享 appToken，并用 DPAPI 单独保存。
+func (a *App) youxiangLogin(username, password string) (LanzouStatus, error) {
+	interval := time.Duration(a.lanzouIntervalMS()) * time.Millisecond
+	client := lanzouyou.NewClient(lanzouyou.Credentials{}, interval)
+	creds, err := client.Login(a.context(), username, password)
+	if err != nil {
+		return a.youxiangStatus(), err
+	}
+	client.SetCredentials(creds)
+	if err := lanzouyou.SaveCredentials(creds); err != nil {
+		return a.youxiangStatus(), fmt.Errorf("登录成功，但保存登录态失败：%w", err)
+	}
+	a.setYouxiangClient(client, "login")
+	st := a.youxiangStatus()
+	if err := client.Validate(a.context()); err != nil {
+		st.Message = "登录成功，但读取账号信息失败（不影响浏览目录，可稍后重试）：" + err.Error()
+	}
+	return st, nil
+}
+
+// LanzouUseCookie 用粘贴的 Cookie 登录（仅老版蓝奏云支持）。
+func (a *App) LanzouUseCookie(platform, raw string) (LanzouStatus, error) {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return a.youxiangStatus(), errors.New("蓝奏优享使用 appToken 登录，不支持粘贴 Cookie；请用账号密码登录")
+	}
 	creds, err := lanzou.ParseCookieHeader(raw)
 	if err != nil {
-		return a.LanzouStatus(), err
+		return a.LanzouStatus(cloudPlatformLanzou), err
 	}
 	client := lanzou.NewClient(creds, time.Duration(a.lanzouIntervalMS())*time.Millisecond)
 	if err := client.Validate(a.context()); err != nil {
-		return a.LanzouStatus(), err
+		return a.LanzouStatus(cloudPlatformLanzou), err
 	}
 	if err := lanzou.SaveCredentials(creds); err != nil {
-		return a.LanzouStatus(), fmt.Errorf("Cookie 有效，但保存登录态失败：%w", err)
+		return a.LanzouStatus(cloudPlatformLanzou), fmt.Errorf("Cookie 有效，但保存登录态失败：%w", err)
 	}
 	a.setLanzouClient(client, "cookie")
-	return a.LanzouStatus(), nil
+	return a.LanzouStatus(cloudPlatformLanzou), nil
 }
 
-// LanzouImportCSharp 从 C# 版（%AppData%\FileDedupTool）导入登录态。
-func (a *App) LanzouImportCSharp() (LanzouStatus, error) {
+// LanzouImportCSharp 从 C# 版（%AppData%\FileDedupTool）导入登录态（仅老版蓝奏云）。
+func (a *App) LanzouImportCSharp(platform string) (LanzouStatus, error) {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return a.youxiangStatus(), errors.New("蓝奏优享暂不支持从 C# 版导入登录态；请用账号密码登录")
+	}
 	creds, src, err := lanzou.ImportFromCSharp()
 	if err != nil {
-		return a.LanzouStatus(), err
+		return a.LanzouStatus(cloudPlatformLanzou), err
 	}
 	if creds == nil {
-		return a.LanzouStatus(), errors.New("未找到可导入的 C# 版登录态（%AppData%\\FileDedupTool）")
+		return a.LanzouStatus(cloudPlatformLanzou), errors.New("未找到可导入的 C# 版登录态（%AppData%\\FileDedupTool）")
 	}
 	client := lanzou.NewClient(*creds, time.Duration(a.lanzouIntervalMS())*time.Millisecond)
 	if err := lanzou.SaveCredentials(*creds); err != nil {
-		return a.LanzouStatus(), fmt.Errorf("已从 %s 读到登录态，但保存失败：%w", src, err)
+		return a.LanzouStatus(cloudPlatformLanzou), fmt.Errorf("已从 %s 读到登录态，但保存失败：%w", src, err)
 	}
 	a.setLanzouClient(client, "import")
-	st := a.LanzouStatus()
+	st := a.LanzouStatus(cloudPlatformLanzou)
 	st.Message = "已从 C# 版导入登录态：" + src
 	return st, nil
 }
 
 // LanzouLogout 清除内存与本机保存的登录态。
-func (a *App) LanzouLogout() LanzouStatus {
+func (a *App) LanzouLogout(platform string) LanzouStatus {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		a.lanzouMu.Lock()
+		a.youxiangClient = nil
+		a.youxiangSource = ""
+		a.lanzouMu.Unlock()
+		if err := lanzouyou.DeleteCredentials(); err != nil {
+			st := a.youxiangStatus()
+			st.Message = "已退出，但删除本机凭据失败：" + err.Error()
+			return st
+		}
+		return a.youxiangStatus()
+	}
 	a.lanzouMu.Lock()
 	a.lanzouClient = nil
 	a.lanzouSource = ""
 	a.lanzouMu.Unlock()
 	if err := lanzou.DeleteCredentials(); err != nil {
-		st := a.LanzouStatus()
+		st := a.LanzouStatus(cloudPlatformLanzou)
 		st.Message = "已退出，但删除本机凭据失败：" + err.Error()
 		return st
 	}
-	return a.LanzouStatus()
+	return a.LanzouStatus(cloudPlatformLanzou)
 }
 
 // LanzouBrowse 浏览云端目录；folderID 传 "0" 表示根目录。
-func (a *App) LanzouBrowse(folderID string) (lanzou.Listing, error) {
-	client, err := a.requireLanzouClient()
+func (a *App) LanzouBrowse(platform, folderID string) (lanzou.Listing, error) {
+	client, err := a.requireCloudClient(platform)
 	if err != nil {
 		return lanzou.Listing{}, err
 	}
@@ -268,6 +400,7 @@ func (a *App) LanzouBrowse(folderID string) (lanzou.Listing, error) {
 
 // LanzouPrepare 读本地目录与云端目录，做上传前预检。不会移动或上传任何文件。
 func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
+	platform := normalizeCloudPlatform(opts.Platform)
 	localDir := strings.TrimSpace(opts.LocalDir)
 	if localDir == "" {
 		return LanzouPrepareResult{}, errors.New("请先选择本地目录")
@@ -281,7 +414,7 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 	}
 	workers, intervalMS := normalizeLanzouOptions(opts.Workers, opts.IntervalMS)
 
-	client, err := a.requireLanzouClient()
+	client, err := a.requireCloudClient(platform)
 	if err != nil {
 		return LanzouPrepareResult{}, err
 	}
@@ -301,6 +434,7 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 		return LanzouPrepareResult{}, fmt.Errorf("读取本地目录失败：%w", err)
 	}
 
+	maxSize := client.MaxUploadSize()
 	cache := lanzou.LoadUploadCache()
 	items := make([]lanzou.Item, 0, len(entries))
 	var sum lanzou.Summary
@@ -325,9 +459,9 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 		item := lanzou.Item{LocalPath: path, Name: e.Name(), Size: fi.Size(), Kind: lanzou.KindPending}
 
 		switch {
-		case fi.Size() > lanzou.MaxUploadSize:
+		case maxSize > 0 && fi.Size() > maxSize:
 			item.Kind = lanzou.KindSkippedLarge
-		case !opts.ForceReupload && cacheHit(cache, folderID, path, fi.Size(), fi.ModTime()):
+		case !opts.ForceReupload && cacheHit(cache, platform, folderID, path, fi.Size(), fi.ModTime()):
 			// 缓存优先于云端判重：已经传过的文件不再移动，避免把本地文件挪走。
 			item.Kind = lanzou.KindCached
 		default:
@@ -346,6 +480,7 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 	id := fmt.Sprintf("lanzou-%d", time.Now().UnixNano())
 	p := &lanzouPrepare{
 		id:         id,
+		platform:   platform,
 		folderID:   folderID,
 		folderName: strings.TrimSpace(opts.FolderName),
 		localDir:   localDir,
@@ -354,6 +489,7 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 	}
 	p.state.LanzouUploadState = LanzouUploadState{
 		BatchID:    id,
+		Platform:   platform,
 		Phase:      "prepared",
 		FolderID:   folderID,
 		FolderName: p.folderName,
@@ -373,6 +509,7 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 
 	result := LanzouPrepareResult{
 		BatchID:    id,
+		Platform:   platform,
 		FolderID:   folderID,
 		FolderName: p.folderName,
 		LocalDir:   localDir,
@@ -391,9 +528,13 @@ func (a *App) LanzouPrepare(opts LanzouOptions) (LanzouPrepareResult, error) {
 			result.Cached++
 		}
 	}
+	largeNote := ""
+	if maxSize > 0 {
+		largeNote = fmt.Sprintf("超 %d MiB %d，", maxSize>>20, result.SkippedLarge)
+	}
 	result.Message = fmt.Sprintf(
-		"预检完成：待上传 %d，云端重复 %d，超 100 MiB %d，本机缓存 %d。此步骤未改动任何本地文件。",
-		result.Uploadable, result.Duplicates, result.SkippedLarge, result.Cached)
+		"预检完成（%s）：待上传 %d，云端重复 %d，%s本机缓存 %d。此步骤未改动任何本地文件。",
+		platformLabel(platform), result.Uploadable, result.Duplicates, largeNote, result.Cached)
 	return result, nil
 }
 
@@ -411,7 +552,8 @@ func (a *App) LanzouStartUpload(batchID string, confirmed bool) error {
 	if !confirmed {
 		return errors.New("未确认，拒绝上传")
 	}
-	if err := requireLicense(auth.FeatureApply); err != nil {
+	// 网盘上传属于专业版功能；标准版在这里给出带机器码的明确原因，不静默降级。
+	if err := requireLicense(auth.FeatureCloud); err != nil {
 		return err
 	}
 	settings, _ := LoadSettings()
@@ -422,7 +564,7 @@ func (a *App) LanzouStartUpload(batchID string, confirmed bool) error {
 	if err != nil {
 		return err
 	}
-	client, err := a.requireLanzouClient()
+	client, err := a.requireCloudClient(p.platform)
 	if err != nil {
 		return err
 	}
@@ -467,7 +609,7 @@ func (a *App) LanzouStartUpload(batchID string, confirmed bool) error {
 	return nil
 }
 
-func (a *App) runLanzouUpload(ctx context.Context, p *lanzouPrepare, client *lanzou.Client, folderID, folderName, localDir string, workers int) {
+func (a *App) runLanzouUpload(ctx context.Context, p *lanzouPrepare, client cloudClient, folderID, folderName, localDir string, workers int) {
 	cache := lanzou.LoadUploadCache()
 
 	// 第一步：处理云端重复项（只做本地移动，不联网）。
@@ -551,10 +693,10 @@ dispatch:
 	p.mu.Unlock()
 
 	if err := cache.Save(); err != nil {
-		log.Printf("蓝奏云上传缓存保存失败：%v", err)
+		log.Printf("%s上传缓存保存失败：%v", platformLabel(p.platform), err)
 	}
 
-	report := lanzou.BuildReport(folderID, folderName, localDir, items, sum)
+	report := lanzou.BuildReportFor(reportPlatform(p.platform), folderID, folderName, localDir, items, sum)
 	jsonPath, csvPath, err := lanzou.WriteReport(localDir, report, time.Now())
 	p.mu.Lock()
 	if err != nil {
@@ -569,7 +711,7 @@ dispatch:
 	p.mu.Unlock()
 }
 
-func (p *lanzouPrepare) uploadOne(ctx context.Context, client *lanzou.Client, folderID string, cache *lanzou.UploadCache, i int) {
+func (p *lanzouPrepare) uploadOne(ctx context.Context, client cloudClient, folderID string, cache *lanzou.UploadCache, i int) {
 	p.mu.Lock()
 	item := p.state.Items[i]
 	size := item.Size
@@ -613,7 +755,7 @@ func (p *lanzouPrepare) uploadOne(ctx context.Context, client *lanzou.Client, fo
 			Kind: kind, RemoteID: res.FileID,
 		})
 		if modTime > 0 {
-			key := cache.Key(folderID, item.LocalPath, size, modTime)
+			key := cache.KeyFor(reportPlatform(p.platform), folderID, item.LocalPath, size, modTime)
 			cache.Put(key, lanzou.CacheEntry{
 				Path: item.LocalPath, FolderID: folderID, Size: size, ModTime: modTime,
 				RemoteID: res.FileID, UploadedAt: time.Now(),
@@ -666,12 +808,16 @@ func (a *App) LanzouCancelUpload(batchID string) error {
 	return nil
 }
 
-// LanzouOpenWeb 在浏览器打开蓝奏云网页端；分享等操作请在网页端手动完成。
-func (a *App) LanzouOpenWeb() error {
+// LanzouOpenWeb 在浏览器打开对应网盘的网页端；分享等操作请在网页端手动完成。
+func (a *App) LanzouOpenWeb(platform string) error {
 	if a.ctx == nil {
 		return errors.New("应用尚未完成初始化")
 	}
-	wruntime.BrowserOpenURL(a.ctx, "https://pc.woozooo.com/mydisk.php")
+	target := "https://pc.woozooo.com/mydisk.php"
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		target = "https://www.ilanzou.com/"
+	}
+	wruntime.BrowserOpenURL(a.ctx, target)
 	return nil
 }
 
@@ -700,7 +846,7 @@ func (a *App) LanzouPickDirectory() (string, error) {
 		return "", errors.New("应用尚未完成初始化")
 	}
 	return wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{
-		Title: "选择要上传到蓝奏云的目录（只传该目录下的文件，不含子目录）",
+		Title: "选择要上传到网盘的目录（只传该目录下的文件，不含子目录）",
 	})
 }
 
@@ -731,6 +877,52 @@ func (a *App) setLanzouClient(client *lanzou.Client, source string) {
 	a.lanzouClient = client
 	a.lanzouSource = source
 	a.lanzouMu.Unlock()
+}
+
+func (a *App) setYouxiangClient(client *lanzouyou.Client, source string) {
+	a.lanzouMu.Lock()
+	a.youxiangClient = client
+	a.youxiangSource = source
+	a.lanzouMu.Unlock()
+}
+
+// requireCloudClient 按平台返回客户端：lanzou 或 youxiang。
+func (a *App) requireCloudClient(platform string) (cloudClient, error) {
+	if normalizeCloudPlatform(platform) == cloudPlatformYouxiang {
+		return a.requireYouxiangClient()
+	}
+	return a.requireLanzouClient()
+}
+
+// requireYouxiangClient 返回可用的蓝奏优享客户端，必要时从本机凭据恢复。
+func (a *App) requireYouxiangClient() (*lanzouyou.Client, error) {
+	settings, _ := LoadSettings()
+	interval := time.Duration(settings.Lanzou.IntervalMS) * time.Millisecond
+
+	a.lanzouMu.Lock()
+	client := a.youxiangClient
+	a.lanzouMu.Unlock()
+	if client != nil {
+		return client, nil
+	}
+
+	creds, err := lanzouyou.LoadCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("读取本机登录态失败：%w", err)
+	}
+	if creds == nil {
+		return nil, errors.New("尚未登录蓝奏优享，请先登录")
+	}
+	client = lanzouyou.NewClient(*creds, interval)
+
+	a.lanzouMu.Lock()
+	if a.youxiangClient == nil {
+		a.youxiangClient = client
+		a.youxiangSource = "local"
+	}
+	client = a.youxiangClient
+	a.lanzouMu.Unlock()
+	return client, nil
 }
 
 func (a *App) requireLanzouClient() (*lanzou.Client, error) {
@@ -789,11 +981,11 @@ func normalizeLanzouOptions(workers, intervalMS int) (int, int) {
 	return workers, intervalMS
 }
 
-func cacheHit(cache *lanzou.UploadCache, folderID, path string, size int64, mod time.Time) bool {
+func cacheHit(cache *lanzou.UploadCache, platform, folderID, path string, size int64, mod time.Time) bool {
 	if cache == nil {
 		return false
 	}
-	_, ok := cache.Hit(cache.Key(folderID, path, size, mod.UnixNano()))
+	_, ok := cache.Hit(cache.KeyFor(reportPlatform(platform), folderID, path, size, mod.UnixNano()))
 	return ok
 }
 

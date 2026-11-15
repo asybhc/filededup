@@ -34,6 +34,10 @@ import (
 // PlatformLanzou 是老版蓝奏云的平台标识，与 C# 版凭据文件里的 platform 字段对应。
 const PlatformLanzou = "lanzou"
 
+// PlatformYouxiang 是蓝奏优享（ilanzou）的平台标识。
+// 优享使用 appToken 而非 Cookie，凭据文件与老版分开放，互不覆盖。
+const PlatformYouxiang = "lanzou-youxiang"
+
 // MaxUploadSize 是老版蓝奏云单文件上限（100 MiB）。超过的本地文件直接跳过，不发起请求。
 //
 // 这是 C# 版的既有规则（c/G.cs 的 100 MiB 判断），未在服务端重新确认。
@@ -222,6 +226,12 @@ func (e *APIError) Error() string {
 // ErrDPAPIUnsupported 表示当前平台没有 DPAPI，凭据只能留在内存里。
 var ErrDPAPIUnsupported = errors.New("当前平台不支持 DPAPI 凭据加密存储")
 
+// ProtectData 暴露本包的 DPAPI 加密，供其他网盘客户端复用同一套凭据保护。
+func ProtectData(plain []byte) ([]byte, error) { return protect(plain) }
+
+// UnprotectData 暴露本包的 DPAPI 解密。
+func UnprotectData(cipher []byte) ([]byte, error) { return unprotect(cipher) }
+
 // SizeWithinTolerance 复刻 C# 版 a.Z.A_m_1(long,long)：
 //
 //	|local-remote| <= max(2048, local/100)
@@ -346,18 +356,33 @@ type Report struct {
 
 // BuildReport 组装报告。
 func BuildReport(folderID, folderName, localDir string, items []Item, sum Summary) Report {
+	return BuildReportFor(PlatformLanzou, folderID, folderName, localDir, items, sum)
+}
+
+// BuildReportFor 按平台组装报告。优享的报告用独立 kind，便于事后区分来源。
+func BuildReportFor(platform, folderID, folderName, localDir string, items []Item, sum Summary) Report {
+	if platform == "" {
+		platform = PlatformLanzou
+	}
+	kind := "filededup.lanzou.upload-report"
+	note := "结果以服务端返回原文为准；服务端拒绝的文件格式会按失败原样记录。" +
+		"分享创建不在本功能范围（服务端接口不可用），需要分享请在网页端手动操作。"
+	if platform == PlatformYouxiang {
+		kind = "filededup.lanzouyou.upload-report"
+		note = "结果以蓝奏优享服务端返回原文为准；优享不支持创建目录，上传前请在本地选好目标目录。" +
+			"优享接口未做真机全流程验证的部分（分片 URL 形式）见 docs/ui-shell.md 的未验证项。"
+	}
 	return Report{
 		SchemaVersion: 1,
-		Kind:          "filededup.lanzou.upload-report",
+		Kind:          kind,
 		GeneratedAt:   time.Now().Format(time.RFC3339),
-		Platform:      PlatformLanzou,
+		Platform:      platform,
 		FolderID:      folderID,
 		FolderName:    folderName,
 		LocalDir:      localDir,
 		Summary:       sum,
 		Items:         items,
-		Note: "结果以服务端返回原文为准；服务端拒绝的文件格式会按失败原样记录。" +
-			"分享创建不在本功能范围（服务端接口不可用），需要分享请在网页端手动操作。",
+		Note:          note,
 	}
 }
 
