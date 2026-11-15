@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.3"
+const appVersion = "0.9.4"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -488,7 +488,10 @@ func (a *App) GetSkipped(id string, offset, limit int) (SkippedPage, error) {
 }
 
 // PreviewPlan 生成执行计划并返回摘要与前 200 条动作。执行前必看。
-func (a *App) PreviewPlan(id, deleteMode string) (PlanPreview, error) {
+//
+// deletePaths 为 nil 时删除每组全部可删除成员（兼容旧界面）；
+// 非 nil 时只删除勾选路径，空切片表示一个都不删。
+func (a *App) PreviewPlan(id, deleteMode string, deletePaths []string) (PlanPreview, error) {
 	s, err := a.session(id)
 	if err != nil {
 		return PlanPreview{}, err
@@ -497,7 +500,7 @@ func (a *App) PreviewPlan(id, deleteMode string) (PlanPreview, error) {
 	if err != nil {
 		return PlanPreview{}, err
 	}
-	p, err := s.planFor(mode)
+	p, err := s.planForPaths(mode, deletePaths)
 	if err != nil {
 		return PlanPreview{}, err
 	}
@@ -507,19 +510,41 @@ func (a *App) PreviewPlan(id, deleteMode string) (PlanPreview, error) {
 		Total:      len(p.Actions),
 		KindCounts: map[string]int{},
 	}
-	s.mu.Lock()
-	if s.result != nil {
-		preview.Groups = len(s.result.Groups)
-		preview.ReclaimableBytes = s.result.Stats.ReclaimableBytes
+	if deletePaths == nil {
+		s.mu.Lock()
+		if s.result != nil {
+			preview.Groups = len(s.result.Groups)
+			preview.ReclaimableBytes = s.result.Stats.ReclaimableBytes
+		}
+		s.mu.Unlock()
+	} else {
+		picked := make(map[string]bool, len(deletePaths))
+		for _, path := range deletePaths {
+			picked[path] = true
+		}
+		s.mu.Lock()
+		if s.result != nil {
+			for _, g := range s.result.Groups {
+				for _, m := range g.Members {
+					if picked[m.Path] {
+						preview.Groups++
+						break
+					}
+				}
+			}
+		}
+		s.mu.Unlock()
 	}
-	s.mu.Unlock()
 	for i, act := range p.Actions {
 		preview.KindCounts[string(act.Kind)]++
+		var size int64
+		if act.Precheck != nil {
+			size = act.Precheck.Size
+		}
+		if deletePaths != nil {
+			preview.ReclaimableBytes += size
+		}
 		if i < 200 {
-			var size int64
-			if act.Precheck != nil {
-				size = act.Precheck.Size
-			}
 			preview.Samples = append(preview.Samples, ActionView{
 				Seq: act.Seq, Kind: string(act.Kind), Src: act.Src, Reason: act.Reason, Size: size,
 			})
@@ -529,7 +554,9 @@ func (a *App) PreviewPlan(id, deleteMode string) (PlanPreview, error) {
 }
 
 // StartExecute 异步执行计划；confirmed=false 时拒绝执行（前端确认框之外的第二道闸）。
-func (a *App) StartExecute(id, deleteMode string, confirmed bool) error {
+//
+// deletePaths 语义同 PreviewPlan，必须与预览时的勾选一致，否则执行范围会变。
+func (a *App) StartExecute(id, deleteMode string, deletePaths []string, confirmed bool) error {
 	if !confirmed {
 		return errors.New("未确认，拒绝执行")
 	}
@@ -544,7 +571,7 @@ func (a *App) StartExecute(id, deleteMode string, confirmed bool) error {
 	if err != nil {
 		return err
 	}
-	p, err := s.planFor(mode)
+	p, err := s.planForPaths(mode, deletePaths)
 	if err != nil {
 		return err
 	}
@@ -617,10 +644,21 @@ func (a *App) GetExecuteState(id string) (ExecuteState, error) {
 }
 
 func (s *scanSession) planFor(mode model.DeleteMode) (*model.Plan, error) {
+	return s.planForPaths(mode, nil)
+}
+
+// planForPaths 生成计划。deletePaths == nil 时复用缓存（默认全删）；
+// 显式勾选不缓存，因为每次勾选调整都对应不同范围。
+func (s *scanSession) planForPaths(mode model.DeleteMode, deletePaths []string) (*model.Plan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.result == nil {
 		return nil, errors.New("扫描尚未完成")
+	}
+	if deletePaths != nil {
+		return plan.FromScan(s.result, plan.Options{
+			RequestID: s.result.RequestID, DeleteMode: mode, DeletePaths: deletePaths,
+		})
 	}
 	if s.plan != nil && s.planMode == mode {
 		return s.plan, nil

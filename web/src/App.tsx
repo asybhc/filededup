@@ -83,10 +83,21 @@ function flatten(groups: GroupView[]): Row[] {
   for (const g of groups) {
     rows.push({ type: "group", key: `g:${g.id}`, group: g });
     for (const m of g.members) {
-      rows.push({ type: "member", key: `m:${g.id}:${m.path}`, groupId: g.id, member: m });
+      rows.push({ type: "member", key: `m:${g.id}:${m.path}`, groupId: g.id, group: g, member: m });
     }
   }
   return rows;
+}
+
+// 默认勾选 = 每组按保留策略可删除的成员（即旧版"执行整组删除"的范围）。
+function defaultDeleteSelection(groups: GroupView[]): Set<string> {
+  const out = new Set<string>();
+  for (const g of groups) {
+    for (const m of g.members) {
+      if (m.deletable) out.add(m.path);
+    }
+  }
+  return out;
 }
 
 function ratio(done: number, total: number): number {
@@ -148,6 +159,9 @@ export default function App() {
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [preview, setPreview] = useState<PlanPreview>();
   const [deleteMode, setDeleteMode] = useState<DeleteMode>("trash");
+  // 勾选 = 将删除；未勾选 = 保留。默认与旧版整组删除一致。
+  const [deleteSel, setDeleteSel] = useState<Set<string>>(new Set());
+  const [selNote, setSelNote] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [permanentAck, setPermanentAck] = useState(false);
   const [exec, setExec] = useState<ExecuteState>();
@@ -459,6 +473,7 @@ export default function App() {
     }
     setGroups(gs);
     setGroupsTotal(gs.length);
+    setDeleteSel(defaultDeleteSelection(gs));
     setScan(mock.demoScanState(gs));
     if (demo === "preview") {
       setPreview(mock.demoPreview(gs, "trash"));
@@ -510,7 +525,7 @@ export default function App() {
     if (step !== "preview" || !sessionId) return;
     let stopped = false;
     api
-      .previewPlan(sessionId, deleteMode)
+      .previewPlan(sessionId, deleteMode, Array.from(deleteSel))
       .then((p) => {
         if (!stopped) setPreview(p);
       })
@@ -520,7 +535,7 @@ export default function App() {
     return () => {
       stopped = true;
     };
-  }, [step, sessionId, deleteMode]);
+  }, [step, sessionId, deleteMode, deleteSel]);
 
   // 执行进度轮询。
   useEffect(() => {
@@ -577,6 +592,8 @@ export default function App() {
         all = all.concat(page.items);
         setGroups(all.slice());
       }
+      setDeleteSel(defaultDeleteSelection(all));
+      setSelNote("");
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -601,6 +618,8 @@ export default function App() {
     setPreview(undefined);
     setGroups([]);
     setGroupsTotal(0);
+    setDeleteSel(new Set());
+    setSelNote("");
     try {
       const id = await api.startScan({
         ...req,
@@ -648,10 +667,71 @@ export default function App() {
     }
   }
 
+  function toggleMember(group: GroupView, path: string) {
+    setSelNote("");
+    const next = new Set(deleteSel);
+    if (next.has(path)) {
+      next.delete(path);
+      setDeleteSel(next);
+      return;
+    }
+    next.add(path);
+    if (group.members.every((m) => next.has(m.path))) {
+      setSelNote("每组至少要保留一个文件：已阻止把整组都勾选删除。");
+      return;
+    }
+    setDeleteSel(next);
+  }
+
+  // all/none 只作用于"可删除"成员；invert 逐成员反转；keep 把当前勾选项视为要保留。
+  function applyGroupSelection(group: GroupView, action: "all" | "none" | "invert" | "keep") {
+    setSelNote("");
+    const next = new Set(deleteSel);
+    if (action === "all") {
+      for (const m of group.members) {
+        if (m.deletable) next.add(m.path);
+      }
+    } else if (action === "none") {
+      for (const m of group.members) next.delete(m.path);
+    } else if (action === "invert") {
+      for (const m of group.members) {
+        if (next.has(m.path)) next.delete(m.path);
+        else next.add(m.path);
+      }
+      if (group.members.every((m) => next.has(m.path))) {
+        const fallback = group.members.find((m) => m.keep) ?? group.members[0];
+        next.delete(fallback.path);
+        setSelNote(`反转后会删除整组，已自动留出「${fallback.name}」保留。`);
+      }
+    } else {
+      const kept = group.members.filter((m) => next.has(m.path));
+      if (kept.length === 0) {
+        setSelNote("请先勾选要保留的文件，再点「仅保留所选」。");
+        return;
+      }
+      for (const m of group.members) {
+        if (next.has(m.path)) next.delete(m.path);
+        else next.add(m.path);
+      }
+      setSelNote(`已保留勾选的 ${kept.length} 个文件，其余 ${group.members.length - kept.length} 个改为待删除。`);
+    }
+    setDeleteSel(next);
+  }
+
+  function selectAllDeletable() {
+    setSelNote("");
+    setDeleteSel(defaultDeleteSelection(groups));
+  }
+
+  function clearAllSelection() {
+    setSelNote("");
+    setDeleteSel(new Set());
+  }
+
   async function openPreview() {
     setError("");
     try {
-      const p = await api.previewPlan(sessionId, deleteMode);
+      const p = await api.previewPlan(sessionId, deleteMode, Array.from(deleteSel));
       setPreview(p);
       setStep("preview");
     } catch (err) {
@@ -664,7 +744,7 @@ export default function App() {
     setError("");
     setExec({ running: true, done: false, total: preview?.total ?? 0, applied: 0, failed: 0, skipped: 0, rolledBack: 0, reclaimed: 0 });
     try {
-      await api.startExecute(sessionId, deleteMode, true);
+      await api.startExecute(sessionId, deleteMode, Array.from(deleteSel), true);
     } catch (err) {
       setExec(undefined);
       setError(errorText(err));
@@ -1009,7 +1089,12 @@ export default function App() {
                 <button className="secondary" onClick={reset}>
                   重新扫描
                 </button>
-                <button className="primary" onClick={openPreview} disabled={perfActive || rows.length === 0}>
+                <button
+                  className="primary"
+                  onClick={openPreview}
+                  disabled={perfActive || rows.length === 0 || deleteSel.size === 0}
+                  title={!perfActive && deleteSel.size === 0 ? "请先勾选要删除的文件" : undefined}
+                >
                   生成执行预览
                 </button>
               </div>
@@ -1051,8 +1136,25 @@ export default function App() {
               </div>
             )}
 
+            {!perfActive && (
+              <div className="toolbar">
+                <span className="hint">
+                  勾选 = <b>删除</b>，未勾选 = <b>保留</b>；已勾选 <b>{deleteSel.size}</b> 项，执行范围以勾选为准，不再按整组删除。
+                  {selNote ? <span className="warn"> {selNote}</span> : null}
+                </span>
+                <div className="actions inline">
+                  <button className="link" onClick={selectAllDeletable}>
+                    全选可删除项
+                  </button>
+                  <button className="link" onClick={clearAllSelection}>
+                    全不选
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="tablehead">
-              <span>状态</span>
+              <span>选择 / 状态</span>
               <span>文件 / 组</span>
               <span>完整路径</span>
               <span className="num">大小</span>
@@ -1063,7 +1165,16 @@ export default function App() {
               rows={rows}
               rowHeight={72}
               rowKey={(row) => row.key}
-              renderRow={(row) => <ResultRow row={row} onSelect={setDetail} />}
+              renderRow={(row) => (
+                <ResultRow
+                  row={row}
+                  onSelect={setDetail}
+                  selectable={!perfActive}
+                  selected={deleteSel}
+                  onToggle={toggleMember}
+                  onGroupAction={applyGroupSelection}
+                />
+              )}
             />
           </section>
         )}
@@ -1093,8 +1204,18 @@ export default function App() {
             {licenseStop && (
               <p className="hint">
                 未授权：确认执行已禁用，只能扫描与预览。请先在“授权”中导入许可证。
+                {license?.machineCode ? (
+                  <>
+                    {" "}
+                    机器码：<code>{license.machineCode}</code>
+                  </>
+                ) : null}
               </p>
             )}
+
+            <p className="hint">
+              本次只处理结果页勾选的 <b>{deleteSel.size}</b> 个文件；同一组未勾选的副本会保留。
+            </p>
 
             <div className="formgrid narrow">
               <label>
@@ -1519,27 +1640,66 @@ function ScanProgress({
 const ResultRow = memo(function ResultRow({
   row,
   onSelect,
+  selectable = false,
+  selected,
+  onToggle,
+  onGroupAction,
 }: {
   row: Row;
   onSelect: (path: string) => void;
+  selectable?: boolean;
+  selected?: Set<string>;
+  onToggle?: (group: GroupView, path: string) => void;
+  onGroupAction?: (group: GroupView, action: "all" | "none" | "invert" | "keep") => void;
 }) {
   if (row.type === "group") {
+    const g = row.group;
+    let checked = 0;
+    if (selected) {
+      for (const m of g.members) if (selected.has(m.path)) checked++;
+    }
     return (
-      <div className="row grouprow" onClick={() => onSelect(row.group.keep)}>
-        <span className={`kind kind-${row.group.kind}`}>{KIND_LABELS[row.group.kind] ?? row.group.kind}</span>
-        <span className="gtitle">重复组 · {row.group.members.length} 个文件</span>
-        <span className="gkeep">
-          保留：{row.group.keep.slice(row.group.keep.lastIndexOf("\\") + 1)}
+      <div className="row grouprow" onClick={() => onSelect(g.keep)}>
+        <span className="gsel">
+          <span className={`kind kind-${g.kind}`}>{KIND_LABELS[g.kind] ?? g.kind}</span>
+          {selectable && <span className="selcount">删 {checked}/{g.members.length}</span>}
         </span>
-        <span className="num">可回收 {formatBytes(row.group.reclaimable)}</span>
-        <span />
+        <span className="gtitle">重复组 · {g.members.length} 个文件</span>
+        <span className="gkeep">策略保留：{g.keep.slice(g.keep.lastIndexOf("\\") + 1)}</span>
+        {selectable ? (
+          <span className="gbuttons" onClick={(e) => e.stopPropagation()}>
+            <button className="link" onClick={() => onGroupAction?.(g, "all")}>全选</button>
+            <button className="link" onClick={() => onGroupAction?.(g, "none")}>全不选</button>
+            <button className="link" onClick={() => onGroupAction?.(g, "invert")}>反选</button>
+            <button className="link" onClick={() => onGroupAction?.(g, "keep")} title="把当前勾选项视为要保留的文件，其余成员改为待删除">
+              仅保留所选
+            </button>
+          </span>
+        ) : (
+          <span className="num">可回收 {formatBytes(g.reclaimable)}</span>
+        )}
+        <span className="num">{selectable ? `${formatBytes(g.reclaimable)}` : ""}</span>
       </div>
     );
   }
   const m = row.member;
+  const checked = selected?.has(m.path) ?? false;
   return (
-    <div className={`row memberrow ${m.keep ? "iskeep" : ""}`} onClick={() => onSelect(m.path)}>
-      <span className={`kind ${m.keep ? "kind-keep" : "kind-del"}`}>{m.keep ? "保留" : "可删除"}</span>
+    <div
+      className={`row memberrow ${m.keep ? "iskeep" : ""} ${checked ? "isdel" : "isretain"}`}
+      onClick={() => onSelect(m.path)}
+    >
+      <span className="selcell" onClick={(e) => e.stopPropagation()}>
+        {selectable && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => onToggle?.(row.group, m.path)}
+            aria-label={checked ? `取消删除 ${m.name}` : `标记删除 ${m.name}`}
+          />
+        )}
+        <span className={`kind ${checked ? "kind-del" : "kind-keep"}`}>{checked ? "将删除" : "保留"}</span>
+      </span>
       <span className="mname" title={m.name}>
         {m.name}
       </span>

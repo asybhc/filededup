@@ -106,7 +106,7 @@ export interface AppInfo {
 
 export type Row =
   | { type: "group"; key: string; group: GroupView }
-  | { type: "member"; key: string; groupId: string; member: MemberView };
+  | { type: "member"; key: string; groupId: string; group: GroupView; member: MemberView };
 
 // ---------- 设置持久化（对应 cmd/filededup/settings.go） ----------
 

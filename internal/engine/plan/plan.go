@@ -18,6 +18,10 @@ type Options struct {
 	RequestID  string
 	DeleteMode model.DeleteMode
 	Now        func() time.Time
+	// DeletePaths 非 nil 时按"用户显式勾选"生成动作（键为成员绝对路径）；
+	// nil 表示沿用"删除组内全部 Deletable 成员"的默认行为。
+	// 空切片是合法输入，表示一个都不删。
+	DeletePaths []string
 }
 
 var (
@@ -25,6 +29,10 @@ var (
 	ErrNilResult = errors.New("plan: 扫描结果为空")
 	// ErrGroupInvalid 表示重复组结构非法（保留项不在成员中、成员不足等）。
 	ErrGroupInvalid = errors.New("plan: 重复组结构非法")
+	// ErrGroupFullySelected 表示某组的所有成员都被勾选删除，至少必须保留一个。
+	ErrGroupFullySelected = errors.New("plan: 勾选会删除整组文件")
+	// ErrSelectionUnknown 表示勾选路径不属于任何重复组（扫描结果可能已过期）。
+	ErrSelectionUnknown = errors.New("plan: 勾选了不属于任何重复组的文件")
 )
 
 // FromScan 生成"删除组内可删除成员"的计划。
@@ -56,6 +64,16 @@ func FromScan(res *model.Result, opt Options) (*model.Plan, error) {
 		requestID = "plan-" + createdAt.Format("20060102T150405Z")
 	}
 
+	var selected map[string]bool
+	if opt.DeletePaths != nil {
+		selected = make(map[string]bool, len(opt.DeletePaths))
+		for _, path := range opt.DeletePaths {
+			if path != "" {
+				selected[path] = true
+			}
+		}
+	}
+
 	p := &model.Plan{
 		SchemaVersion: model.SchemaVersion,
 		RequestID:     requestID,
@@ -63,12 +81,31 @@ func FromScan(res *model.Result, opt Options) (*model.Plan, error) {
 		Source:        model.PlanFromScan,
 		Actions:       []model.Action{},
 	}
+	known := map[string]bool{}
 	for _, g := range res.Groups {
-		actions, err := groupActions(g, mode)
+		var actions []model.Action
+		var err error
+		if selected != nil {
+			actions, err = groupActionsSelected(g, mode, selected, known)
+		} else {
+			actions, err = groupActions(g, mode)
+		}
 		if err != nil {
 			return nil, err
 		}
 		p.Actions = append(p.Actions, actions...)
+	}
+	if selected != nil {
+		var unknown []string
+		for path := range selected {
+			if !known[path] {
+				unknown = append(unknown, path)
+			}
+		}
+		if len(unknown) > 0 {
+			sort.Strings(unknown)
+			return nil, fmt.Errorf("%w：%q 等 %d 个", ErrSelectionUnknown, unknown[0], len(unknown))
+		}
 	}
 	for i := range p.Actions {
 		p.Actions[i].Seq = i + 1
@@ -114,6 +151,68 @@ func groupActions(g model.Group, mode model.DeleteMode) ([]model.Action, error) 
 			Kind:         kind,
 			Src:          m.Path,
 			Reason:       fmt.Sprintf("%s duplicate; keep=%s", g.Kind, g.Keep),
+			Irreversible: kind == model.ActionDeletePermanent,
+			Precheck:     pre,
+			Rollback:     model.RollbackNone,
+			Status:       model.StatusPlanned,
+		})
+	}
+	return actions, nil
+}
+
+// groupActionsSelected 只把用户显式勾选的成员转换为删除动作。
+//
+// 与 groupActions 的区别：允许删掉保留策略选中的成员（用户可改留另一份），
+// 但不允许把整组都勾选删除；known 收集本组出现过的全部路径，供调用方校验未知勾选。
+func groupActionsSelected(g model.Group, mode model.DeleteMode, selected, known map[string]bool) ([]model.Action, error) {
+	if len(g.Members) < 2 {
+		return nil, fmt.Errorf("%w: 组 %s 成员不足 2", ErrGroupInvalid, g.ID)
+	}
+	keepFound := false
+	for _, m := range g.Members {
+		known[m.Path] = true
+		if m.Path == g.Keep {
+			keepFound = true
+		}
+	}
+	if !keepFound {
+		return nil, fmt.Errorf("%w: 组 %s 的保留项 %q 不在成员中", ErrGroupInvalid, g.ID, g.Keep)
+	}
+
+	picked := 0
+	for _, m := range g.Members {
+		if selected[m.Path] {
+			picked++
+		}
+	}
+	if picked == len(g.Members) {
+		return nil, fmt.Errorf("%w：组 %s 共 %d 个成员全部被勾选，至少保留一个", ErrGroupFullySelected, g.ID, len(g.Members))
+	}
+	if picked == 0 {
+		return nil, nil
+	}
+
+	kind := model.ActionDeleteTrash
+	if mode == model.DeletePermanent {
+		kind = model.ActionDeletePermanent
+	}
+	members := make([]model.Member, len(g.Members))
+	copy(members, g.Members)
+	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
+
+	actions := make([]model.Action, 0, picked)
+	for _, m := range members {
+		if !selected[m.Path] {
+			continue
+		}
+		pre := m.Snapshot
+		if pre == nil {
+			pre = &model.Precheck{Size: m.Size, ModTime: m.ModTime, Hash: m.Hash}
+		}
+		actions = append(actions, model.Action{
+			Kind:         kind,
+			Src:          m.Path,
+			Reason:       fmt.Sprintf("%s duplicate; explicitly selected; keep=%s", g.Kind, g.Keep),
 			Irreversible: kind == model.ActionDeletePermanent,
 			Precheck:     pre,
 			Rollback:     model.RollbackNone,

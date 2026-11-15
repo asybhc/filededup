@@ -161,13 +161,30 @@ function doneState(id: string, gs: GroupView[], elapsed: number): ScanState {
   };
 }
 
-function previewOf(id: string, gs: GroupView[], mode: DeleteMode): PlanPreview {
+function validateSelection(gs: GroupView[], deletePaths: string[]): void {
+  const chosen = new Set(deletePaths);
+  const known = new Set<string>();
+  for (const g of gs) {
+    for (const m of g.members) known.add(m.path);
+    if (g.members.length > 0 && g.members.every((m) => chosen.has(m.path))) {
+      throw new Error(`勾选会删除整组文件：${g.id} 共 ${g.members.length} 个成员，至少保留一个`);
+    }
+  }
+  for (const p of chosen) {
+    if (!known.has(p)) throw new Error(`勾选了不属于任何重复组的文件：${p}`);
+  }
+}
+
+function previewOf(id: string, gs: GroupView[], mode: DeleteMode, deletePaths?: string[]): PlanPreview {
+  if (deletePaths !== undefined) validateSelection(gs, deletePaths);
+  const chosen = deletePaths === undefined ? undefined : new Set(deletePaths);
   const kinds: Record<string, number> = {};
   let total = 0;
   const samples = [] as PlanPreview["samples"];
   for (const g of gs) {
     for (const m of g.members) {
-      if (!m.deletable) continue;
+      const selected = chosen ? chosen.has(m.path) : m.deletable;
+      if (!selected) continue;
       const kind = mode === "permanent" ? "delete_permanent" : "delete_trash";
       total++;
       kinds[kind] = (kinds[kind] || 0) + 1;
@@ -764,12 +781,12 @@ export const mock = {
     ];
     return { total: all.length, offset, items: all.slice(offset, offset + limit) };
   },
-  previewPlan(id: string, mode: DeleteMode): PlanPreview {
-    return previewOf(id, groups, mode);
+  previewPlan(id: string, mode: DeleteMode, deletePaths: string[]): PlanPreview {
+    return previewOf(id, groups, mode, deletePaths);
   },
-  startExecute(id: string, mode: DeleteMode, confirmed: boolean): void {
+  startExecute(id: string, mode: DeleteMode, deletePaths: string[], confirmed: boolean): void {
     if (!confirmed) throw new Error("未确认，拒绝执行");
-    const p = previewOf(id, groups, mode);
+    const p = previewOf(id, groups, mode, deletePaths);
     execState = { ...emptyExec(), running: true, total: p.total };
     if (execTimer) window.clearTimeout(execTimer);
     execTimer = window.setTimeout(() => {

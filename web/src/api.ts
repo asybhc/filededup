@@ -49,8 +49,8 @@ interface WailsApp {
   CancelScan(id: string): Promise<void>;
   GetGroups(id: string, offset: number, limit: number): Promise<GroupsPage>;
   GetSkipped(id: string, offset: number, limit: number): Promise<SkippedPage>;
-  PreviewPlan(id: string, deleteMode: DeleteMode): Promise<PlanPreview>;
-  StartExecute(id: string, deleteMode: DeleteMode, confirmed: boolean): Promise<void>;
+  PreviewPlan(id: string, deleteMode: DeleteMode, deletePaths: string[]): Promise<PlanPreview>;
+  StartExecute(id: string, deleteMode: DeleteMode, deletePaths: string[], confirmed: boolean): Promise<void>;
   GetExecuteState(id: string): Promise<ExecuteState>;
   GetSettings(): Promise<SettingsResult>;
   SaveSettings(s: UISettings): Promise<void>;
@@ -141,15 +141,15 @@ export const api = {
     if (b) return b.GetSkipped(id, offset, limit);
     return mock.getSkipped(id, offset, limit);
   },
-  async previewPlan(id: string, deleteMode: DeleteMode): Promise<PlanPreview> {
+  async previewPlan(id: string, deleteMode: DeleteMode, deletePaths: string[]): Promise<PlanPreview> {
     const b = bridge();
-    if (b) return b.PreviewPlan(id, deleteMode);
-    return mock.previewPlan(id, deleteMode);
+    if (b) return b.PreviewPlan(id, deleteMode, deletePaths);
+    return mock.previewPlan(id, deleteMode, deletePaths);
   },
-  async startExecute(id: string, deleteMode: DeleteMode, confirmed: boolean): Promise<void> {
+  async startExecute(id: string, deleteMode: DeleteMode, deletePaths: string[], confirmed: boolean): Promise<void> {
     const b = bridge();
-    if (b) return b.StartExecute(id, deleteMode, confirmed);
-    return mock.startExecute(id, deleteMode, confirmed);
+    if (b) return b.StartExecute(id, deleteMode, deletePaths, confirmed);
+    return mock.startExecute(id, deleteMode, deletePaths, confirmed);
   },
   async getExecuteState(id: string): Promise<ExecuteState> {
     const b = bridge();

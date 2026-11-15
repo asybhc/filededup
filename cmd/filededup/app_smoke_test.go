@@ -97,7 +97,7 @@ func TestAppSmoke(t *testing.T) {
 	kept, dup = keepPath, delPath
 	t.Logf("keep=%s delete=%s", kept, dup)
 
-	pv, err := app.PreviewPlan(id, "trash")
+	pv, err := app.PreviewPlan(id, "trash", nil)
 	if err != nil {
 		t.Fatalf("PreviewPlan: %v", err)
 	}
@@ -105,11 +105,23 @@ func TestAppSmoke(t *testing.T) {
 		t.Fatalf("预览不符合预期: total=%d samples=%v", pv.Total, pv.Samples)
 	}
 
-	if err := app.StartExecute(id, "permanent", false); err == nil {
+	// 显式勾选：只删 dup 时与默认一致；把保留项也勾上必须被拒绝。
+	pvSel, err := app.PreviewPlan(id, "trash", []string{dup})
+	if err != nil {
+		t.Fatalf("PreviewPlan 显式勾选: %v", err)
+	}
+	if pvSel.Total != 1 || pvSel.Groups != 1 || pvSel.Samples[0].Src != dup {
+		t.Fatalf("显式勾选预览不符合预期: total=%d groups=%d samples=%v", pvSel.Total, pvSel.Groups, pvSel.Samples)
+	}
+	if _, err := app.PreviewPlan(id, "trash", []string{dup, kept}); err == nil {
+		t.Fatal("勾选整组删除时不应生成计划")
+	}
+
+	if err := app.StartExecute(id, "permanent", nil, false); err == nil {
 		t.Fatal("未确认时不应允许执行")
 	}
 
-	if err := app.StartExecute(id, "permanent", true); err != nil {
+	if err := app.StartExecute(id, "permanent", []string{dup}, true); err != nil {
 		t.Fatalf("StartExecute: %v", err)
 	}
 	var es ExecuteState

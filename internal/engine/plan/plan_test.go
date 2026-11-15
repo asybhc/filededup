@@ -103,6 +103,51 @@ func TestFromScanTrashDefaults(t *testing.T) {
 	}
 }
 
+func TestFromScanExplicitSelection(t *testing.T) {
+	p, err := FromScan(sampleResult(), Options{DeletePaths: []string{`C:\r\a.txt`, `C:\r\d\dup.bin`}})
+	if err != nil {
+		t.Fatalf("FromScan: %v", err)
+	}
+	if len(p.Actions) != 2 {
+		t.Fatalf("动作数 = %d，期望 2", len(p.Actions))
+	}
+	if p.Actions[0].Src != `C:\r\a.txt` || p.Actions[1].Src != `C:\r\d\dup.bin` {
+		t.Fatalf("动作顺序不符合预期：%+v", p.Actions)
+	}
+	if p.Actions[0].Seq != 1 || p.Actions[1].Seq != 2 {
+		t.Fatalf("序号不连续：%d, %d", p.Actions[0].Seq, p.Actions[1].Seq)
+	}
+
+	// 允许改留另一份：勾选保留项、留下其他副本。
+	keepOnly, err := FromScan(sampleResult(), Options{DeletePaths: []string{`C:\r\b.txt`}})
+	if err != nil {
+		t.Fatalf("勾选保留项失败：%v", err)
+	}
+	if len(keepOnly.Actions) != 1 || keepOnly.Actions[0].Src != `C:\r\b.txt` {
+		t.Fatalf("勾选保留项结果不符合预期：%+v", keepOnly.Actions)
+	}
+
+	// 空切片合法，表示一个都不删。
+	none, err := FromScan(sampleResult(), Options{DeletePaths: []string{}})
+	if err != nil {
+		t.Fatalf("空勾选不应报错：%v", err)
+	}
+	if len(none.Actions) != 0 {
+		t.Fatalf("空勾选动作数 = %d，期望 0", len(none.Actions))
+	}
+}
+
+func TestFromScanExplicitSelectionRejects(t *testing.T) {
+	if _, err := FromScan(sampleResult(), Options{DeletePaths: []string{
+		`C:\r\a.txt`, `C:\r\b.txt`, `C:\r\c.txt`,
+	}}); !errors.Is(err, ErrGroupFullySelected) {
+		t.Fatalf("整组勾选应返回 ErrGroupFullySelected，实际 %v", err)
+	}
+	if _, err := FromScan(sampleResult(), Options{DeletePaths: []string{`C:\r\不存在.txt`}}); !errors.Is(err, ErrSelectionUnknown) {
+		t.Fatalf("未知路径应返回 ErrSelectionUnknown，实际 %v", err)
+	}
+}
+
 func TestFromScanPermanent(t *testing.T) {
 	p, err := FromScan(sampleResult(), Options{DeleteMode: model.DeletePermanent})
 	if err != nil {
