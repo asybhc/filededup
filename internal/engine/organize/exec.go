@@ -36,6 +36,9 @@ type ExecHooks struct {
 	SameVolume func(a, b string) (bool, error)
 	// Link 创建硬链接；nil 时退化为 os.Link。
 	Link func(oldname, newname string) error
+	// CopyFile 覆盖内置复制实现（仅测试注入，用于模拟复制失败/半截文件）；
+	// nil 时使用内置的“临时文件 + 校验 + 原子重命名”实现。
+	CopyFile func(src, dst string) error
 	// Undo 接收一条“成功执行”的反向动作，供调用方持久化后回滚；nil 表示不记录。
 	Undo func(record UndoRecord)
 }
@@ -107,7 +110,7 @@ func Apply(root string, res Result, opt ExecOptions, hooks ExecHooks) (ExecRepor
 			}
 			var undo []UndoRecord
 			if hooks.Undo != nil {
-				undo = preUndo(absRoot, a)
+				undo = preUndo(absRoot, a, hooks)
 			}
 			if err := applyOne(absRoot, a, opt, hooks); err != nil {
 				if errors.Is(err, errAlreadyWritable) {
@@ -176,6 +179,107 @@ func resolveRel(root, rel string) (string, error) {
 	return joined, nil
 }
 
+// resolveDest 解析“动作目标”：绝对路径（整理目标在根目录之外）原样使用，
+// 其余仍按根内相对路径解析并拒绝逃逸。
+func resolveDest(root, p string) (string, error) {
+	if p == "" {
+		return "", errors.New("目标路径为空")
+	}
+	if filepath.IsAbs(p) || filepath.VolumeName(p) != "" {
+		abs := filepath.Clean(filepath.FromSlash(p))
+		if utf16Len(abs) > 32767 {
+			return "", fmt.Errorf("路径超过 Windows 长路径上限：%q", p)
+		}
+		return abs, nil
+	}
+	return resolveRel(root, p)
+}
+
+// copyFileAtomic 跨卷复制：写入目标目录内的临时文件，校验大小后原子重命名。
+// 任一步失败都会删除临时文件，不留下半截文件；源文件始终保留。
+func copyFileAtomic(from, to string, hooks ExecHooks) error {
+	info, err := os.Stat(from)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("仅支持复制普通文件：%s", filepath.Base(from))
+	}
+	dir := filepath.Dir(to)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".filededup-copy-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	done := false
+	defer func() {
+		if !done {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if hooks.CopyFile != nil {
+		if err := hooks.CopyFile(from, tmpName); err != nil {
+			return err
+		}
+	} else if err := copyFileContents(from, tmpName, info); err != nil {
+		return err
+	}
+	copied, err := os.Stat(tmpName)
+	if err != nil {
+		return err
+	}
+	if copied.Size() != info.Size() {
+		return fmt.Errorf("复制不完整：源 %d 字节，副本 %d 字节", info.Size(), copied.Size())
+	}
+	if err := os.Chtimes(tmpName, info.ModTime(), info.ModTime()); err != nil {
+		return fmt.Errorf("设置副本时间失败：%w", err)
+	}
+	if _, err := os.Lstat(to); err == nil {
+		return fmt.Errorf("目标已存在：%s", filepath.Base(to))
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(tmpName, to); err != nil {
+		return err
+	}
+	done = true
+	return nil
+}
+
+// copyFileContents 把源文件内容复制到已创建的目标文件，并保留权限位与时间。
+func copyFileContents(from, to string, info fs.FileInfo) error {
+	src, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(to, os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	if err := dst.Sync(); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	if err := dst.Chmod(info.Mode().Perm()); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	return dst.Close()
+}
+
 // applyOne 执行单条动作；调用方已保证非 DryRun。
 func applyOne(root string, a Action, opt ExecOptions, hooks ExecHooks) error {
 	switch a.Kind {
@@ -184,7 +288,7 @@ func applyOne(root string, a Action, opt ExecOptions, hooks ExecHooks) error {
 		if a.To == "" {
 			return errors.New("目标目录为空")
 		}
-		dir, err := resolveRel(root, a.To)
+		dir, err := resolveDest(root, a.To)
 		if err != nil {
 			return err
 		}
@@ -201,7 +305,7 @@ func applyOne(root string, a Action, opt ExecOptions, hooks ExecHooks) error {
 		if a.To == "" {
 			return errors.New("目标路径为空")
 		}
-		to, err := resolveRel(root, a.To)
+		to, err := resolveDest(root, a.To)
 		if err != nil {
 			return err
 		}
@@ -213,7 +317,15 @@ func applyOne(root string, a Action, opt ExecOptions, hooks ExecHooks) error {
 		} else if !errors.Is(statErr, fs.ErrNotExist) {
 			return statErr
 		}
-		return os.Rename(from, to)
+		// 同卷走重命名式移动；跨卷退化为复制并保留源文件，避免用户误以为原文件已被移走。
+		same, err := hooks.sameVolume(from, to)
+		if err != nil {
+			return err
+		}
+		if same {
+			return os.Rename(from, to)
+		}
+		return copyFileAtomic(from, to, hooks)
 
 	case ActionDelete:
 		// 对齐原版特殊文件删除与去重删除：按 a.A 的选择走回收站或永久删除。
@@ -283,7 +395,7 @@ func dryRunMkdir(root string, a Action) error {
 	if target == "" {
 		return nil
 	}
-	dir, err := resolveRel(root, target)
+	dir, err := resolveDest(root, target)
 	if err != nil {
 		return err
 	}

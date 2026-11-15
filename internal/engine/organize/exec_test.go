@@ -621,3 +621,170 @@ func TestExecLongPathRejected(t *testing.T) {
 		t.Fatalf("失败记录 = %q, 期望包含“长路径”", rep.Errors[0])
 	}
 }
+
+// assertNoCopyTemp 断言目标目录里没有复制临时文件残留。
+func assertNoCopyTemp(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("读取目录失败 %s: %v", dir, err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".filededup-copy-") {
+			t.Fatalf("目标目录残留临时文件：%s", e.Name())
+		}
+	}
+}
+
+// TestApplyCrossVolumeCopies 注入“不同卷”，验证复制分支、源文件保留、内容一致。
+func TestApplyCrossVolumeCopies(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "外部目标")
+	src := filepath.Join(root, "a.txt")
+	execWriteFile(t, src, "hello-cross-volume")
+	dst := filepath.Join(out, "a.txt")
+
+	res := Result{Steps: []StepPlan{{ID: string(StepOrganize), Actions: []Action{
+		{Kind: ActionEnsureDir, To: filepath.ToSlash(out)},
+		{Kind: ActionMove, From: "a.txt", To: filepath.ToSlash(dst)},
+	}}}}
+	hooks := ExecHooks{SameVolume: func(a, b string) (bool, error) { return false, nil }}
+	rep, err := Apply(root, res, ExecOptions{}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Applied != 2 || rep.Failed != 0 {
+		t.Fatalf("统计 = %+v, 期望 applied=2 failed=0", rep)
+	}
+	execAssertContent(t, dst, "hello-cross-volume")
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("跨卷复制后源文件应保留：%v", err)
+	}
+	assertNoCopyTemp(t, out)
+}
+
+// TestApplyCrossVolumeCopyFailureLeavesNoPartial 复制失败时不产生目标文件与临时文件。
+func TestApplyCrossVolumeCopyFailureLeavesNoPartial(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "外部目标")
+	src := filepath.Join(root, "a.txt")
+	execWriteFile(t, src, "full-content")
+	dst := filepath.Join(out, "a.txt")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionEnsureDir, To: filepath.ToSlash(out)},
+		{Kind: ActionMove, From: "a.txt", To: filepath.ToSlash(dst)},
+	}}}}
+	hooks := ExecHooks{
+		SameVolume: func(a, b string) (bool, error) { return false, nil },
+		CopyFile: func(src, dst string) error {
+			if err := os.WriteFile(dst, []byte("half"), 0o644); err != nil {
+				return err
+			}
+			return errors.New("模拟磁盘已满")
+		},
+	}
+	rep, err := Apply(root, res, ExecOptions{}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 || rep.Applied != 1 {
+		t.Fatalf("统计 = %+v, 期望 applied=1(建目录) failed=1", rep)
+	}
+	if !strings.Contains(rep.Errors[0], "模拟磁盘已满") {
+		t.Fatalf("失败记录 = %q, 期望包含注入错误", rep.Errors[0])
+	}
+	if _, err := os.Stat(dst); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("复制失败后目标不应存在：%v", err)
+	}
+	execAssertContent(t, src, "full-content")
+	assertNoCopyTemp(t, out)
+}
+
+// TestApplyCrossVolumeCopySizeMismatch 复制“成功”但大小不符时按失败处理并清理。
+func TestApplyCrossVolumeCopySizeMismatch(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "外部目标")
+	execWriteFile(t, filepath.Join(root, "a.txt"), "0123456789")
+	dst := filepath.Join(out, "a.txt")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionEnsureDir, To: filepath.ToSlash(out)},
+		{Kind: ActionMove, From: "a.txt", To: filepath.ToSlash(dst)},
+	}}}}
+	hooks := ExecHooks{
+		SameVolume: func(a, b string) (bool, error) { return false, nil },
+		CopyFile: func(src, dst string) error {
+			return os.WriteFile(dst, []byte("01234"), 0o644)
+		},
+	}
+	rep, err := Apply(root, res, ExecOptions{}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Fatalf("统计 = %+v, 期望 failed=1", rep)
+	}
+	if !strings.Contains(rep.Errors[0], "复制不完整") {
+		t.Fatalf("失败记录 = %q, 期望包含“复制不完整”", rep.Errors[0])
+	}
+	if _, err := os.Stat(dst); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("尺寸不符时目标不应存在：%v", err)
+	}
+	assertNoCopyTemp(t, out)
+}
+
+// TestApplyAbsoluteDestination 目标在根目录之外（绝对路径），同卷仍走重命名移动。
+func TestApplyAbsoluteDestination(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "外部目标")
+	execWriteFile(t, filepath.Join(root, "a.txt"), "absolute-dest")
+	dst := filepath.Join(out, "a.txt")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionEnsureDir, To: filepath.ToSlash(out)},
+		{Kind: ActionMove, From: "a.txt", To: filepath.ToSlash(dst)},
+	}}}}
+	hooks := ExecHooks{SameVolume: func(a, b string) (bool, error) { return true, nil }}
+	rep, err := Apply(root, res, ExecOptions{}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Applied != 2 || rep.Failed != 0 {
+		t.Fatalf("统计 = %+v, 期望 applied=2 failed=0", rep)
+	}
+	execAssertContent(t, dst, "absolute-dest")
+	if _, err := os.Stat(filepath.Join(root, "a.txt")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("同卷移动后源文件应不存在：%v", err)
+	}
+}
+
+// TestApplySameVolumeError 卷判定失败时如实报错，不移动、不复制。
+func TestApplySameVolumeError(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "外部目标")
+	execWriteFile(t, filepath.Join(root, "a.txt"), "keep-me")
+	dst := filepath.Join(out, "a.txt")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionEnsureDir, To: filepath.ToSlash(out)},
+		{Kind: ActionMove, From: "a.txt", To: filepath.ToSlash(dst)},
+	}}}}
+	hooks := ExecHooks{SameVolume: func(a, b string) (bool, error) {
+		return false, errors.New("无法判断卷")
+	}}
+	rep, err := Apply(root, res, ExecOptions{}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Fatalf("统计 = %+v, 期望 failed=1", rep)
+	}
+	if !strings.Contains(rep.Errors[0], "无法判断卷") {
+		t.Fatalf("失败记录 = %q, 期望包含注入错误", rep.Errors[0])
+	}
+	execAssertContent(t, filepath.Join(root, "a.txt"), "keep-me")
+	if _, err := os.Stat(dst); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("卷判定失败时不应产生目标文件：%v", err)
+	}
+}

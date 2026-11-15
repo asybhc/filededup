@@ -373,8 +373,13 @@ export function Organizer({
 
         <div className="formgrid">
           <label>
-            <span>整理目标子目录（相对根目录，留空 = 根目录）</span>
-            <input value={cfg.target} onChange={(e) => patch({ target: e.target.value })} placeholder="例如 整理结果" />
+            <span>整理目标目录（留空 = 根目录；可填绝对路径放在源目录之外）</span>
+            <input
+              value={cfg.target}
+              onChange={(e) => patch({ target: e.target.value })}
+              placeholder="例如 整理结果（根内）或 D:\整理输出（根外）"
+            />
+            <span className="hint">目标可在源目录之外；同卷按重命名移动，跨卷改为复制并保留源文件。</span>
           </label>
           <label>
             <span>整理方式（第五步）</span>
@@ -486,7 +491,7 @@ export function Organizer({
             />
           </label>
           <label>
-            <span>排除子串（逗号或空格分隔）</span>
+            <span>排除目录（按目录名匹配；逗号或空格分隔）</span>
             <input
               value={excludesText}
               onChange={(e) => {
@@ -495,6 +500,7 @@ export function Organizer({
               }}
               placeholder="例如 node_modules .git"
             />
+            <span className="hint">只对目录生效：目录名相同即跳过该目录及其内容，不按文件名或部分子串过滤。</span>
           </label>
           <label>
             <span>保护词（跳过改名与特殊删除判定）</span>
@@ -506,7 +512,7 @@ export function Organizer({
               checked={cfg.includeHidden}
               onChange={(e) => patch({ includeHidden: e.target.checked })}
             />
-            <span>包含隐藏/系统文件</span>
+            <span>包含隐藏/系统文件（不勾选 = 跳过隐藏与系统文件）</span>
           </label>
           <label className="checkline">
             <input type="checkbox" checked={cfg.hardlink} onChange={(e) => patch({ hardlink: e.target.checked })} />
@@ -726,6 +732,17 @@ export function Organizer({
 
           {state.error && <div className="banner error">{state.error}</div>}
 
+          {state.targetExternal && (
+            <div className="banner info">
+              <span>
+                整理目标在源目录之外：<b>{state.targetDir}</b>。
+                {state.moveMode === "copy" && "跨卷：将复制文件，原文件仍保留在源目录（不会被移走）。"}
+                {state.moveMode === "move" && "同卷：将重命名式移动，原文件会离开源目录。"}
+                {state.moveMode === "unknown" && "无法判断是否同卷：执行时按实际卷逐条判断，跨卷复制、同卷移动。"}
+              </span>
+            </div>
+          )}
+
           {planOnlyRun ? (
             <div className="banner perf">
               这是仅规划结果：只做了扫描与规划，没有创建目录、没有移动、没有删除、没有修改任何文件。
@@ -865,7 +882,13 @@ export function Organizer({
               <div className="sample" key={i}>
                 <span className="seq">#{i + 1}</span>
                 <span className={`kind ${a.kind === "suggest" ? "kind-warn" : a.kind === "delete" ? "kind-danger" : "kind-exact"}`}>
-                  {KIND_LABELS[a.kind] ?? a.kind}
+                  {a.kind === "move"
+                    ? a.mode === "copy"
+                      ? "复制"
+                      : a.mode === "unknown"
+                        ? "移动/复制"
+                        : (KIND_LABELS[a.kind] ?? a.kind)
+                    : (KIND_LABELS[a.kind] ?? a.kind)}
                   {a.kind === "delete" && cfg.deleteMode === "trash" ? "（回收站）" : ""}
                 </span>
                 <span className="samplepath" title={`${a.step}\n${a.from ?? ""}${a.to ? "\n→ " + a.to : ""}`}>

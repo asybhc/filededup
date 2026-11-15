@@ -27,11 +27,14 @@ const (
 	UndoRemoveDirIfEmpty UndoKind = "remove_dir_if_empty"
 	// UndoRestoreMode 恢复文件权限位。
 	UndoRestoreMode UndoKind = "restore_mode"
+	// UndoRemoveCopy 删除跨卷复制产生的副本（源文件仍保留在原处）。
+	UndoRemoveCopy UndoKind = "remove_copy"
 	// UndoUnrestorable 无法还原的动作（删除、硬链接替换）。
 	UndoUnrestorable UndoKind = "unrestorable"
 )
 
-// UndoRecord 是一条可持久化的反向动作。路径均为相对根目录、'/' 分隔。
+// UndoRecord 是一条可持久化的反向动作。路径通常为相对根目录、'/' 分隔；
+// 整理目标在根目录之外时，From 可能为绝对路径。
 type UndoRecord struct {
 	Kind   UndoKind `json:"kind"`
 	From   string   `json:"from,omitempty"`
@@ -82,7 +85,7 @@ func Undo(root string, records []UndoRecord, opt ExecOptions) (UndoReport, error
 func undoOne(root string, rec UndoRecord) error {
 	switch rec.Kind {
 	case UndoMoveBack:
-		cur, err := resolveRel(root, rec.From)
+		cur, err := resolveDest(root, rec.From)
 		if err != nil {
 			return err
 		}
@@ -109,6 +112,18 @@ func undoOne(root string, rec UndoRecord) error {
 			return err
 		}
 		return os.Rename(cur, dst)
+
+	case UndoRemoveCopy:
+		p, err := resolveDest(root, rec.From)
+		if err != nil {
+			return err
+		}
+		if _, statErr := os.Lstat(p); errors.Is(statErr, fs.ErrNotExist) {
+			return errUndoSkip
+		} else if statErr != nil {
+			return statErr
+		}
+		return os.Remove(p)
 
 	case UndoMkdirBack:
 		d, err := resolveRel(root, rec.From)
@@ -148,13 +163,13 @@ func undoOne(root string, rec UndoRecord) error {
 
 // preUndo 在执行一条动作前采集反向动作所需的旧状态。
 // 无法确定旧状态（路径解析失败等）时返回 nil，宁可少记也不记错。
-func preUndo(root string, a Action) []UndoRecord {
+func preUndo(root string, a Action, hooks ExecHooks) []UndoRecord {
 	switch a.Kind {
 	case ActionEnsureDir:
 		if a.To == "" {
 			return nil
 		}
-		p, err := resolveRel(root, a.To)
+		p, err := resolveDest(root, a.To)
 		if err != nil {
 			return nil
 		}
@@ -164,11 +179,17 @@ func preUndo(root string, a Action) []UndoRecord {
 		if a.From == "" || a.To == "" {
 			return nil
 		}
-		to, err := resolveRel(root, a.To)
+		to, err := resolveDest(root, a.To)
 		if err != nil {
 			return nil
 		}
 		recs := missingDirUndo(root, filepath.Dir(to))
+		// 跨卷复制保留源文件，撤销时应删除副本而不是移回原路径。
+		if fromAbs, err := resolveRel(root, a.From); err == nil {
+			if same, verr := hooks.sameVolume(fromAbs, to); verr == nil && !same {
+				return append(recs, UndoRecord{Kind: UndoRemoveCopy, From: a.To})
+			}
+		}
 		return append(recs, UndoRecord{Kind: UndoMoveBack, From: a.To, To: a.From})
 
 	case ActionDelete:

@@ -378,6 +378,8 @@ export interface OrganizeActionView {
   to?: string;
   reason?: string;
   rule?: string;
+  /** 仅 move 动作：同卷移动 / 跨卷复制 / 无法判断。 */
+  mode?: "move" | "copy" | "unknown";
 }
 
 export interface OrganizeExecView {
@@ -404,6 +406,11 @@ export interface OrganizeState {
   dryRun: boolean;
   order: "standalone" | "preview";
   usePreviewPlan: boolean;
+  /** 规范化后的整理目标：根内相对路径或根外绝对路径。 */
+  targetDir: string;
+  targetExternal: boolean;
+  /** 整理目标与根目录的卷关系；空表示未启用第五步。 */
+  moveMode: "" | "move" | "copy" | "unknown";
   elapsedMs: number;
   error?: string;
   steps: OrganizeStepView[];

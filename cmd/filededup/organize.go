@@ -126,6 +126,7 @@ type OrganizeStepView struct {
 }
 
 // OrganizeActionView 是动作样例（只回传前若干条，避免一次塞太多）。
+// Mode 仅对 kind=move 有意义：同卷 move / 跨卷 copy / 无法判断 unknown。
 type OrganizeActionView struct {
 	Kind   string `json:"kind"`
 	Step   string `json:"step"`
@@ -133,6 +134,7 @@ type OrganizeActionView struct {
 	To     string `json:"to,omitempty"`
 	Reason string `json:"reason,omitempty"`
 	Rule   string `json:"rule,omitempty"`
+	Mode   string `json:"mode,omitempty"`
 }
 
 // OrganizeSuspectView 是存疑项；Key 为稳定的确认键（大小写折叠后的路径）。
@@ -156,20 +158,25 @@ type OrganizeExecView struct {
 
 // OrganizeState 是一次整理任务的完整状态；界面按 400ms 轮询。
 type OrganizeState struct {
-	ID             string                `json:"id"`
-	Phase          string                `json:"phase"` // running | done | failed
-	Stage          string                `json:"stage"`
-	DryRun         bool                  `json:"dryRun"`
-	Order          string                `json:"order"` // standalone | preview
-	UsePreviewPlan bool                  `json:"usePreviewPlan"`
-	ElapsedMS      int64                 `json:"elapsedMs"`
-	Error          string                `json:"error,omitempty"`
-	Steps          []OrganizeStepView    `json:"steps"`
-	Counters       organize.Counter      `json:"counters"`
-	Exec           OrganizeExecView      `json:"exec"`
-	ActionTotal    int                   `json:"actionTotal"`
-	Actions        []OrganizeActionView  `json:"actions"`
-	Suspects       []OrganizeSuspectView `json:"suspects"`
+	ID             string `json:"id"`
+	Phase          string `json:"phase"` // running | done | failed
+	Stage          string `json:"stage"`
+	DryRun         bool   `json:"dryRun"`
+	Order          string `json:"order"` // standalone | preview
+	UsePreviewPlan bool   `json:"usePreviewPlan"`
+	// TargetDir 是规范化后的整理目标（根内相对路径或根外绝对路径），供界面展示。
+	TargetDir      string `json:"targetDir"`
+	TargetExternal bool   `json:"targetExternal"`
+	// MoveMode 是整理目标与根目录的卷关系：move / copy / unknown（空表示未启用整理步骤）。
+	MoveMode    string                `json:"moveMode"`
+	ElapsedMS   int64                 `json:"elapsedMs"`
+	Error       string                `json:"error,omitempty"`
+	Steps       []OrganizeStepView    `json:"steps"`
+	Counters    organize.Counter      `json:"counters"`
+	Exec        OrganizeExecView      `json:"exec"`
+	ActionTotal int                   `json:"actionTotal"`
+	Actions     []OrganizeActionView  `json:"actions"`
+	Suspects    []OrganizeSuspectView `json:"suspects"`
 }
 
 // OrganizeStepMeta 只用于界面渲染步骤顺序与标题。
@@ -260,7 +267,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	if !validConflictPolicies[conflict] {
 		return "", fmt.Errorf("未知冲突策略：%s", req.Conflict)
 	}
-	targetRel, err := normalizeTarget(absRoot, req.Target)
+	targetSpec, err := organize.ResolveTarget(absRoot, req.Target)
 	if err != nil {
 		return "", err
 	}
@@ -302,6 +309,8 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 		AutoDeleteConfirmed: len(confirmed) > 0,
 	}
 
+	moveMode := organizeMoveMode(absRoot, targetSpec, req.Steps.Organize)
+
 	job := &organizeJob{state: OrganizeState{
 		ID:             newJobID(),
 		Phase:          "running",
@@ -309,6 +318,9 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 		DryRun:         req.DryRun,
 		Order:          string(cfg.Order),
 		UsePreviewPlan: req.UsePreviewPlan,
+		TargetDir:      displayTarget(targetSpec),
+		TargetExternal: targetSpec.External,
+		MoveMode:       moveMode,
 		Steps:          []OrganizeStepView{},
 		Actions:        []OrganizeActionView{},
 		Suspects:       []OrganizeSuspectView{},
@@ -322,7 +334,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	a.orgJobs[job.state.ID] = job
 	a.mu.Unlock()
 
-	target := targetRel
+	target := targetSpec
 	usePreview := req.UsePreviewPlan
 	dryRun := req.DryRun
 	planOnly := req.PlanOnly
@@ -355,7 +367,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 			return
 		}
 		providers := orgscan.PrepareProviders(tree.Entries, absRoot, cfg)
-		snap := organize.Snapshot{Root: absRoot, Target: target, Files: tree.Entries, Dirs: tree.Dirs}
+		snap := organize.Snapshot{Root: absRoot, Target: target.Rel, Files: tree.Entries, Dirs: tree.Dirs}
 
 		job.update(func(s *OrganizeState) { s.Stage = "规划动作" })
 		if usePreview {
@@ -365,6 +377,9 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 			cfg.Order = organize.OrderPreview
 		}
 		res := organize.Plan(cfg, snap, providers)
+		if target.External {
+			organize.RewriteExternalTarget(&res, target.Abs)
+		}
 
 		job.update(func(s *OrganizeState) {
 			s.Order = string(res.Order)
@@ -381,6 +396,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 					sample = append(sample, OrganizeActionView{
 						Kind: string(act.Kind), Step: sp.Title,
 						From: act.From, To: act.To, Reason: act.Reason, Rule: act.Rule,
+						Mode: actionMoveMode(act.Kind, act.To, target, moveMode),
 					})
 				}
 			}
@@ -495,25 +511,51 @@ func suspectViews(res organize.Result) []OrganizeSuspectView {
 	return out
 }
 
-// normalizeTarget 校验整理目标子目录：必须相对、且落在根目录内。
-func normalizeTarget(absRoot, target string) (string, error) {
-	t := strings.TrimSpace(target)
-	if t == "" {
-		return "", nil
+// displayTarget 返回界面展示用的整理目标：根内显示相对路径，根外显示绝对路径。
+func displayTarget(spec organize.TargetSpec) string {
+	if spec.External {
+		return spec.Abs
 	}
-	if filepath.IsAbs(t) {
-		return "", errors.New("整理目标请填写相对根目录的子目录名")
+	return spec.Rel
+}
+
+// organizeMoveMode 判断整理目标与根目录的卷关系。
+// 返回 move（同卷重命名）/ copy（跨卷复制）/ unknown（无法判断，执行期会如实报错）。
+func organizeMoveMode(absRoot string, spec organize.TargetSpec, organizeOn bool) string {
+	if spec.Rel == "" || !organizeOn {
+		return ""
 	}
-	clean := filepath.Clean(t)
-	if clean == "." || strings.HasPrefix(clean, "..") {
-		return "", errors.New("整理目标不能是根目录本身或上级目录")
+	dest := spec.Rel
+	if spec.External {
+		dest = spec.Abs
 	}
-	abs := filepath.Join(absRoot, clean)
-	rel, err := filepath.Rel(absRoot, abs)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", errors.New("整理目标必须位于根目录内")
+	same, err := platform.SameVolume(absRoot, filepath.FromSlash(dest))
+	switch {
+	case err != nil:
+		return "unknown"
+	case same:
+		return "move"
+	default:
+		return "copy"
 	}
-	return filepath.ToSlash(clean), nil
+}
+
+// actionMoveMode 给动作样例标注移动/复制方式；只对 move 动作有意义。
+func actionMoveMode(kind organize.ActionKind, to string, spec organize.TargetSpec, moveMode string) string {
+	if kind != organize.ActionMove {
+		return ""
+	}
+	if !spec.External {
+		return "move"
+	}
+	base := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(spec.Abs)), "/")
+	if to != base && !strings.HasPrefix(to, base+"/") {
+		return "move"
+	}
+	if moveMode == "" {
+		return "move"
+	}
+	return moveMode
 }
 
 func cleanList(in []string) []string {

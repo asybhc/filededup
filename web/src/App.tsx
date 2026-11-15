@@ -1096,7 +1096,7 @@ export default function App() {
                 />
               </label>
               <label>
-                <span>排除子串（逗号或空格分隔）</span>
+                <span>排除目录（目录名或路径前缀；逗号或空格分隔）</span>
                 <input value={excludesText} onChange={(e) => setExcludesText(e.target.value)} placeholder="例如 node_modules .git" />
               </label>
               <label className="checkline">
@@ -1145,9 +1145,13 @@ export default function App() {
                   checked={req.includeHidden}
                   onChange={(e) => setReq({ ...req, includeHidden: e.target.checked })}
                 />
-                <span>包含隐藏/系统文件</span>
+                <span>包含隐藏/系统文件（不勾选 = 跳过隐藏与系统文件）</span>
               </label>
             </div>
+
+            <p className="hint">
+              排除项只匹配目录：填目录名会跳过所有同名目录及其内容，填带路径的项按路径前缀匹配；不会按文件名子串过滤。
+            </p>
 
             <p className="hint">
               相似图片默认关闭，勾选后才参与查重。阈值 0 表示指纹完全相同；数值越大判定越宽松，

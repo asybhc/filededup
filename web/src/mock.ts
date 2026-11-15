@@ -410,7 +410,8 @@ function stepEnabled(sid: string, s: OrganizeRequest["steps"]): boolean {
 function emptyOrgState(id: string): OrganizeState {
   return {
     id, phase: "running", stage: "枚举目录", dryRun: true, order: "standalone",
-    usePreviewPlan: false, elapsedMs: 0, steps: [], counters: zeroCounter(),
+    usePreviewPlan: false, targetDir: "", targetExternal: false, moveMode: "", elapsedMs: 0,
+    steps: [], counters: zeroCounter(),
     exec: { total: 0, applied: 0, failed: 0, skipped: 0, errors: [] }, actionTotal: 0, actions: [], suspects: [],
   };
 }
@@ -480,6 +481,7 @@ function buildOrgState(id: string, req: OrganizeRequest, elapsed: number): Organ
     : req.dryRun
       ? { total, applied: 0, failed: 0, skipped: total, errors: [] }
       : { total, applied: total, failed: 0, skipped: 0, errors: [] };
+  const targetExternal = /^[A-Za-z]:[\\/]/.test(req.target) || req.target.startsWith("\\\\");
   return {
     id,
     phase: "done",
@@ -487,6 +489,9 @@ function buildOrgState(id: string, req: OrganizeRequest, elapsed: number): Organ
     dryRun: req.dryRun,
     order: req.usePreviewPlan ? "preview" : "standalone",
     usePreviewPlan: req.usePreviewPlan,
+    targetDir: req.target || "",
+    targetExternal: targetExternal && req.target !== req.root,
+    moveMode: req.target && req.steps.organize ? "move" : "",
     elapsedMs: elapsed,
     steps,
     counters,

@@ -37,12 +37,12 @@ func usage() {
 scan 选项:
   --exclude <list>     排除项，逗号/分号/空白分隔；纯名称匹配目录名
   --min-size <n>       最小文件大小（字节），0=不限
-  --include-hidden     包含隐藏/系统文件
+  --include-hidden     包含隐藏/系统文件（默认跳过）
   --follow-links       跟随符号链接（默认不跟随，与 C# 一致）
   --keep <policy>      newest|oldest|largest|nameShortest|pathShortest（默认 pathShortest）
   --no-exact           关闭精确查重（可与 --image/--audio 组合）
   --image              开启相似图片判定（jpg/jpeg/png/gif/bmp/tif/tiff/webp）
-  --image-threshold <n> 图片 dHash 汉明阈值，0-64（默认 8）
+  --image-threshold <n> 图片 dHash 汉明阈值，0-16（默认 8；调大更宽松）
   --image-keep <policy> 相似图片保留策略（默认 largest）
   --image-skip-uniform 无行内梯度的退化指纹（纯色图）不参与相似分组（默认关闭，与原版一致）
   --audio              开启相似音频判定（mp3/wav）
@@ -72,7 +72,7 @@ apply 选项:
 
 organize 选项:
   --root <dir>         整理根目录（必填）
-  --target <rel>       整理目标目录（root 下的相对子目录）
+  --target <path>      整理目标目录（root 内相对路径，或 root 外绝对路径）
   --steps <list>       启用步骤，默认 prefix,suffix,special,readonly,content,image,audio,organize,empty
   --mode <m>           category|extension|namefeature|keyword|fixedfolder（默认 category）
   --keyword/--regex/--fixed  第五步分类参数
@@ -139,7 +139,7 @@ func runScan(args []string) int {
 	fs.Var(&roots, "root", "扫描根目录（可重复）")
 	exclude := fs.String("exclude", "", "排除项")
 	minSize := fs.Int64("min-size", 0, "最小文件大小")
-	includeHidden := fs.Bool("include-hidden", false, "包含隐藏文件")
+	includeHidden := fs.Bool("include-hidden", false, "包含隐藏/系统文件；默认跳过隐藏与系统文件")
 	followLinks := fs.Bool("follow-links", false, "跟随符号链接")
 	keep := fs.String("keep", "", "保留策略")
 	noExact := fs.Bool("no-exact", false, "关闭精确查重")

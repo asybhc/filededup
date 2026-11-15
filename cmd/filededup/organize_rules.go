@@ -240,11 +240,12 @@ func validateOrganizeRules(r OrganizeSettings) error {
 	}
 	if r.Target != "" {
 		if filepath.IsAbs(r.Target) || filepath.VolumeName(r.Target) != "" {
-			add("target=%q 必须是相对根目录的子目录", r.Target)
+			if !filepath.IsAbs(r.Target) {
+				add("target=%q 不是有效的绝对路径", r.Target)
+			}
 		} else {
 			clean := filepath.Clean(r.Target)
-			if clean == "." || clean == ".." ||
-				strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			if clean == "." || strings.HasPrefix(clean, "..") {
 				add("target=%q 不能是根目录本身或上级目录", r.Target)
 			}
 		}

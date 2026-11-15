@@ -297,7 +297,7 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
 
         <label className="checkrow">
           <input type="checkbox" checked={includeHidden} onChange={(e) => setIncludeHidden(e.target.checked)} disabled={running} />
-          包含隐藏 / 系统文件
+          包含隐藏 / 系统文件（不勾选 = 跳过）
         </label>
 
         <div className="actionsrow">

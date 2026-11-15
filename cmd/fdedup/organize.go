@@ -26,7 +26,7 @@ func runOrganize(args []string) int {
 	fs := flag.NewFlagSet("organize", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	root := fs.String("root", "", "整理根目录（必填）")
-	target := fs.String("target", "", "整理目标目录（root 下的相对子目录）")
+	target := fs.String("target", "", "整理目标目录（root 内相对路径，或 root 外绝对路径）")
 	steps := fs.String("steps", "prefix,suffix,special,readonly,content,image,audio,organize,empty",
 		"启用的步骤：prefix,suffix,special,readonly,content,image,audio,organize,empty")
 	mode := fs.String("mode", "category", "整理方式：category|extension|namefeature|keyword|fixedfolder")
@@ -42,7 +42,7 @@ func runOrganize(args []string) int {
 	audioTolerance := fs.Int("audio-tolerance", 2, "音频时长容差（秒）")
 	strength := fs.Int("strength", 1, "垃圾识别强度：0 低 / 1 中 / 2 高")
 	minSize := fs.Int64("min-size", 0, "最小文件大小（字节），0=不限")
-	includeHidden := fs.Bool("include-hidden", false, "包含隐藏/系统文件")
+	includeHidden := fs.Bool("include-hidden", false, "包含隐藏/系统文件；默认跳过隐藏与系统文件")
 	exclude := fs.String("exclude", "", "排除目录（逗号/分号/空白分隔）")
 	autoConfirm := fs.Bool("auto-confirm", false, "与 --confirmed 配合：删除清单内的存疑项（缺任一项则存疑项一律保留）")
 	confirmedFile := fs.String("confirmed", "", "已确认删除清单（每行一个根内相对路径）")
@@ -85,7 +85,7 @@ func runOrganize(args []string) int {
 	}
 	absRoot = filepath.Clean(absRoot)
 
-	targetRel, err := organizeTarget(absRoot, *target)
+	targetSpec, err := organizeTarget(absRoot, *target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 2
@@ -129,7 +129,7 @@ func runOrganize(args []string) int {
 		return 3
 	}
 	providers := orgscan.PrepareProviders(tree.Entries, absRoot, cfg)
-	snap := organize.Snapshot{Root: absRoot, Target: targetRel, Files: tree.Entries, Dirs: tree.Dirs}
+	snap := organize.Snapshot{Root: absRoot, Target: targetSpec.Rel, Files: tree.Entries, Dirs: tree.Dirs}
 
 	// 预览计划：文件优先，其次现场生成；两者都要求“先去重后整理”的顺序。
 	var usedPlan *organize.PreviewPlan
@@ -165,6 +165,9 @@ func runOrganize(args []string) int {
 	}
 
 	res := organize.Plan(cfg, snap, providers)
+	if targetSpec.External {
+		organize.RewriteExternalTarget(&res, targetSpec.Abs)
+	}
 	report, err := organize.Apply(absRoot, res, organize.ExecOptions{
 		DryRun:          *dryRun,
 		ContinueOnError: *continueOnError,
@@ -176,7 +179,7 @@ func runOrganize(args []string) int {
 	}
 
 	payload := organizeOutput{
-		Root: absRoot, Target: targetRel, DryRun: *dryRun, Order: cfg.Order,
+		Root: absRoot, Target: targetDisplay(targetSpec), DryRun: *dryRun, Order: cfg.Order,
 		PreviewPlan: usedPlan, Result: res, Exec: report,
 	}
 	if *out != "" {
@@ -235,21 +238,17 @@ func printOrganizeSummary(o organizeOutput) {
 	}
 }
 
-// organizeTarget 把 --target 解析为根内相对路径；空值表示不指定整理目标。
-func organizeTarget(root, target string) (string, error) {
-	t := strings.TrimSpace(target)
-	if t == "" {
-		return "", nil
+// organizeTarget 解析 --target：根内相对路径，或根目录之外的绝对路径。
+func organizeTarget(root, target string) (organize.TargetSpec, error) {
+	return organize.ResolveTarget(root, target)
+}
+
+// targetDisplay 返回报告里的整理目标：根内相对路径或根外绝对路径。
+func targetDisplay(spec organize.TargetSpec) string {
+	if spec.External {
+		return spec.Abs
 	}
-	abs := t
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(root, filepath.FromSlash(t))
-	}
-	rel, err := filepath.Rel(root, abs)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("--target 必须是 root 的子目录：%s", target)
-	}
-	return filepath.ToSlash(rel), nil
+	return spec.Rel
 }
 
 func loadConfirmedKeys(path, root string) (map[string]bool, error) {
