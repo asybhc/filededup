@@ -3,6 +3,7 @@ import type {
   DeleteMode,
   ExecuteState,
   GroupsPage,
+  LicenseState,
   OrganizeMeta,
   OrganizeRequest,
   OrganizeState,
@@ -31,6 +32,10 @@ interface WailsApp {
   GetOrganizeMeta(): Promise<OrganizeMeta>;
   StartOrganize(req: OrganizeRequest): Promise<string>;
   GetOrganizeState(id: string): Promise<OrganizeState>;
+  GetLicenseState(): Promise<LicenseState>;
+  GetMachineCode(): Promise<string>;
+  ImportLicenseFile(): Promise<LicenseState>;
+  ImportLicenseText(text: string): Promise<LicenseState>;
 }
 
 declare global {
@@ -49,7 +54,7 @@ export const api = {
   async getAppInfo(): Promise<AppInfo> {
     const b = bridge();
     if (b) return b.GetAppInfo();
-    return { version: "0.6.0-ui (浏览器预览)", platform: "browser" };
+    return { version: "0.7.0 (浏览器预览)", platform: "browser" };
   },
   async pickDirectory(): Promise<string> {
     const b = bridge();
@@ -120,5 +125,25 @@ export const api = {
     const b = bridge();
     if (b) return b.GetOrganizeState(id);
     return mock.getOrganizeState(id);
+  },
+  async getLicenseState(): Promise<LicenseState> {
+    const b = bridge();
+    if (b) return b.GetLicenseState();
+    return mock.getLicenseState();
+  },
+  async getMachineCode(): Promise<string> {
+    const b = bridge();
+    if (b) return b.GetMachineCode();
+    return mock.getLicenseState().machineCode;
+  },
+  async importLicenseFile(): Promise<LicenseState> {
+    const b = bridge();
+    if (b) return b.ImportLicenseFile();
+    return mock.importLicenseFile();
+  },
+  async importLicenseText(text: string): Promise<LicenseState> {
+    const b = bridge();
+    if (b) return b.ImportLicenseText(text);
+    return mock.importLicenseText(text);
   },
 };

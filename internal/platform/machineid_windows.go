@@ -87,7 +87,12 @@ func systemVolumeSerial() (uint32, error) {
 	if root == "" {
 		root = "C:"
 	}
-	root += `\`
+	return VolumeSerial(root + `\`)
+}
+
+// VolumeSerial 返回指定盘符根目录（如 "C:\"）的卷序列号。
+// 授权模块需要按 Windows 目录所在卷计算旧版机器码，因此单独暴露。
+func VolumeSerial(root string) (uint32, error) {
 	p, err := syscall.UTF16PtrFromString(root)
 	if err != nil {
 		return 0, err

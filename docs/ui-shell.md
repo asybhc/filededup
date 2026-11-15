@@ -1,6 +1,6 @@
 # 桌面 UI 外壳（Wails v2 + React/TS）
 
-首版标记：`0.6.0-ui`。目标是先用一版能点的界面把现有引擎接起来，功能范围见“已接通 / 未实现”。
+当前版本：`0.7.0`（Go 版独立版本序列，从 `0.6.0-ui` 起算；见文末“版本号”）。功能范围见“已接通 / 未实现”。
 
 ## 构建与运行
 
@@ -30,7 +30,10 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/filededup/settings.go` | 设置持久化：读写用户配置目录、版本号与容错 |
 | `cmd/filededup/organize.go` | 整理器门面：两套顺序、九步规划、试运行/真实执行 |
 | `cmd/filededup/main_desktop.go` | Wails 入口（`//go:build desktop`） |
+| `cmd/filededup/license.go` | 授权门面：状态查询、机器码、导入许可证 |
 | `cmd/filededup/app_smoke_test.go` | 后端接线冒烟测试（`-tags desktop`） |
+| `internal/auth/` | 机器码、Ed25519/旧 ECDSA 验签、试用记录、授权状态 |
+| `cmd/fdedup-keygen/` | 离线签发工具（密钥与私钥操作只在仓库外进行） |
 | `web/src/App.tsx` | 模块切换与查重五步状态机 |
 | `web/src/Organizer.tsx` | 九步整理页 |
 | `web/src/api.ts` | Wails 桥 / 浏览器 mock 分派 |
@@ -83,6 +86,37 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
   - 真实执行完成后用红色横幅与“真实执行”标签区分，并提示删除项去了回收站还是已永久删除。
 - 轮询：`GetOrganizeState` 400ms 一次，返回阶段（枚举 / 规划 / 执行）、每步动作数与计数、前 200 条动作样例、执行统计与失败明细。
 
+## 授权与试用
+
+细节（许可证格式、签发流程、机器码算法、试用加固）见 [license-and-trial.md](license-and-trial.md)。界面侧约定：
+
+- 顶栏授权徽标始终可见（已授权 / 试用中 N 天 / 试用已到期 / 未授权），点击打开授权面板。
+- 授权面板显示：状态、许可证来源（Ed25519 / 旧 ECDSA 只读兼容）、版本（standard/pro）、到期日（或永久）、
+  本机机器码（可一键复制）、许可证文件路径、当前功能位、试用起止与剩余天数、以及未授权时的限制说明。
+- 导入方式两种：文件选择框（`*.lic;*.fdlic;*.txt`，上限 64 KB）与直接粘贴文本。导入前先验签，验签失败不会落盘。
+- **未授权不静默退化**：`apply`（执行删除）与 `organize`（整理真实执行）在后端被拒绝并返回中文原因（含机器码），
+  前端同时禁用按钮并显示红色横幅；扫描与试运行始终可用。
+- 启动时调用 `auth.TouchTrial()` 创建/刷新试用记录；记录与 C# 版共用存储，切换版本不会重置试用。
+
+## 打包与分发
+
+```powershell
+cd web && npm install && npm run build
+cd .. && powershell -File scripts/build-desktop.ps1     # 便携版 bin\fdedup-ui.exe
+powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedupGo-Setup-<版本>.exe
+```
+
+- `build-desktop.ps1` 是 exe 的唯一入口；`build-installer.ps1` 先调用它，并在打包前再校验一次产物不是 stub。
+- 版本号只在 `cmd/filededup/app.go` 的 `appVersion` 维护；打包脚本从中读取，前端版本见 `web/package.json`，两处需同步。
+- 安装包（[scripts/installer.nsi](../scripts/installer.nsi)）：
+  - NSIS 3.x，`RequestExecutionLevel user`，**只写 HKCU**，不需要管理员权限。
+  - 安装到 `%LOCALAPPDATA%\Programs\FileDedupGo`；快捷方式为开始菜单“文件去重 Go”文件夹 + 桌面。
+  - 与 C# 版 `FileDedupTool`（文件去重）共存：安装目录、`HKCU\Software\FileDedupGo`、
+    `...\Uninstall\FileDedupGo`、exe 名 `fdedup-ui.exe` 全部与之错开。
+  - 卸载删除安装目录、快捷方式与上述两个注册表项；**保留** `%AppData%\FileDedup`（设置、许可证）与
+    `%AppData%\FileDedupTool`（与 C# 版共用的试用记录），避免卸载后重装被当成新用户重置试用。
+- `makensis` 查找顺序：`-Makensis` 参数 > `C:\Users\chong.YUJIANG\.tools\nsis-3.13\makensis.exe` > PATH。
+
 ## 大目录性能
 
 虚拟滚动：固定行高 72px、绝对定位、只渲染可视窗口 + overscan，滚动用 rAF 节流；行组件 `memo`，行容器 `contain: layout paint`。
@@ -110,9 +144,9 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
 
 界面首屏底部与整理页底部固定展示这两行，改功能时同步改这里，不要留下“点了没反应”的入口。
 
-- 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细）。
+- 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细）、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控）。
 - 未实现：
-  - 全局：系统托盘、自动更新、授权与试用、蓝奏云上传、自定义保留项、执行撤销、撤销历史。
+  - 全局：系统托盘、自动更新、蓝奏云上传、自定义保留项、执行撤销、撤销历史。
   - 整理页：存疑项逐项人工确认（引擎只把 `suggest` 记为“存疑（仅报告）”，不落盘）、整理后撤销、规则导入导出。
 
 ## 已知限制
@@ -123,3 +157,14 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
 2. 结果列表一次性载入全部组（分页 500 逐步拉取），超大结果集的内存占用未单独测量。
 3. 预览只展示前 200 条动作样例，完整计划在执行时才交给执行器。
 4. 整理器动作样例同样只回传前 200 条；`suggest`（存疑项）只出现在样例里，不产生文件系统变化。
+5. 旧 ECDSA 许可证只做了算法与格式层面的单元测试（临时密钥 + 合成 payload/P1363 签名），**没有用真实签发的旧许可证样本验证**：
+   历史私钥不在手边，无法生成真样本。
+6. 便携版与安装包里的 exe 没有内嵌版本资源（右键属性看不到版本号），版本号在安装包资源与界面“关于”里显示。
+
+## 版本号
+
+Go 版走自己的序列，当前 `0.7.0`：
+
+- 上一版是 `0.6.0-ui`，本版新增授权与试用，按语义化版本升次版本号；
+- 仍是 `0.x`：整理器的存疑项确认、撤销等尚未实现，不足以标 1.0；
+- 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.7.0` 为准）。

@@ -174,6 +174,30 @@ export interface SettingsResult {
   warning?: string;
 }
 
+// ---------- 授权（对应 internal/auth） ----------
+
+export type LicenseStatus = "licensed" | "trial" | "trial-expired" | "unlicensed";
+
+export interface LicenseState {
+  status: LicenseStatus;
+  licensed: boolean;
+  source: string;
+  edition?: string;
+  expiry?: string;
+  forever: boolean;
+  machineCode: string;
+  features: string[];
+  canApply: boolean;
+  canOrganize: boolean;
+  trialActive: boolean;
+  trialStart?: string;
+  trialEnd?: string;
+  trialDaysLeft: number;
+  licensePath?: string;
+  limits: string;
+  warning?: string;
+}
+
 // ---------- 整理器（对应 cmd/filededup/organize.go） ----------
 
 export interface OrganizeRequest extends Omit<OrganizeSettings, "root"> {

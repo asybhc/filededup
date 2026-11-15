@@ -1008,3 +1008,65 @@ button.link {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- 授权 ---- */
+.license-badge {
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-family: inherit;
+}
+
+.license-badge.licensed {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.license-badge.trial {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.license-badge.trial-expired,
+.license-badge.unlicensed {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.license-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 20px 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-size: 13px;
+}
+
+.licenseinfo {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 12px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.licenseinfo dt {
+  color: var(--muted);
+}
+
+.licenseinfo dd {
+  margin: 0;
+}
+
+.licenseinfo dd.break {
+  word-break: break-all;
+}

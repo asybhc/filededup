@@ -7,6 +7,7 @@ import type {
   ExecuteState,
   GroupView,
   GroupsPage,
+  LicenseState,
   OrganizeRequest,
   OrganizeMeta,
   OrganizeState,
@@ -499,6 +500,32 @@ export const mock = {
       return { ...emptyOrgState(id), phase: "failed", error: "整理任务不存在" };
     }
     return buildOrgState(id, orgJob.req, Date.now() - orgJob.startedAt);
+  },
+  // ---- 授权：浏览器预览没有真实授权，按“试用中”展示，导入操作如实拒绝 ----
+  getLicenseState(): LicenseState {
+    return {
+      status: "trial",
+      licensed: false,
+      source: "trial",
+      forever: false,
+      machineCode: "DEMO-0000-0000-0000",
+      features: ["scan", "apply", "organize"],
+      canApply: true,
+      canOrganize: true,
+      trialActive: true,
+      trialStart: new Date().toISOString().slice(0, 10),
+      trialEnd: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+      trialDaysLeft: 3,
+      licensePath: "浏览器预览无许可证文件",
+      limits: "浏览器预览：按试用中展示，导入许可证需在桌面版操作。",
+      warning: "浏览器预览使用合成数据，授权状态不是真实结果。",
+    };
+  },
+  importLicenseFile(): LicenseState {
+    throw new Error("浏览器预览不支持导入许可证，请在桌面版操作");
+  },
+  importLicenseText(_text: string): LicenseState {
+    throw new Error("浏览器预览不支持导入许可证，请在桌面版操作");
   },
 };
 

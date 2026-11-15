@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"filededup/internal/auth"
 	"filededup/internal/engine/apply"
 	"filededup/internal/engine/model"
 	"filededup/internal/engine/plan"
@@ -23,7 +25,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.6.0-ui"
+const appVersion = "0.7.0"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -175,6 +177,10 @@ func currentPlatform() string {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// 首次启动创建试用记录；之后每次启动更新“最后见到”时间，用于检测回拨。
+	if err := auth.TouchTrial(); err != nil {
+		log.Printf("试用记录更新失败：%v", err)
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -463,6 +469,9 @@ func (a *App) PreviewPlan(id, deleteMode string) (PlanPreview, error) {
 func (a *App) StartExecute(id, deleteMode string, confirmed bool) error {
 	if !confirmed {
 		return errors.New("未确认，拒绝执行")
+	}
+	if err := requireLicense(auth.FeatureApply); err != nil {
+		return err
 	}
 	s, err := a.session(id)
 	if err != nil {

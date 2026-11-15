@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+// 冒烟测试要真删文件、真整理，关闭授权门控以保证测试可重复。
+func TestMain(m *testing.M) {
+	enforceLicense = false
+	os.Exit(m.Run())
+}
+
 // 临时冒烟测试：验证 UI 后端门面（App）与引擎的真实接线。
 func TestAppSmoke(t *testing.T) {
 	root := t.TempDir()

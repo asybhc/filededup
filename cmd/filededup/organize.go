@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"filededup/internal/auth"
 	"filededup/internal/engine/organize"
 	"filededup/internal/orgscan"
 	"filededup/internal/platform"
@@ -244,6 +245,11 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	targetRel, err := normalizeTarget(absRoot, req.Target)
 	if err != nil {
 		return "", err
+	}
+	if !req.DryRun {
+		if err := requireLicense(auth.FeatureOrganize); err != nil {
+			return "", err
+		}
 	}
 
 	cfg := organize.Config{

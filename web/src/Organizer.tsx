@@ -128,9 +128,13 @@ function orderLabel(order: string): string {
 export function Organizer({
   initial,
   onPersist,
+  canRun = true,
+  licenseHint,
 }: {
   initial?: OrganizeSettings;
   onPersist: (s: OrganizeSettings) => void;
+  canRun?: boolean;
+  licenseHint?: string;
 }) {
   const [cfg, setCfg] = useState<OrganizeSettings>(() => initial ?? defaultOrganizeSettings());
   const [excludesText, setExcludesText] = useState(() => (initial?.excludes ?? []).join(" "));
@@ -474,7 +478,8 @@ export function Organizer({
               </button>
               <button
                 className="danger"
-                disabled={!cfg.root || enabledCount === 0 || running}
+                disabled={!cfg.root || enabledCount === 0 || running || !canRun}
+                title={!canRun ? licenseHint : undefined}
                 onClick={() => {
                   setPermanentAck(false);
                   setConfirmOpen(true);
@@ -483,6 +488,9 @@ export function Organizer({
                 执行（会改文件）
               </button>
               {running && <span className="hint">正在执行，按钮暂时禁用。</span>}
+              {!running && !canRun && (
+                <span className="hint">{licenseHint || "未授权：整理执行已禁用。"}</span>
+              )}
             </div>
 
             <p className="hint">
@@ -638,13 +646,14 @@ export function Organizer({
                 <span>我明白永久删除不可恢复，并已备份重要数据</span>
               </label>
             )}
+            {!canRun && <p className="hint">{licenseHint || "未授权：整理执行已禁用。"}</p>}
             <div className="actions">
               <button className="secondary" onClick={() => setConfirmOpen(false)}>
                 取消
               </button>
               <button
                 className="danger"
-                disabled={cfg.deleteMode === "permanent" && !permanentAck}
+                disabled={(cfg.deleteMode === "permanent" && !permanentAck) || !canRun}
                 onClick={() => {
                   setConfirmOpen(false);
                   void start(false);
