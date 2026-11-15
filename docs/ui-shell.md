@@ -32,6 +32,8 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/filededup/organize_undo.go` | 最近一次整理的撤销记录落盘与回滚接口 |
 | `cmd/filededup/organize_rules.go` | 整理规则导入导出（版本化 JSON、未知键与非法值校验） |
 | `cmd/filededup/update.go` | 自动更新门面：检查、验签、下载、替换回滚、跳过版本 |
+| `cmd/filededup/lanzou.go` | 蓝奏云门面：登录态、目录浏览、上传预检、上传执行与报告 |
+| `internal/cloud/lanzou/` | 蓝奏云老版协议：挑战登录、列目录、上传、去重规则、DPAPI 凭据、上传缓存、报告 |
 | `internal/update/` | 清单解析与验签、下载校验、替换与清理 |
 | `cmd/fdedup-update-sign/` | 更新签名工具（私钥只在仓库外使用） |
 | `cmd/filededup/main_desktop.go` | Wails 入口（`//go:build desktop`） |
@@ -41,6 +43,7 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `cmd/fdedup-keygen/` | 离线签发工具（密钥与私钥操作只在仓库外进行） |
 | `web/src/App.tsx` | 模块切换与查重五步状态机 |
 | `web/src/Organizer.tsx` | 九步整理页 |
+| `web/src/Lanzou.tsx` | 蓝奏云上传页（登录、浏览、预检、上传进度、报告） |
 | `web/src/api.ts` | Wails 桥 / 浏览器 mock 分派 |
 | `web/src/components/VirtualList.tsx` | 固定行高虚拟滚动 |
 | `web/src/styles.css` | 中文排版与布局 |
@@ -63,7 +66,7 @@ scan.RunWithOptions → plan.FromScan → plan.Validate → apply.Executor{Trash
 ## 设置持久化
 
 - 位置：`os.UserConfigDir()/FileDedup/ui-settings.json`（Windows 即 `%AppData%\FileDedup\ui-settings.json`），界面会显示真实路径。
-- 内容：`{ schemaVersion, scan, organize }`，覆盖查重页与整理页的全部选项（阈值、删除方式、保留策略、排除目录、九步开关等）。
+- 内容：`{ schemaVersion, scan, organize, update, lanzou }`，覆盖查重页、整理页与蓝奏上传页的全部选项（阈值、删除方式、保留策略、排除目录、九步开关等）。
 - 容错约定：
   - 缺键按默认值补齐（先填默认值，再用文件里存在的键覆盖）；
   - **多出来的键不判损坏**：读取时忽略，保存时原样保留；
@@ -100,6 +103,32 @@ orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
   导入用 `DisallowUnknownFields` 拒绝未知键，并校验版本、枚举、阈值范围、正则与 target 相对路径；失败不落盘、不改当前设置，
   成功导入后仍沿用当前根目录。
 - 轮询：`GetOrganizeState` 400ms 一次，返回阶段（枚举 / 规划 / 执行）、每步动作数与计数、存疑项、前 200 条动作样例、执行统计与失败明细。
+
+## 蓝奏云上传（一期）
+
+一期范围与 C# 版对等：老版蓝奏云（`pc.woozooo.com` / `accounts.woozooo.com`）。优享版、网盘查重、分享创建都不在本期。
+
+**未联调声明**：仓库内没有蓝奏账号。协议按 C# 版与实测响应实现，并用 `httptest` 覆盖；**真实登录成功后的列表、上传、云端去重命中都没有用真实账号跑过**，
+界面与报告里都如实标注「未联调，需账号」。只读探测确认过的只有：登录页可达、`acw_sc__v2` 挑战算法、错误凭据返回 `{"zt":0,"msgs":"用户名不正确"}`、
+未登录上传返回 `{"zt":9,"info":"login not"}`。
+
+- **登录态**：账号密码为主，粘贴 Cookie 为降级。
+  - 登录：GET 登录页，命中阿里云 WAF 的 `acw_sc__v2` 挑战时本地算 Cookie 后重试；再 POST `task=uselogin`；成功时跟随 `msgs` 中转页收集 `ylogin` / `phpdisk_info`。
+  - Cookie：接受整段 `a=1; b=2`、带换行或 `Cookie:` 前缀，至少要有 `ylogin` 与 `phpdisk_info`，否则原文报错。
+  - 兼容导入：扫描 `%AppData%\FileDedupTool`，逐个 DPAPI 解密，取 `ylogin + phpdisk_info` 且 `platform` 为空或含 `lanzou` 的记录。
+- **持久化**：DPAPI（CurrentUser）加密，落 `%AppData%\FileDedup\lanzou\lanzou.bin`；只存 Cookie，不存密码。
+  目录 0700、临时文件 0600 + `Rename` 原子替换。界面只显示 `ylogin` 后四位，日志与报告不落明文。
+  非 Windows 平台没有 DPAPI，`SupportsProtection=false`，保存会失败并在界面原文提示。
+- **上传**：并发默认 3（1–5）、请求间隔默认 1500ms（1000–2000）、单文件 >100 MiB 直接跳过不发请求、失败重试 ≤3（429 与 4xx 不重试）、可取消。
+  本机上传缓存 `%AppData%\FileDedup\lanzou\upload-cache.json`，键为「目录 + 路径 + 大小 + 修改时间」；
+  **与 C# 版差异**：C# 键含 MD5，这里不额外整文件读取，内容变了但大小与修改时间没变会误判，可用「强制重传」绕过。
+- **去重规则**：名字 `Trim` 后 `OrdinalIgnoreCase` 相等，且 `|本地 - 云端| <= max(2048, 本地/100)`；云端大小解析失败（`-1`）一律不匹配。
+  缓存优先于云端判重：已经传过的文件不会被移动。重复项不上传，本地文件移动到上传目录**旁边**的「网盘重复文件」，重名追加序号不覆盖。
+- **两道闸**：预检只读（不动本地文件）；开始上传要求后端 `confirmed=true`、设置里 `disclaimerAccepted=true`，并通过 `FeatureApply` 授权门控。
+- **错误透传**：`APIError` 原样带出操作名、HTTP 状态码、服务端 `zt/info` 或 `code/msg` 与响应片段，不包装成「网络错误」，不假装成功。
+- **结果分类**（沿用 C# 七种 + 汇总行）：上传成功、秒传、缓存跳过、超过 100 MiB 跳过、云端重复（本地已移动）、已取消、失败。
+- **报告**：结束后在上传目录写 `upload-report-<yyyyMMdd-HHmmss>.json` 与同名 `.csv`（UTF-8 BOM，带引号转义），
+  界面提供「打开报告」与「打开网页端」。分享创建不在本功能内，需要分享请到网页端手动操作。
 
 ## 授权与试用
 
@@ -258,11 +287,13 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
 
 - 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
   九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细 / 仅规划 / 存疑项逐条确认或驳回 /
-  最近一次整理撤销 / 规则导入导出）、自动更新（ed25519 清单与安装包验签、长度与 SHA-256 校验、备份与回滚、跳过版本、
-  安装包缓存清理）、
+  最近一次整理撤销 / 规则导入导出）、蓝奏云上传一期（老版登录 / Cookie 降级 / C# 凭据导入 / 目录浏览 / 只读预检 /
+  并发上传与取消 / 云端同名同大小去重 / 七类结果与汇总 / 报告导出，**真实链路未联调，需账号**）、
+  自动更新（ed25519 清单与安装包验签、长度与 SHA-256 校验、备份与回滚、跳过版本、安装包缓存清理）、
   exe 与安装包版本资源、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控）。
 - 未实现：
-  - 全局：系统托盘、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史。
+  - 全局：系统托盘、自定义保留项、查重侧执行撤销、撤销历史。
+  - 蓝奏云：优享版（二期）、网盘查重（三期，原版默认只列不删、删除需二次确认）、分享创建（C# 版没有、服务端接口不可用）。
 
 ## 已知限制
 
@@ -285,6 +316,10 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
 10. 自动更新的“下载→验签→替换运行中的 exe→重启”已在真实安装目录（`%LOCALAPPDATA%\Programs\FileDedupGo`）实测通过，
     含启动失败回滚；**界面“下载并安装”按钮本身未人工点击**，闭环用命令行驱动同一套 `internal/update` 代码。
 11. macOS / Linux 的自更新按单文件可执行程序替换实现，未处理 `.app` 包、代码签名与权限提升，**未真机验证**。
+12. 蓝奏云上传一期**没有真实账号联调**：登录成功后的目录列表、上传、秒传、云端去重命中、并发与限流表现都只由 `httptest` 覆盖；
+    实测仅确认了挑战算法、错误凭据与未登录上传的响应原文。粘贴 Cookie 路径同样未经真实 Cookie 验证。
+    本机缓存键不含 MD5（与 C# 版不同），内容变但大小/修改时间不变会误判为已传，可用「强制重传」绕过。
+    生成的报告与 CSV 只由单测校验格式，未在真实上传批次上产出过。
 
 ## 版本号
 

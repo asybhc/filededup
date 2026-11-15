@@ -169,11 +169,23 @@ export interface UpdateSettings {
   skippedVersion: string;
 }
 
+// 蓝奏云上传页的持久化选项。凭据不在这里：后端单独用 DPAPI 加密存 lanzou.bin。
+export interface LanzouSettings {
+  workers: number;
+  intervalMs: number;
+  forceReupload: boolean;
+  disclaimerAccepted: boolean;
+  lastLocalDir: string;
+  lastFolderId: string;
+  lastFolderName: string;
+}
+
 export interface UISettings {
   schemaVersion: number;
   scan: ScanSettings;
   organize: OrganizeSettings;
   update: UpdateSettings;
+  lanzou: LanzouSettings;
 }
 
 export interface SettingsResult {
@@ -362,4 +374,119 @@ export interface UpdateInstallView {
   size: number;
   sha256: string;
   restarting: boolean;
+}
+
+// ---------- 蓝奏云上传（对应 cmd/filededup/lanzou.go、internal/cloud/lanzou） ----------
+// 注意：登录成功后的真实列表、上传与去重命中都需要真实账号联调，界面必须如实标注。
+
+export type LanzouSource = "login" | "cookie" | "import" | "local" | "none";
+
+export interface LanzouStatus {
+  loggedIn: boolean;
+  account: string;
+  platform: string;
+  source: LanzouSource;
+  credentialPath: string;
+  supportsDpapi: boolean;
+  message?: string;
+  savedAt?: string;
+}
+
+export interface LanzouFolder {
+  id: string;
+  name: string;
+}
+
+// size = -1 表示服务端给的大小无法解析。
+export interface LanzouRemoteFile {
+  id: string;
+  name: string;
+  size: number;
+  sizeText?: string;
+  time?: string;
+}
+
+export interface LanzouListing {
+  folderId: string;
+  folders: LanzouFolder[];
+  files: LanzouRemoteFile[];
+}
+
+export interface LanzouOptions {
+  localDir: string;
+  folderId: string;
+  folderName: string;
+  workers: number;
+  intervalMs: number;
+  forceReupload: boolean;
+}
+
+export type LanzouItemKind =
+  | "pending"
+  | "success"
+  | "instant"
+  | "cached"
+  | "skipped-large"
+  | "duplicate"
+  | "canceled"
+  | "failed";
+
+export interface LanzouItem {
+  localPath: string;
+  name: string;
+  size: number;
+  kind: LanzouItemKind;
+  remoteId?: string;
+  duplicateOf?: string;
+  movedTo?: string;
+  error?: string;
+}
+
+export interface LanzouSummary {
+  total: number;
+  success: number;
+  instant: number;
+  cached: number;
+  skippedLarge: number;
+  duplicate: number;
+  canceled: number;
+  failed: number;
+}
+
+export interface LanzouPrepareResult {
+  batchId: string;
+  folderId: string;
+  folderName: string;
+  localDir: string;
+  total: number;
+  uploadable: number;
+  duplicates: number;
+  skippedLarge: number;
+  cached: number;
+  items: LanzouItem[];
+  message?: string;
+}
+
+export type LanzouPhase = "prepared" | "running" | "cancelling" | "done" | "failed";
+
+export interface LanzouUploadState {
+  batchId: string;
+  phase: LanzouPhase;
+  folderId: string;
+  folderName: string;
+  localDir: string;
+  workers: number;
+  intervalMs: number;
+  total: number;
+  done: number;
+  bytesSent: number;
+  bytesTotal: number;
+  active: string[];
+  summary: LanzouSummary;
+  items: LanzouItem[];
+  reportJson?: string;
+  reportCsv?: string;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
 }

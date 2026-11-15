@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"filededup/internal/auth"
+	"filededup/internal/cloud/lanzou"
 	"filededup/internal/engine/apply"
 	"filededup/internal/engine/model"
 	"filededup/internal/engine/plan"
@@ -170,10 +171,20 @@ type App struct {
 	undoMu sync.Mutex
 	// updateMu 串行化安装更新，避免并发下载/替换。
 	updateMu sync.Mutex
+
+	// lanzouMu 保护蓝奏云客户端与预检结果；lanzouPreps 里是尚未上传完的批次。
+	lanzouMu     sync.Mutex
+	lanzouClient *lanzou.Client
+	lanzouSource string
+	lanzouPreps  map[string]*lanzouPrepare
 }
 
 func NewApp() *App {
-	return &App{sessions: make(map[string]*scanSession), orgJobs: make(map[string]*organizeJob)}
+	return &App{
+		sessions:    make(map[string]*scanSession),
+		orgJobs:     make(map[string]*organizeJob),
+		lanzouPreps: make(map[string]*lanzouPrepare),
+	}
 }
 
 func currentPlatform() string {
@@ -210,6 +221,20 @@ func (a *App) shutdown(ctx context.Context) {
 			s.execCancelling()
 		}
 		s.mu.Unlock()
+	}
+
+	a.lanzouMu.Lock()
+	preps := make([]*lanzouPrepare, 0, len(a.lanzouPreps))
+	for _, p := range a.lanzouPreps {
+		preps = append(preps, p)
+	}
+	a.lanzouMu.Unlock()
+	for _, p := range preps {
+		p.mu.Lock()
+		if p.cancel != nil {
+			p.cancel()
+		}
+		p.mu.Unlock()
 	}
 }
 

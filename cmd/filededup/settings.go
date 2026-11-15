@@ -68,12 +68,25 @@ type UpdateSettings struct {
 	SkippedVersion string `json:"skippedVersion"`
 }
 
+// LanzouSettings 是蓝奏云上传页的持久化选项。
+// 凭据不在这里：它单独用 DPAPI 加密存到 FileDedup/lanzou/lanzou.bin。
+type LanzouSettings struct {
+	Workers        int    `json:"workers"`            // 并发 1–5，默认 3
+	IntervalMS     int    `json:"intervalMs"`         // 请求间隔 1000–2000ms，默认 1500
+	ForceReupload  bool   `json:"forceReupload"`      // 忽略云端去重与本机缓存
+	DisclaimerOK   bool   `json:"disclaimerAccepted"` // 免责声明确认
+	LastLocalDir   string `json:"lastLocalDir"`
+	LastFolderID   string `json:"lastFolderId"`
+	LastFolderName string `json:"lastFolderName"`
+}
+
 // UISettings 是整份配置。
 type UISettings struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	Scan          ScanSettings     `json:"scan"`
 	Organize      OrganizeSettings `json:"organize"`
 	Update        UpdateSettings   `json:"update"`
+	Lanzou        LanzouSettings   `json:"lanzou"`
 }
 
 // SettingsResult 把“加载结果 + 提示”一起返回，界面可如实展示警告。
@@ -111,6 +124,10 @@ func DefaultSettings() UISettings {
 		Update: UpdateSettings{
 			CheckMode:     "auto",
 			IntervalHours: 18,
+		},
+		Lanzou: LanzouSettings{
+			Workers:    3,
+			IntervalMS: 1500,
 		},
 	}
 }
@@ -170,6 +187,12 @@ func LoadSettings() (UISettings, string) {
 		if err := json.Unmarshal(v, &out.Update); err != nil {
 			out.Update = def.Update
 			warns = append(warns, "update 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["lanzou"]; ok {
+		if err := json.Unmarshal(v, &out.Lanzou); err != nil {
+			out.Lanzou = def.Lanzou
+			warns = append(warns, "lanzou 段无法解析，已整体使用默认值")
 		}
 	}
 
@@ -237,6 +260,25 @@ func normalizeSettings(s *UISettings, def UISettings) {
 		s.Update.IntervalHours = def.Update.IntervalHours
 	}
 	s.Update.SkippedVersion = strings.TrimSpace(s.Update.SkippedVersion)
+
+	if s.Lanzou.Workers <= 0 {
+		s.Lanzou.Workers = def.Lanzou.Workers
+	}
+	if s.Lanzou.Workers > 5 {
+		s.Lanzou.Workers = 5
+	}
+	if s.Lanzou.IntervalMS <= 0 {
+		s.Lanzou.IntervalMS = def.Lanzou.IntervalMS
+	}
+	if s.Lanzou.IntervalMS < 1000 {
+		s.Lanzou.IntervalMS = 1000
+	}
+	if s.Lanzou.IntervalMS > 2000 {
+		s.Lanzou.IntervalMS = 2000
+	}
+	s.Lanzou.LastLocalDir = strings.TrimSpace(s.Lanzou.LastLocalDir)
+	s.Lanzou.LastFolderID = strings.TrimSpace(s.Lanzou.LastFolderID)
+	s.Lanzou.LastFolderName = strings.TrimSpace(s.Lanzou.LastFolderName)
 }
 
 func validKeepPolicy(s string) bool {
@@ -276,6 +318,7 @@ func SaveSettings(s UISettings) error {
 		put("scan", s.Scan),
 		put("organize", s.Organize),
 		put("update", s.Update),
+		put("lanzou", s.Lanzou),
 	} {
 		if err != nil {
 			return err

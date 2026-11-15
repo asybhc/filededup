@@ -3,12 +3,14 @@ import { api, isDesktop } from "./api";
 import { mock } from "./mock";
 import { VirtualList } from "./components/VirtualList";
 import { Organizer } from "./Organizer";
+import { Lanzou } from "./Lanzou";
 import type {
   AppInfo,
   DeleteMode,
   ExecuteState,
   GroupView,
   KeepPolicy,
+  LanzouSettings,
   LicenseState,
   OrganizeSettings,
   PlanPreview,
@@ -153,7 +155,7 @@ export default function App() {
   const [perfRows, setPerfRows] = useState<Row[]>([]);
   const [perfActive, setPerfActive] = useState(false);
   const [fps, setFps] = useState(0);
-  const [view, setView] = useState<"dedup" | "organize">("dedup");
+  const [view, setView] = useState<"dedup" | "organize" | "lanzou">("dedup");
   const [settings, setSettings] = useState<UISettings>();
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsPath, setSettingsPath] = useState("");
@@ -249,6 +251,15 @@ export default function App() {
     const base = settingsRef.current;
     if (!base) return;
     const merged: UISettings = { ...base, organize: next };
+    settingsRef.current = merged;
+    setSettings(merged);
+    api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+  };
+
+  const persistLanzou = (partial: Partial<LanzouSettings>) => {
+    const base = settingsRef.current;
+    if (!base) return;
+    const merged: UISettings = { ...base, lanzou: { ...base.lanzou, ...partial } };
     settingsRef.current = merged;
     setSettings(merged);
     api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
@@ -695,7 +706,7 @@ export default function App() {
           <div className="logo">FD</div>
           <div>
             <h1>文件去重</h1>
-            <p>本地扫描 · 回收站可恢复 · 不做云端上传</p>
+            <p>本地扫描 · 回收站可恢复 · 云端上传为可选</p>
           </div>
         </div>
         <div className="topmeta">
@@ -741,6 +752,9 @@ export default function App() {
         <button className={view === "organize" ? "active" : ""} onClick={() => setView("organize")}>
           九步整理
         </button>
+        <button className={view === "lanzou" ? "active" : ""} onClick={() => setView("lanzou")}>
+          蓝奏云上传
+        </button>
         {view === "dedup" && (
           <span className="tabs-hint">
             当前流程：{STEPS.map((s) => s.label).join(" → ")}
@@ -780,6 +794,20 @@ export default function App() {
           ) : (
             <section className="card">
               <h2>九步整理</h2>
+              <p className="hint">正在读取设置…</p>
+            </section>
+          )
+        ) : view === "lanzou" ? (
+          settingsReady ? (
+            <Lanzou
+              initial={settings?.lanzou}
+              onPersist={persistLanzou}
+              canRun={!licenseStop}
+              licenseHint="未授权：开始上传会被拒绝，登录与预检仍可用。"
+            />
+          ) : (
+            <section className="card">
+              <h2>蓝奏云上传</h2>
               <p className="hint">正在读取设置…</p>
             </section>
           )
@@ -1449,8 +1477,12 @@ function FeatureStatus() {
         Ed25519 许可证导入与状态显示、旧版 ECDSA 许可证只读兼容、试用期（PBKDF2 + 双存储 + 回拨检测）
       </p>
       <p>
+        <span className="kind kind-warn">未联调</span>{" "}
+        蓝奏云上传页（登录/目录浏览/预检/上传门面已接通，真实列表与上传需要蓝奏账号验证）
+      </p>
+      <p>
         <span className="kind kind-warn">未实现</span>{" "}
-        系统托盘、蓝奏云上传、自定义保留项、查重侧执行撤销、撤销历史
+        系统托盘、自定义保留项、查重侧执行撤销、撤销历史
       </p>
     </div>
   );

@@ -3,6 +3,11 @@ import type {
   DeleteMode,
   ExecuteState,
   GroupsPage,
+  LanzouListing,
+  LanzouOptions,
+  LanzouPrepareResult,
+  LanzouStatus,
+  LanzouUploadState,
   LicenseState,
   OrganizeMeta,
   OrganizeRequest,
@@ -51,6 +56,20 @@ interface WailsApp {
   GetMachineCode(): Promise<string>;
   ImportLicenseFile(): Promise<LicenseState>;
   ImportLicenseText(text: string): Promise<LicenseState>;
+  LanzouStatus(): Promise<LanzouStatus>;
+  LanzouLogin(username: string, password: string): Promise<LanzouStatus>;
+  LanzouUseCookie(raw: string): Promise<LanzouStatus>;
+  LanzouImportCSharp(): Promise<LanzouStatus>;
+  LanzouLogout(): Promise<LanzouStatus>;
+  LanzouBrowse(folderID: string): Promise<LanzouListing>;
+  LanzouPrepare(opts: LanzouOptions): Promise<LanzouPrepareResult>;
+  LanzouStartUpload(batchId: string, confirmed: boolean): Promise<void>;
+  LanzouUploadState(batchId: string): Promise<LanzouUploadState>;
+  LanzouCancelUpload(batchId: string): Promise<void>;
+  LanzouOpenWeb(): Promise<void>;
+  LanzouOpenReport(batchId: string): Promise<void>;
+  LanzouPickDirectory(): Promise<string>;
+  LanzouAcceptDisclaimer(): Promise<void>;
 }
 
 declare global {
@@ -200,5 +219,77 @@ export const api = {
     const b = bridge();
     if (b) return b.ImportLicenseText(text);
     return mock.importLicenseText(text);
+  },
+
+  // ---- 蓝奏云上传：编译可用的门面，真实列表/上传需账号联调 ----
+  async lanzouStatus(): Promise<LanzouStatus> {
+    const b = bridge();
+    if (b) return b.LanzouStatus();
+    return mock.lanzouStatus();
+  },
+  async lanzouLogin(username: string, password: string): Promise<LanzouStatus> {
+    const b = bridge();
+    if (b) return b.LanzouLogin(username, password);
+    return mock.lanzouLogin(username, password);
+  },
+  async lanzouUseCookie(raw: string): Promise<LanzouStatus> {
+    const b = bridge();
+    if (b) return b.LanzouUseCookie(raw);
+    return mock.lanzouUseCookie(raw);
+  },
+  async lanzouImportCSharp(): Promise<LanzouStatus> {
+    const b = bridge();
+    if (b) return b.LanzouImportCSharp();
+    return mock.lanzouImportCSharp();
+  },
+  async lanzouLogout(): Promise<LanzouStatus> {
+    const b = bridge();
+    if (b) return b.LanzouLogout();
+    return mock.lanzouLogout();
+  },
+  async lanzouBrowse(folderID: string): Promise<LanzouListing> {
+    const b = bridge();
+    if (b) return b.LanzouBrowse(folderID);
+    return mock.lanzouBrowse(folderID);
+  },
+  async lanzouPrepare(opts: LanzouOptions): Promise<LanzouPrepareResult> {
+    const b = bridge();
+    if (b) return b.LanzouPrepare(opts);
+    return mock.lanzouPrepare(opts);
+  },
+  async lanzouStartUpload(batchId: string, confirmed: boolean): Promise<void> {
+    const b = bridge();
+    if (b) return b.LanzouStartUpload(batchId, confirmed);
+    mock.lanzouStartUpload(batchId, confirmed);
+  },
+  async lanzouUploadState(batchId: string): Promise<LanzouUploadState> {
+    const b = bridge();
+    if (b) return b.LanzouUploadState(batchId);
+    return mock.lanzouUploadState(batchId);
+  },
+  async lanzouCancelUpload(batchId: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.LanzouCancelUpload(batchId);
+    mock.lanzouCancelUpload(batchId);
+  },
+  async lanzouOpenWeb(): Promise<void> {
+    const b = bridge();
+    if (b) return b.LanzouOpenWeb();
+    mock.lanzouOpenWeb();
+  },
+  async lanzouOpenReport(batchId: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.LanzouOpenReport(batchId);
+    mock.lanzouOpenReport(batchId);
+  },
+  async lanzouPickDirectory(): Promise<string> {
+    const b = bridge();
+    if (b) return b.LanzouPickDirectory();
+    return mock.lanzouPickDirectory();
+  },
+  async lanzouAcceptDisclaimer(): Promise<void> {
+    const b = bridge();
+    if (b) return b.LanzouAcceptDisclaimer();
+    mock.lanzouAcceptDisclaimer();
   },
 };

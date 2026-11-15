@@ -7,6 +7,13 @@ import type {
   ExecuteState,
   GroupView,
   GroupsPage,
+  LanzouItem,
+  LanzouListing,
+  LanzouOptions,
+  LanzouPrepareResult,
+  LanzouStatus,
+  LanzouSummary,
+  LanzouUploadState,
   LicenseState,
   OrganizeRequest,
   OrganizeMeta,
@@ -202,6 +209,15 @@ function mockDefaultSettings(): UISettings {
       intervalHours: 18,
       skippedVersion: "",
     },
+    lanzou: {
+      workers: 3,
+      intervalMs: 1500,
+      forceReupload: false,
+      disclaimerAccepted: false,
+      lastLocalDir: "",
+      lastFolderId: "0",
+      lastFolderName: "",
+    },
   };
 }
 
@@ -220,6 +236,7 @@ function readSettings(): UISettings {
         steps: { ...def.organize.steps, ...(parsed.organize?.steps ?? {}) },
       },
       update: { ...def.update, ...(parsed.update ?? {}) },
+      lanzou: { ...def.lanzou, ...(parsed.lanzou ?? {}) },
     };
   } catch {
     return def;
@@ -406,6 +423,206 @@ function buildOrgState(id: string, req: OrganizeRequest, elapsed: number): Organ
     actionTotal: total,
     actions,
     suspects,
+  };
+}
+
+// ---------- 蓝奏云：浏览器预览用合成登录态、目录与上传进度 ----------
+// 这里不联网、不写本机凭据；登录成功后的真实列表与上传仍需在桌面版用账号联调。
+
+const LANZOU_ROOT_ID = "0";
+const LANZOU_CREDENTIAL_PATH = "浏览器预览：不写本机凭据（合成数据）";
+
+let lanzouSeq = 0;
+
+let lanzouStatus: LanzouStatus = {
+  loggedIn: false,
+  account: "",
+  platform: "lanzou",
+  source: "none",
+  credentialPath: LANZOU_CREDENTIAL_PATH,
+  supportsDpapi: false,
+};
+
+function lanzouLoggedStatus(source: LanzouStatus["source"], message: string): LanzouStatus {
+  return {
+    loggedIn: true,
+    account: "****1234",
+    platform: "lanzou",
+    source,
+    credentialPath: LANZOU_CREDENTIAL_PATH,
+    supportsDpapi: false,
+    message,
+    savedAt: new Date().toISOString(),
+  };
+}
+
+// 固定的假目录树：id 与名称都稳定，便于演示下钻与面包屑。
+const LANZOU_LISTINGS: Record<string, LanzouListing> = {
+  "0": {
+    folderId: "0",
+    folders: [
+      { id: "f-1001", name: "照片备份" },
+      { id: "f-1002", name: "工作文档" },
+    ],
+    files: [
+      { id: "mock-file-101", name: "说明.txt", size: 1229, sizeText: "1.2 KB", time: "2026-10-02 09:12" },
+      { id: "mock-file-102", name: "旧版备份.zip", size: 8 * MB, sizeText: "8.0 MB", time: "2026-08-18 21:40" },
+    ],
+  },
+  "f-1001": {
+    folderId: "f-1001",
+    folders: [{ id: "f-2001", name: "2024 旅行" }],
+    files: [
+      { id: "mock-file-201", name: "海边日落.jpg", size: Math.round(2.4 * MB), sizeText: "2.4 MB", time: "2026-05-01 18:02" },
+      { id: "mock-file-202", name: "山顶合影.png", size: Math.round(1.8 * MB), sizeText: "1.8 MB", time: "2026-05-02 10:31" },
+      { id: "mock-file-203", name: "现场录音.mp3", size: Math.round(5.2 * MB), sizeText: "5.2 MB", time: "2026-06-11 20:15" },
+    ],
+  },
+  "f-1002": {
+    folderId: "f-1002",
+    folders: [],
+    files: [
+      { id: "mock-file-301", name: "产品报价单.pdf", size: Math.round(480 * 1024), sizeText: "480 KB", time: "2026-09-09 14:25" },
+      { id: "mock-file-302", name: "会议纪要.txt", size: 3174, sizeText: "3.1 KB", time: "2026-09-10 09:05" },
+    ],
+  },
+  "f-2001": {
+    folderId: "f-2001",
+    folders: [],
+    files: [{ id: "mock-file-401", name: "城市夜景.jpg", size: Math.round(3.6 * MB), sizeText: "3.6 MB", time: "2026-04-20 22:18" }],
+  },
+};
+
+interface MockLanzouBatch {
+  id: string;
+  localDir: string;
+  folderId: string;
+  folderName: string;
+  workers: number;
+  intervalMs: number;
+  baseItems: LanzouItem[];
+  startedAt: number;
+  canceled: boolean;
+  cancelAt: number;
+}
+
+let lanzouBatch: MockLanzouBatch | null = null;
+
+function lanzouSummaryOf(items: LanzouItem[]): LanzouSummary {
+  const s: LanzouSummary = {
+    total: items.length, success: 0, instant: 0, cached: 0,
+    skippedLarge: 0, duplicate: 0, canceled: 0, failed: 0,
+  };
+  for (const it of items) {
+    switch (it.kind) {
+      case "success": s.success++; break;
+      case "instant": s.instant++; break;
+      case "cached": s.cached++; break;
+      case "skipped-large": s.skippedLarge++; break;
+      case "duplicate": s.duplicate++; break;
+      case "canceled": s.canceled++; break;
+      case "failed": s.failed++; break;
+      default: break;
+    }
+  }
+  return s;
+}
+
+// 与后端一致：云端重复的本地文件移动到上传目录旁边的「网盘重复文件」。
+function lanzouDuplicateTarget(localDir: string, name: string): string {
+  const idx = Math.max(localDir.lastIndexOf("\\"), localDir.lastIndexOf("/"));
+  const parent = idx > 0 ? localDir.slice(0, idx) : localDir;
+  return `${parent}\\网盘重复文件\\${name}`;
+}
+
+function lanzouStamp(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function lanzouStateOf(b: MockLanzouBatch): LanzouUploadState {
+  const items = b.baseItems.map((it) => ({ ...it }));
+  const pending: { item: LanzouItem; index: number }[] = [];
+  items.forEach((it, index) => {
+    if (it.kind === "pending") pending.push({ item: it, index });
+  });
+
+  const started = b.startedAt > 0;
+  const now = Date.now();
+  const elapsed = started ? (b.canceled ? b.cancelAt : now) - b.startedAt : 0;
+  const slot = pending.length > 0 ? Math.max(700, Math.round(5200 / pending.length)) : 0;
+  let bytesTotal = 0;
+  let bytesSent = 0;
+  const active: string[] = [];
+
+  if (started) {
+    pending.forEach(({ item, index }, order) => {
+      const size = Math.max(0, item.size);
+      bytesTotal += size;
+      const from = order * slot;
+      const to = from + slot;
+      if (elapsed >= to) {
+        items[index] = {
+          ...item,
+          kind: order === 0 ? "instant" : "success",
+          remoteId: `mock-remote-${index + 1}`,
+        };
+        bytesSent += size;
+      } else if (elapsed > from) {
+        bytesSent += Math.round((size * (elapsed - from)) / slot);
+        active.push(item.name);
+      } else if (b.canceled) {
+        items[index] = { ...item, kind: "canceled" };
+      }
+    });
+    if (b.canceled) {
+      items.forEach((it, i) => {
+        if (it.kind === "pending") items[i] = { ...it, kind: "canceled" };
+      });
+      active.length = 0;
+    }
+    items.forEach((it, i) => {
+      if (it.kind === "duplicate") {
+        items[i] = { ...it, movedTo: lanzouDuplicateTarget(b.localDir, it.name) };
+      }
+    });
+  }
+
+  const cancelling = b.canceled && now - b.cancelAt < 700;
+  const allReached = pending.every((_, order) => elapsed >= (order + 1) * slot);
+  const ended = started && !cancelling && (b.canceled || allReached);
+  const phase: LanzouUploadState["phase"] = !started
+    ? "prepared"
+    : cancelling
+      ? "cancelling"
+      : ended
+        ? "done"
+        : "running";
+
+  const stamp = started ? lanzouStamp(b.startedAt) : "";
+  const reportJson = ended ? `${b.localDir}\\upload-report-${stamp}.json` : undefined;
+  const reportCsv = ended ? `${b.localDir}\\upload-report-${stamp}.csv` : undefined;
+
+  return {
+    batchId: b.id,
+    phase,
+    folderId: b.folderId,
+    folderName: b.folderName,
+    localDir: b.localDir,
+    workers: b.workers,
+    intervalMs: b.intervalMs,
+    total: items.length,
+    done: items.filter((it) => it.kind !== "pending").length,
+    bytesSent,
+    bytesTotal,
+    active,
+    summary: lanzouSummaryOf(items),
+    items,
+    reportJson,
+    reportCsv,
+    startedAt: started ? new Date(b.startedAt).toISOString() : undefined,
+    finishedAt: ended ? new Date(now).toISOString() : undefined,
   };
 }
 
@@ -689,6 +906,147 @@ export const mock = {
   },
   importLicenseText(_text: string): LicenseState {
     throw new Error("浏览器预览不支持导入许可证，请在桌面版操作");
+  },
+
+  // ---- 蓝奏云（合成数据）：登录态只存在内存里，不写本机凭据 ----
+  lanzouStatus(): LanzouStatus {
+    return { ...lanzouStatus };
+  },
+  lanzouLogin(username: string, password: string): LanzouStatus {
+    if (!username.trim() || !password) throw new Error("请输入蓝奏云账号和密码");
+    lanzouStatus = lanzouLoggedStatus("login", "浏览器预览为合成数据，未连接蓝奏云。");
+    return { ...lanzouStatus };
+  },
+  lanzouUseCookie(raw: string): LanzouStatus {
+    if (!raw.trim()) throw new Error("粘贴的 Cookie 为空");
+    lanzouStatus = lanzouLoggedStatus("cookie", "浏览器预览为合成数据：Cookie 未校验、未保存。");
+    return { ...lanzouStatus };
+  },
+  lanzouImportCSharp(): LanzouStatus {
+    lanzouStatus = lanzouLoggedStatus("import", "浏览器预览为合成数据：C# 版登录态未真正读取。");
+    return { ...lanzouStatus };
+  },
+  lanzouLogout(): LanzouStatus {
+    lanzouStatus = {
+      loggedIn: false,
+      account: "",
+      platform: "lanzou",
+      source: "none",
+      credentialPath: LANZOU_CREDENTIAL_PATH,
+      supportsDpapi: false,
+    };
+    lanzouBatch = null;
+    return { ...lanzouStatus };
+  },
+  lanzouBrowse(folderID: string): LanzouListing {
+    if (!lanzouStatus.loggedIn) throw new Error("尚未登录蓝奏云，请先登录或粘贴 Cookie");
+    const id = folderID.trim() || LANZOU_ROOT_ID;
+    const listing = LANZOU_LISTINGS[id];
+    if (!listing) return { folderId: id, folders: [], files: [] };
+    return {
+      folderId: id,
+      folders: listing.folders.map((f) => ({ ...f })),
+      files: listing.files.map((f) => ({ ...f })),
+    };
+  },
+  lanzouPrepare(opts: LanzouOptions): LanzouPrepareResult {
+    if (!lanzouStatus.loggedIn) throw new Error("尚未登录蓝奏云，请先登录或粘贴 Cookie");
+    const localDir = opts.localDir.trim() || SAMPLE_ROOT;
+    const folderId = opts.folderId.trim() || LANZOU_ROOT_ID;
+    const folderName = opts.folderName.trim() || (folderId === LANZOU_ROOT_ID ? "根目录" : folderId);
+    const items: LanzouItem[] = [
+      { localPath: `${localDir}\\海边日落.jpg`, name: "海边日落.jpg", size: Math.round(2.4 * MB), kind: "pending" },
+      { localPath: `${localDir}\\山顶合影.png`, name: "山顶合影.png", size: Math.round(1.8 * MB), kind: "pending" },
+      { localPath: `${localDir}\\现场录音.mp3`, name: "现场录音.mp3", size: Math.round(5.2 * MB), kind: "pending" },
+      { localPath: `${localDir}\\会议纪要.txt`, name: "会议纪要.txt", size: 3174, kind: "cached" },
+      {
+        localPath: `${localDir}\\产品报价单.pdf`, name: "产品报价单.pdf", size: Math.round(480 * 1024),
+        kind: "duplicate", duplicateOf: "产品报价单.pdf", remoteId: "mock-file-501",
+      },
+      {
+        localPath: `${localDir}\\旧版备份.zip`, name: "旧版备份.zip", size: 8 * MB,
+        kind: "duplicate", duplicateOf: "旧版备份.zip", remoteId: "mock-file-502",
+      },
+      { localPath: `${localDir}\\年会视频.mp4`, name: "年会视频.mp4", size: 420 * MB, kind: "skipped-large" },
+      {
+        localPath: `${localDir}\\损坏文件.bin`, name: "损坏文件.bin", size: 12288,
+        kind: "failed", error: "读取文件信息失败：浏览器预览为合成数据",
+      },
+    ];
+    lanzouSeq++;
+    lanzouBatch = {
+      id: `mock-lanzou-${lanzouSeq}`,
+      localDir,
+      folderId,
+      folderName,
+      workers: opts.workers,
+      intervalMs: opts.intervalMs,
+      baseItems: items.map((it) => ({ ...it })),
+      startedAt: 0,
+      canceled: false,
+      cancelAt: 0,
+    };
+    let uploadable = 0;
+    let duplicates = 0;
+    let skippedLarge = 0;
+    let cached = 0;
+    for (const it of items) {
+      if (it.kind === "pending") uploadable++;
+      else if (it.kind === "duplicate") duplicates++;
+      else if (it.kind === "skipped-large") skippedLarge++;
+      else if (it.kind === "cached") cached++;
+    }
+    return {
+      batchId: lanzouBatch.id,
+      folderId,
+      folderName,
+      localDir,
+      total: items.length,
+      uploadable,
+      duplicates,
+      skippedLarge,
+      cached,
+      items,
+      message:
+        `预检完成：待上传 ${uploadable}，云端重复 ${duplicates}，超 100 MiB ${skippedLarge}，本机缓存 ${cached}。` +
+        "此步骤未改动任何本地文件（浏览器预览为合成数据）。",
+    };
+  },
+  lanzouStartUpload(batchId: string, confirmed: boolean): void {
+    if (!confirmed) throw new Error("未确认，拒绝上传");
+    if (!readSettings().lanzou.disclaimerAccepted) throw new Error("请先阅读并同意免责声明");
+    const b = lanzouBatch;
+    if (!b || b.id !== batchId) throw new Error(`找不到上传批次：${batchId}`);
+    if (lanzouStateOf(b).phase === "done") throw new Error("该批次已结束，请重新预检");
+    if (b.startedAt > 0) throw new Error("该批次正在上传");
+    b.startedAt = Date.now();
+    b.canceled = false;
+  },
+  lanzouUploadState(batchId: string): LanzouUploadState {
+    const b = lanzouBatch;
+    if (!b || b.id !== batchId) throw new Error(`找不到上传批次：${batchId}`);
+    return lanzouStateOf(b);
+  },
+  lanzouCancelUpload(batchId: string): void {
+    const b = lanzouBatch;
+    if (!b || b.id !== batchId) throw new Error(`找不到上传批次：${batchId}`);
+    if (b.startedAt <= 0 || b.canceled) return;
+    b.canceled = true;
+    b.cancelAt = Date.now();
+  },
+  lanzouOpenWeb(): void {
+    window.open("https://pc.woozooo.com/mydisk.php", "_blank", "noopener");
+  },
+  lanzouOpenReport(_batchId: string): void {
+    throw new Error("浏览器预览没有真实报告文件，请在桌面版中打开。");
+  },
+  lanzouPickDirectory(): string {
+    return SAMPLE_ROOT;
+  },
+  lanzouAcceptDisclaimer(): void {
+    const s = readSettings();
+    s.lanzou.disclaimerAccepted = true;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   },
 };
 
