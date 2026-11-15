@@ -198,11 +198,21 @@ export interface SettingsResult {
 
 export type LicenseStatus = "licensed" | "trial" | "trial-expired" | "unlicensed";
 
+export interface LicenseFeature {
+  key: string;
+  name: string;
+  unlocked: boolean;
+  edition: string;
+  reason?: string;
+}
+
 export interface LicenseState {
   status: LicenseStatus;
   licensed: boolean;
   source: string;
   edition?: string;
+  editionCode?: string;
+  featureList: LicenseFeature[];
   expiry?: string;
   forever: boolean;
   machineCode: string;

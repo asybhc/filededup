@@ -60,8 +60,9 @@ func usage() {
       -days N            有效天数，默认 365；与 -exp 互斥
       -exp YYYY-MM-DD    指定到期日
       -forever           永久许可证
-      -edition pro|standard
-      -features a,b,c    功能位，默认 scan,apply,organize
+      -edition pro|standard  版本，默认 pro
+      -features a,b,c    功能位；留空按版本默认集（标准版 scan,apply,organize,search；
+                         专业版再加 cloud,cloud-dedup,ai,schedule）
       -id ID             许可证编号，默认随机
       -out FILE          写入文件；不指定则打印到标准输出
 
@@ -126,7 +127,7 @@ func cmdIssue(args []string) error {
 	exp := fs.String("exp", "", "到期日 YYYY-MM-DD")
 	forever := fs.Bool("forever", false, "永久有效")
 	edition := fs.String("edition", "pro", "pro 或 standard")
-	features := fs.String("features", "scan,apply,organize", "功能位，逗号分隔")
+	features := fs.String("features", "", "功能位，逗号分隔；留空按版本默认集")
 	id := fs.String("id", "", "许可证编号")
 	out := fs.String("out", "", "输出文件")
 	if err := fs.Parse(args); err != nil {

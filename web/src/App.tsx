@@ -1218,6 +1218,8 @@ export default function App() {
               <dd>{licenseLabel(license)}</dd>
               <dt>来源</dt>
               <dd>{licenseSourceLabel(license?.source)}</dd>
+              <dt>版本</dt>
+              <dd>{license?.edition || (license?.status === "unlicensed" ? "未授权" : "—")}</dd>
               <dt>到期</dt>
               <dd>
                 {license?.licensed
@@ -1237,6 +1239,21 @@ export default function App() {
             </dl>
 
             <p className="hint">{license?.limits}</p>
+            {license?.featureList?.length ? (
+              <div className="featurelist" aria-label="功能解锁状态">
+                {license.featureList.map((f) => (
+                  <div
+                    key={f.key}
+                    className={`featureitem ${f.unlocked ? "on" : "off"}`}
+                    title={f.unlocked ? "已解锁" : `${f.edition}解锁 · ${f.reason ?? ""}`}
+                  >
+                    <span className="mark">{f.unlocked ? "已解锁" : "未解锁"}</span>
+                    <span className="name">{f.name}</span>
+                    <span className="meta">{f.unlocked ? f.edition : `${f.edition} · ${f.reason ?? ""}`}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {license?.warning && <p className="hint warn">{license.warning}</p>}
             {license?.trialActive && (
               <p className="hint">

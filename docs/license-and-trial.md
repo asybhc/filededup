@@ -48,7 +48,7 @@ FDLIC1:<base64url(payload JSON)>:<base64url(signature)>
   "exp": "2027-11-15",
   "issued": "2026-11-15",
   "edition": "pro",
-  "features": ["scan", "apply", "organize"],
+  "features": ["scan", "apply", "organize", "search"],
   "id": "0A1B2C3D4E5F"
 }
 ```
@@ -59,11 +59,20 @@ FDLIC1:<base64url(payload JSON)>:<base64url(signature)>
 | `app` | 必须为 `filededup-go` |
 | `machine` | 16 位机器码（可带连字符），或 `*` 表示不绑定机器 |
 | `exp` | `YYYY-MM-DD`；`forever` / `never` / 空 表示永久 |
-| `edition` | `pro` 或 `standard`，缺省 standard |
-| `features` | `scan` / `apply` / `organize` 的子集；缺省或全为空视为全部功能 |
+| `edition` | `pro` 或 `standard`，缺省 standard（旧许可证没有该字段时按标准版处理，不会失效） |
+| `features` | 功能位子集，见下表；缺省或全为空时按 `edition` 给默认功能集 |
+
+版本与默认功能集（`internal/auth/license.go` 的 `featureDefs` / `DefaultFeatures`）：
+
+| 版本 | 默认功能位 | 说明 |
+| --- | --- | --- |
+| 标准版 `standard` | `scan` 重复文件扫描、`apply` 删除执行、`organize` 九步整理、`search` 本地搜索 | 旧许可证与旧 ECDSA 许可证缺 features 时按这套 |
+| 专业版 `pro` | 标准版全部 + `cloud` 网盘上传、`cloud-dedup` 网盘查重、`ai` AI 分析建议、`schedule` 定时任务 | 显式 features 仍然优先 |
 
 到期按**本地日期**比较，到期日当天仍可用（`ExpiredOn` 只在日期更大时返回 true）。
 功能位是白名单：没有 `apply` 就不能执行删除，没有 `organize` 就不能真实整理；`scan` 始终可用。
+未解锁的功能不会从界面消失：授权面板列出全部功能与解锁所需版本，调用被拒绝时错误里带功能名、
+所需版本与本机机器码。
 
 ### 签名与密钥
 
@@ -88,6 +97,7 @@ go run ./cmd/fdedup-keygen inspect -license ..\outputs\license-keys\demo.lic
 ```
 
 `-forever`、`-exp YYYY-MM-DD`、`-features scan,apply`、`-id` 等参数见 `fdedup-keygen` 的 usage。
+不传 `-features` 时按 `-edition` 的默认功能集签发（`standard` / `pro`）；传了则只认列出的功能位。
 私钥也可以用环境变量 `FDEDUP_LICENSE_KEY` 指定，避免出现在命令行历史里。
 签发机应离线或至少与发布产物隔离；不要用仓库工作副本里的私钥签名正式许可证。
 

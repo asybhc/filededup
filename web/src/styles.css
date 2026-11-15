@@ -1359,3 +1359,46 @@ button.link {
 .disclaimer .hint {
   margin: 6px 0 0;
 }
+
+/* 授权面板：功能解锁列表。未解锁项也展示，避免静默隐藏。 */
+.featurelist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+.featureitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 13px;
+}
+.featureitem .mark {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.featureitem.on .mark {
+  background: var(--ok-weak);
+  color: var(--ok);
+}
+.featureitem.off {
+  color: var(--muted);
+}
+.featureitem.off .mark {
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+.featureitem .name {
+  flex: 1 1 auto;
+}
+.featureitem .meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}

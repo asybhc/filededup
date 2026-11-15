@@ -26,14 +26,88 @@ const (
 // 使用 var 是为了让测试可以替换成临时公钥。
 var embeddedEd25519PublicKeyB64 = "wW68/Ea4R9SRjGIEv2JqyBYAyn9uvlQaOnfxoUarF14="
 
-// Feature 是功能位名称。与许可证里的 features 字段一致。
+// 许可证版本名。旧许可证缺 edition 字段时按标准版处理，仍可正常使用。
 const (
-	FeatureScan     = "scan"
-	FeatureApply    = "apply"
-	FeatureOrganize = "organize"
+	EditionStandard = "standard"
+	EditionPro      = "pro"
 )
 
-var allFeatures = []string{FeatureScan, FeatureApply, FeatureOrganize}
+// Feature 是功能位名称。与许可证里的 features 字段一致。
+const (
+	FeatureScan       = "scan"
+	FeatureApply      = "apply"
+	FeatureOrganize   = "organize"
+	FeatureSearch     = "search"
+	FeatureCloud      = "cloud"
+	FeatureCloudDedup = "cloud-dedup"
+	FeatureAI         = "ai"
+	FeatureSchedule   = "schedule"
+)
+
+// FeatureDef 描述一个功能位：中文名与解锁所需的最低版本。
+type FeatureDef struct {
+	Key     string
+	Name    string
+	Edition string // EditionStandard | EditionPro
+}
+
+// featureDefs 的顺序就是界面展示顺序。标准版是基础，专业版在其上追加网盘、AI 与定时任务。
+var featureDefs = []FeatureDef{
+	{FeatureScan, "重复文件扫描", EditionStandard},
+	{FeatureApply, "删除执行", EditionStandard},
+	{FeatureOrganize, "九步整理", EditionStandard},
+	{FeatureSearch, "本地搜索", EditionStandard},
+	{FeatureCloud, "网盘上传", EditionPro},
+	{FeatureCloudDedup, "网盘查重", EditionPro},
+	{FeatureAI, "AI 分析建议", EditionPro},
+	{FeatureSchedule, "定时任务", EditionPro},
+}
+
+var standardFeatures = []string{FeatureScan, FeatureApply, FeatureOrganize, FeatureSearch}
+
+var allFeatures = []string{
+	FeatureScan, FeatureApply, FeatureOrganize, FeatureSearch,
+	FeatureCloud, FeatureCloudDedup, FeatureAI, FeatureSchedule,
+}
+
+// EditionName 返回版本中文名；未知值原样返回。
+func EditionName(edition string) string {
+	switch strings.ToLower(strings.TrimSpace(edition)) {
+	case EditionPro:
+		return "专业版"
+	case EditionStandard, "":
+		return "标准版"
+	}
+	return edition
+}
+
+// DefaultFeatures 返回某版本默认解锁的功能位。旧许可证没有 features 字段时用它兜底。
+func DefaultFeatures(edition string) []string {
+	if strings.EqualFold(strings.TrimSpace(edition), EditionPro) {
+		return append([]string{}, allFeatures...)
+	}
+	return append([]string{}, standardFeatures...)
+}
+
+// FeatureName 返回功能中文名；未知功能返回原键名。
+func FeatureName(key string) string {
+	for _, d := range featureDefs {
+		if d.Key == key {
+			return d.Name
+		}
+	}
+	return key
+}
+
+// FeatureEdition 返回某功能位解锁所需的最低版本；未知功能返回空串。
+func FeatureEdition(key string) string {
+	for _, d := range featureDefs {
+		if d.Key == key {
+			return d.Edition
+		}
+	}
+	return ""
+}
 
 // License 是验签通过后的许可证内容。
 type License struct {
@@ -196,9 +270,11 @@ func verifyEd25519License(text string, pub ed25519.PublicKey, fp [10]byte, now t
 		lic.Expiry = d
 	}
 
+	// 缺 features 时按版本默认功能集补齐：旧标准版许可证不会被当成专业版，
+	// 也不会因为缺字段而失效。
 	features := normalizeFeatures(p.Features)
 	if len(features) == 0 {
-		features = append([]string{}, allFeatures...)
+		features = DefaultFeatures(lic.Edition)
 	}
 	lic.Features = features
 	return lic, nil
@@ -209,9 +285,8 @@ func normalizeFeatures(in []string) []string {
 	out := make([]string, 0, len(in))
 	for _, f := range in {
 		f = strings.ToLower(strings.TrimSpace(f))
-		switch f {
-		case FeatureScan, FeatureApply, FeatureOrganize:
-			if !seen[f] {
+		for _, d := range featureDefs {
+			if f == d.Key && !seen[f] {
 				seen[f] = true
 				out = append(out, f)
 			}
@@ -279,14 +354,15 @@ func verifyLegacyLicense(text string, fp [10]byte, now time.Time) (License, erro
 
 	days := binary.LittleEndian.Uint16(payload[15:17])
 	lic := License{
-		Source:   "legacy-ecdsa",
-		Edition:  "standard",
-		Machine:  groupBy4(want),
-		Features: append([]string{}, allFeatures...),
+		Source:  "legacy-ecdsa",
+		Edition: EditionStandard,
+		Machine: groupBy4(want),
 	}
 	if payloadLen == 18 && payload[17] == 1 {
-		lic.Edition = "pro"
+		lic.Edition = EditionPro
 	}
+	// 旧格式没有 features 字段，按版本给默认功能集。
+	lic.Features = DefaultFeatures(lic.Edition)
 	if days == 0xFFFF {
 		lic.Forever = true
 		return lic, nil

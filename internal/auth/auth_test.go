@@ -286,3 +286,78 @@ func TestTrialInvalidSource(t *testing.T) {
 		t.Fatalf("唯一来源损坏时应判定试用失效，而不是重新开始：%+v", st)
 	}
 }
+
+func TestEditionFeatureDefaults(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldKey := embeddedEd25519PublicKeyB64
+	embeddedEd25519PublicKeyB64 = base64.StdEncoding.EncodeToString(pub)
+	defer func() { embeddedEd25519PublicKeyB64 = oldKey }()
+
+	fp := testFingerprint(7)
+	machine := groupBy4(crockfordEncode(fp[:]))
+	now := time.Date(2029, 1, 1, 12, 0, 0, 0, time.Local)
+
+	// 缺 edition、缺 features：按标准版处理，许可证仍然有效。
+	stdText, err := IssueLicense(Payload{Machine: machine, Expiry: "forever"}, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	std, err := verifyLicenseWithMachine(stdText, fp, now)
+	if err != nil {
+		t.Fatalf("缺版本字段的许可证不应失效：%v", err)
+	}
+	if std.Edition != EditionStandard {
+		t.Fatalf("缺版本字段应按标准版处理，实际 %q", std.Edition)
+	}
+	if !hasFeature(std.Features, FeatureSearch) || hasFeature(std.Features, FeatureCloud) {
+		t.Fatalf("标准版应含本地搜索、不含网盘上传：%v", std.Features)
+	}
+
+	// 专业版缺 features：给专业版默认功能集。
+	proText, err := IssueLicense(Payload{Machine: machine, Expiry: "forever", Edition: "pro"}, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pro, err := verifyLicenseWithMachine(proText, fp, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{FeatureCloud, FeatureCloudDedup, FeatureAI, FeatureSchedule} {
+		if !hasFeature(pro.Features, f) {
+			t.Fatalf("专业版默认应包含 %s：%v", f, pro.Features)
+		}
+	}
+
+	// 显式 features 优先于版本默认集。
+	customText, err := IssueLicense(Payload{
+		Machine: machine, Expiry: "forever", Edition: "pro",
+		Features: []string{FeatureScan, "unknown"},
+	}, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	custom, err := verifyLicenseWithMachine(customText, fp, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(custom.Features) != 1 || custom.Features[0] != FeatureScan {
+		t.Fatalf("显式功能位应过滤未知项后保留：%v", custom.Features)
+	}
+
+	list := buildFeatureList(custom.Features)
+	var locked int
+	for _, f := range list {
+		if !f.Unlocked {
+			locked++
+			if f.Reason == "" {
+				t.Fatalf("未解锁功能缺少原因：%+v", f)
+			}
+		}
+	}
+	if locked != len(featureDefs)-1 {
+		t.Fatalf("未解锁功能数量不正确：%d", locked)
+	}
+}
