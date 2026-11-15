@@ -107,3 +107,147 @@ export interface AppInfo {
 export type Row =
   | { type: "group"; key: string; group: GroupView }
   | { type: "member"; key: string; groupId: string; member: MemberView };
+
+// ---------- 设置持久化（对应 cmd/filededup/settings.go） ----------
+
+export interface ScanSettings {
+  root: string;
+  keepPolicy: KeepPolicy;
+  deleteMode: DeleteMode;
+  similarImage: boolean;
+  imageThreshold: number;
+  similarAudio: boolean;
+  audioTolerance: number;
+  minSize: number;
+  includeHidden: boolean;
+  excludes: string[];
+}
+
+export interface OrganizeSteps {
+  renamePrefix: boolean;
+  renameSuffix: boolean;
+  specialDelete: boolean;
+  readonly: boolean;
+  contentDedup: boolean;
+  imageDedup: boolean;
+  audioDedup: boolean;
+  organize: boolean;
+  emptyDirs: boolean;
+}
+
+// 整理器比扫描多一个“保留最大文件”，引擎 ParseKeepRule 与设置默认值都用 largest。
+export type KeepRule = KeepPolicy | "largest";
+
+export interface OrganizeSettings {
+  root: string;
+  target: string;
+  usePreviewPlan: boolean;
+  steps: OrganizeSteps;
+  mode: string;
+  keyword: string;
+  regex: string;
+  fixedDir: string;
+  conflict: string;
+  deleteMode: DeleteMode;
+  keepPolicy: KeepRule;
+  imageKeepPolicy: KeepRule;
+  imageThreshold: number;
+  audioTolerance: number;
+  strength: number;
+  minSize: number;
+  includeHidden: boolean;
+  excludes: string[];
+  protectWords: string;
+  hardlink: boolean;
+  continueOnError: boolean;
+}
+
+export interface UISettings {
+  schemaVersion: number;
+  scan: ScanSettings;
+  organize: OrganizeSettings;
+}
+
+export interface SettingsResult {
+  settings: UISettings;
+  path: string;
+  warning?: string;
+}
+
+// ---------- 整理器（对应 cmd/filededup/organize.go） ----------
+
+export interface OrganizeRequest extends Omit<OrganizeSettings, "root"> {
+  root: string;
+  dryRun: boolean;
+}
+
+export interface OrganizeStepMeta {
+  id: string;
+  title: string;
+}
+
+export interface OrganizeMeta {
+  standalone: OrganizeStepMeta[];
+  preview: OrganizeStepMeta[];
+}
+
+export interface Counter {
+  renamed: number;
+  specialDeleted: number;
+  moved: number;
+  conflictSkip: number;
+  readonly: number;
+  organizeSkip: number;
+  contentDeleted: number;
+  imageDeleted: number;
+  audioDeleted: number;
+  emptyDirs: number;
+  excluded: number;
+  hiddenSkipped: number;
+  suspectsKept: number;
+  hardlinkMerged: number;
+}
+
+export interface OrganizeStepView {
+  id: string;
+  title: string;
+  order: number;
+  enabled: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  actionNum: number;
+  counters: Counter;
+}
+
+export interface OrganizeActionView {
+  kind: string;
+  step: string;
+  from?: string;
+  to?: string;
+  reason?: string;
+  rule?: string;
+}
+
+export interface OrganizeExecView {
+  total: number;
+  applied: number;
+  failed: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface OrganizeState {
+  id: string;
+  phase: "running" | "done" | "failed";
+  stage: string;
+  dryRun: boolean;
+  order: "standalone" | "preview";
+  usePreviewPlan: boolean;
+  elapsedMs: number;
+  error?: string;
+  steps: OrganizeStepView[];
+  counters: Counter;
+  exec: OrganizeExecView;
+  actionTotal: number;
+  actions: OrganizeActionView[];
+}

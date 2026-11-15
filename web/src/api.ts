@@ -3,10 +3,15 @@ import type {
   DeleteMode,
   ExecuteState,
   GroupsPage,
+  OrganizeMeta,
+  OrganizeRequest,
+  OrganizeState,
   PlanPreview,
   ScanRequest,
   ScanState,
+  SettingsResult,
   SkippedPage,
+  UISettings,
 } from "./types";
 import { mock } from "./mock";
 
@@ -21,6 +26,11 @@ interface WailsApp {
   PreviewPlan(id: string, deleteMode: DeleteMode): Promise<PlanPreview>;
   StartExecute(id: string, deleteMode: DeleteMode, confirmed: boolean): Promise<void>;
   GetExecuteState(id: string): Promise<ExecuteState>;
+  GetSettings(): Promise<SettingsResult>;
+  SaveSettings(s: UISettings): Promise<void>;
+  GetOrganizeMeta(): Promise<OrganizeMeta>;
+  StartOrganize(req: OrganizeRequest): Promise<string>;
+  GetOrganizeState(id: string): Promise<OrganizeState>;
 }
 
 declare global {
@@ -85,5 +95,30 @@ export const api = {
     const b = bridge();
     if (b) return b.GetExecuteState(id);
     return mock.getExecuteState();
+  },
+  async getSettings(): Promise<SettingsResult> {
+    const b = bridge();
+    if (b) return b.GetSettings();
+    return mock.getSettings();
+  },
+  async saveSettings(s: UISettings): Promise<void> {
+    const b = bridge();
+    if (b) return b.SaveSettings(s);
+    mock.saveSettings(s);
+  },
+  async getOrganizeMeta(): Promise<OrganizeMeta> {
+    const b = bridge();
+    if (b) return b.GetOrganizeMeta();
+    return mock.getOrganizeMeta();
+  },
+  async startOrganize(req: OrganizeRequest): Promise<string> {
+    const b = bridge();
+    if (b) return b.StartOrganize(req);
+    return mock.startOrganize(req);
+  },
+  async getOrganizeState(id: string): Promise<OrganizeState> {
+    const b = bridge();
+    if (b) return b.GetOrganizeState(id);
+    return mock.getOrganizeState(id);
   },
 };

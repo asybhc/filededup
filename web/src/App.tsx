@@ -1,18 +1,21 @@
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, isDesktop } from "./api";
 import { mock } from "./mock";
 import { VirtualList } from "./components/VirtualList";
+import { Organizer } from "./Organizer";
 import type {
   AppInfo,
   DeleteMode,
   ExecuteState,
   GroupView,
   KeepPolicy,
+  OrganizeSettings,
   PlanPreview,
   Row,
   ScanRequest,
   ScanState,
   SkipView,
+  UISettings,
 } from "./types";
 
 const MB = 1024 * 1024;
@@ -111,6 +114,86 @@ export default function App() {
   const [perfRows, setPerfRows] = useState<Row[]>([]);
   const [perfActive, setPerfActive] = useState(false);
   const [fps, setFps] = useState(0);
+  const [view, setView] = useState<"dedup" | "organize">("dedup");
+  const [settings, setSettings] = useState<UISettings>();
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsPath, setSettingsPath] = useState("");
+  const [settingsNote, setSettingsNote] = useState("");
+  const settingsRef = useRef<UISettings | undefined>(undefined);
+
+  // 启动时恢复设置：缺键由后端补默认值，坏文件只给提示不回退到崩溃。
+  useEffect(() => {
+    let alive = true;
+    api
+      .getSettings()
+      .then((r) => {
+        if (!alive) return;
+        const s = r.settings;
+        settingsRef.current = s;
+        setSettings(s);
+        setSettingsPath(r.path);
+        if (r.warning) setSettingsNote(r.warning);
+        setReq((prev) => ({
+          ...prev,
+          root: s.scan.root || prev.root,
+          keepPolicy: s.scan.keepPolicy,
+          minSizeMB: Math.round((s.scan.minSize || 0) / MB),
+          includeHidden: s.scan.includeHidden,
+          similarImage: s.scan.similarImage,
+          imageThreshold: s.scan.imageThreshold,
+          similarAudio: s.scan.similarAudio,
+          audioTolerance: s.scan.audioTolerance,
+        }));
+        setDeleteMode(s.scan.deleteMode);
+        setExcludesText((s.scan.excludes || []).join(" "));
+        setSettingsReady(true);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setSettingsNote("设置读取失败，已使用默认值：" + errorText(err));
+        setSettingsReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 扫描选项变更后自动落盘（600ms 防抖），不阻塞输入。
+  useEffect(() => {
+    const base = settingsRef.current;
+    if (!base) return;
+    const timer = window.setTimeout(() => {
+      const next: UISettings = {
+        ...base,
+        scan: {
+          ...base.scan,
+          root: req.root,
+          keepPolicy: req.keepPolicy,
+          deleteMode,
+          similarImage: req.similarImage,
+          imageThreshold: req.imageThreshold,
+          similarAudio: req.similarAudio,
+          audioTolerance: req.audioTolerance,
+          minSize: Math.round(req.minSizeMB * MB),
+          includeHidden: req.includeHidden,
+          excludes: excludesText.split(/[,，;；\s]+/).filter(Boolean),
+        },
+      };
+      settingsRef.current = next;
+      setSettings(next);
+      api.saveSettings(next).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [req, deleteMode, excludesText]);
+
+  const persistOrganize = (next: OrganizeSettings) => {
+    const base = settingsRef.current;
+    if (!base) return;
+    const merged: UISettings = { ...base, organize: next };
+    settingsRef.current = merged;
+    setSettings(merged);
+    api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+  };
 
   useEffect(() => {
     api.getAppInfo().then(setInfo).catch(() => undefined);
@@ -375,14 +458,30 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="stepper" aria-label="流程">
-        {STEPS.map((s, i) => (
-          <div key={s.key} className={`step ${i === stepIndex ? "active" : ""} ${i < stepIndex ? "done" : ""}`}>
-            <span className="step-no">{i + 1}</span>
-            <span>{s.label}</span>
-          </div>
-        ))}
+      <nav className="tabs" aria-label="模块">
+        <button className={view === "dedup" ? "active" : ""} onClick={() => setView("dedup")}>
+          查重与清理
+        </button>
+        <button className={view === "organize" ? "active" : ""} onClick={() => setView("organize")}>
+          九步整理
+        </button>
+        {view === "dedup" && (
+          <span className="tabs-hint">
+            当前流程：{STEPS.map((s) => s.label).join(" → ")}
+          </span>
+        )}
       </nav>
+
+      {view === "dedup" && (
+        <nav className="stepper" aria-label="流程">
+          {STEPS.map((s, i) => (
+            <div key={s.key} className={`step ${i === stepIndex ? "active" : ""} ${i < stepIndex ? "done" : ""}`}>
+              <span className="step-no">{i + 1}</span>
+              <span>{s.label}</span>
+            </div>
+          ))}
+        </nav>
+      )}
 
       {error && (
         <div className="banner error" role="alert">
@@ -394,6 +493,17 @@ export default function App() {
       )}
 
       <main className="main">
+        {view === "organize" ? (
+          settingsReady ? (
+            <Organizer initial={settings?.organize} onPersist={persistOrganize} />
+          ) : (
+            <section className="card">
+              <h2>九步整理</h2>
+              <p className="hint">正在读取设置…</p>
+            </section>
+          )
+        ) : (
+          <>
         {step === "pick" && (
           <section className="card">
             <h2>1. 选择目录与扫描设置</h2>
@@ -487,7 +597,16 @@ export default function App() {
               </label>
             </div>
 
-            <p className="hint">设置只在本次会话生效：设置持久化尚未实现，重启后恢复默认值。</p>
+            <p className="hint">
+              {settingsPath ? (
+                <>
+                  设置自动保存到 <code>{settingsPath}</code>，重启后自动恢复。
+                  {settingsNote ? `（${settingsNote}）` : ""}
+                </>
+              ) : (
+                "正在读取设置…"
+              )}
+            </p>
 
             <div className="actions">
               <button className="primary" disabled={!req.root} onClick={startScan}>
@@ -689,6 +808,8 @@ export default function App() {
             </div>
           </section>
         )}
+          </>
+        )}
       </main>
 
       {detail && (
@@ -864,11 +985,11 @@ function FeatureStatus() {
       <h3>功能状态（如实标注）</h3>
       <p>
         <span className="kind kind-keep">已接通</span>{" "}
-        目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志
+        目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化
       </p>
       <p>
         <span className="kind kind-warn">未实现</span>{" "}
-        设置持久化、系统托盘、自动更新、授权与试用、蓝奏云上传、整理器界面、自定义保留项、执行撤销、撤销历史
+        系统托盘、自动更新、授权与试用、蓝奏云上传、自定义保留项、执行撤销、撤销历史
       </p>
     </div>
   );

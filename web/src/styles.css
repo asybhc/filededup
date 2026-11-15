@@ -797,6 +797,209 @@ button.link {
   text-overflow: ellipsis;
 }
 
+/* ---------- 模块切换 ---------- */
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tabs button:hover {
+  background: #f1f5f9;
+}
+
+.tabs button.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.tabs-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge.danger {
+  color: var(--danger);
+  background: var(--danger-weak);
+}
+
+/* ---------- 九步整理 ---------- */
+
+.orgpage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 2px;
+}
+
+.chips.inline {
+  margin: 0;
+}
+
+.chip-warn {
+  color: var(--warn);
+  background: var(--warn-weak);
+  border-color: #fde68a;
+}
+
+.chip-danger {
+  color: var(--danger);
+  background: var(--danger-weak);
+  border-color: #fecaca;
+}
+
+.orders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin: 10px 0 4px;
+}
+
+.ordercard {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ordercard:hover {
+  border-color: #c7ced9;
+}
+
+.ordercard.active {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.ordercard h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ordercard ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.ordercard li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orgsteps {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.orgstep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.orgstep:last-child {
+  border-bottom: none;
+}
+
+.orgstep:hover {
+  background: #f8fbff;
+}
+
+.orgstep.off {
+  color: var(--muted);
+  background: #fbfcfe;
+  cursor: default;
+}
+
+.orgstep input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.orgstepno {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e5e7eb;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.orgsteptitle {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orgstep.result {
+  flex-wrap: wrap;
+  cursor: default;
+}
+
+.orgcounters {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 34px;
+  font-size: 11px;
+}
+
+.orgsamples {
+  max-height: 360px;
+}
+
+.confirmsteps {
+  margin: 6px 0 10px;
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
 @media (max-width: 900px) {
   .main {
     padding: 12px;

@@ -162,10 +162,11 @@ type App struct {
 
 	mu       sync.Mutex
 	sessions map[string]*scanSession
+	orgJobs  map[string]*organizeJob
 }
 
 func NewApp() *App {
-	return &App{sessions: make(map[string]*scanSession)}
+	return &App{sessions: make(map[string]*scanSession), orgJobs: make(map[string]*organizeJob)}
 }
 
 func currentPlatform() string {

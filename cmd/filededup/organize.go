@@ -1,0 +1,470 @@
+//go:build desktop
+
+package main
+
+// 整理器界面后端：把九步整理接进 UI。
+//
+// 与 CLI（cmd/fdedup organize）走的是同一套引擎调用：
+// orgscan.Collect → PrepareProviders → Snapshot →（可选）BuildPreviewPlan → Plan → Apply。
+// 两套执行顺序直接复用引擎的 OrderStandalone / OrderPreview，不在 UI 层重新排列。
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"filededup/internal/engine/organize"
+	"filededup/internal/orgscan"
+	"filededup/internal/platform"
+)
+
+// OrganizeSteps 是九步开关的桥接类型。
+type OrganizeSteps struct {
+	RenamePrefix  bool `json:"renamePrefix"`
+	RenameSuffix  bool `json:"renameSuffix"`
+	SpecialDelete bool `json:"specialDelete"`
+	Readonly      bool `json:"readonly"`
+	ContentDedup  bool `json:"contentDedup"`
+	ImageDedup    bool `json:"imageDedup"`
+	AudioDedup    bool `json:"audioDedup"`
+	Organize      bool `json:"organize"`
+	EmptyDirs     bool `json:"emptyDirs"`
+}
+
+// DefaultOrganizeSteps 跟随引擎的原版默认开关。
+func DefaultOrganizeSteps() OrganizeSteps {
+	return stepsFromSwitches(organize.DefaultStepSwitches())
+}
+
+func stepsFromSwitches(s organize.StepSwitches) OrganizeSteps {
+	return OrganizeSteps{
+		RenamePrefix:  s.RenamePrefix,
+		RenameSuffix:  s.RenameSuffix,
+		SpecialDelete: s.SpecialDelete,
+		Readonly:      s.Readonly,
+		ContentDedup:  s.ContentDedup,
+		ImageDedup:    s.ImageDedup,
+		AudioDedup:    s.AudioDedup,
+		Organize:      s.Organize,
+		EmptyDirs:     s.EmptyDirs,
+	}
+}
+
+func (s OrganizeSteps) toSwitches() organize.StepSwitches {
+	return organize.StepSwitches{
+		RenamePrefix:  s.RenamePrefix,
+		RenameSuffix:  s.RenameSuffix,
+		SpecialDelete: s.SpecialDelete,
+		Readonly:      s.Readonly,
+		ContentDedup:  s.ContentDedup,
+		ImageDedup:    s.ImageDedup,
+		AudioDedup:    s.AudioDedup,
+		Organize:      s.Organize,
+		EmptyDirs:     s.EmptyDirs,
+	}
+}
+
+func (s OrganizeSteps) anyOn() bool {
+	return s.RenamePrefix || s.RenameSuffix || s.SpecialDelete || s.Readonly ||
+		s.ContentDedup || s.ImageDedup || s.AudioDedup || s.Organize || s.EmptyDirs
+}
+
+var validOrganizeModes = map[string]bool{
+	"category": true, "extension": true, "namefeature": true, "keyword": true, "fixedfolder": true,
+}
+
+var validConflictPolicies = map[string]bool{"overwrite": true, "skip": true, "rename": true}
+
+// OrganizeRequest 是整理页的一次执行请求。
+type OrganizeRequest struct {
+	Root            string        `json:"root"`
+	Target          string        `json:"target"`
+	UsePreviewPlan  bool          `json:"usePreviewPlan"`
+	DryRun          bool          `json:"dryRun"`
+	Steps           OrganizeSteps `json:"steps"`
+	Mode            string        `json:"mode"`
+	Keyword         string        `json:"keyword"`
+	Regex           string        `json:"regex"`
+	FixedDir        string        `json:"fixedDir"`
+	Conflict        string        `json:"conflict"`
+	DeleteMode      string        `json:"deleteMode"`
+	KeepPolicy      string        `json:"keepPolicy"`
+	ImageKeepPolicy string        `json:"imageKeepPolicy"`
+	ImageThreshold  int           `json:"imageThreshold"`
+	AudioTolerance  int           `json:"audioTolerance"`
+	Strength        int           `json:"strength"`
+	MinSize         int64         `json:"minSize"`
+	IncludeHidden   bool          `json:"includeHidden"`
+	Excludes        []string      `json:"excludes"`
+	ProtectWords    string        `json:"protectWords"`
+	Hardlink        bool          `json:"hardlink"`
+	ContinueOnError bool          `json:"continueOnError"`
+}
+
+// OrganizeStepView 是单个步骤的执行结果，Skipped 表示该步被关闭或未启用。
+type OrganizeStepView struct {
+	ID         string           `json:"id"`
+	Title      string           `json:"title"`
+	Order      int              `json:"order"`
+	Enabled    bool             `json:"enabled"`
+	Skipped    bool             `json:"skipped"`
+	SkipReason string           `json:"skipReason,omitempty"`
+	ActionNum  int              `json:"actionNum"`
+	Counters   organize.Counter `json:"counters"`
+}
+
+// OrganizeActionView 是动作样例（只回传前若干条，避免一次塞太多）。
+type OrganizeActionView struct {
+	Kind   string `json:"kind"`
+	Step   string `json:"step"`
+	From   string `json:"from,omitempty"`
+	To     string `json:"to,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	Rule   string `json:"rule,omitempty"`
+}
+
+// OrganizeExecView 是落盘阶段的统计。
+type OrganizeExecView struct {
+	Total   int      `json:"total"`
+	Applied int      `json:"applied"`
+	Failed  int      `json:"failed"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors"`
+}
+
+// OrganizeState 是一次整理任务的完整状态；界面按 400ms 轮询。
+type OrganizeState struct {
+	ID             string               `json:"id"`
+	Phase          string               `json:"phase"` // running | done | failed
+	Stage          string               `json:"stage"`
+	DryRun         bool                 `json:"dryRun"`
+	Order          string               `json:"order"` // standalone | preview
+	UsePreviewPlan bool                 `json:"usePreviewPlan"`
+	ElapsedMS      int64                `json:"elapsedMs"`
+	Error          string               `json:"error,omitempty"`
+	Steps          []OrganizeStepView   `json:"steps"`
+	Counters       organize.Counter     `json:"counters"`
+	Exec           OrganizeExecView     `json:"exec"`
+	ActionTotal    int                  `json:"actionTotal"`
+	Actions        []OrganizeActionView `json:"actions"`
+}
+
+// OrganizeStepMeta 只用于界面渲染步骤顺序与标题。
+type OrganizeStepMeta struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// OrganizeMeta 把引擎的两套顺序原样交给界面。
+type OrganizeMeta struct {
+	Standalone []OrganizeStepMeta `json:"standalone"`
+	Preview    []OrganizeStepMeta `json:"preview"`
+}
+
+type organizeJob struct {
+	mu    sync.Mutex
+	state OrganizeState
+}
+
+func (j *organizeJob) update(fn func(*OrganizeState)) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	fn(&j.state)
+}
+
+func (j *organizeJob) snapshot() OrganizeState {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	cp := j.state
+	cp.Steps = append([]OrganizeStepView(nil), j.state.Steps...)
+	cp.Actions = append([]OrganizeActionView(nil), j.state.Actions...)
+	cp.Exec.Errors = append([]string(nil), j.state.Exec.Errors...)
+	return cp
+}
+
+// GetOrganizeMeta 返回两套步骤顺序。
+// 实现方式是对空快照跑一次 Plan——不复制引擎里的顺序表，避免界面与引擎漂移。
+func (a *App) GetOrganizeMeta() OrganizeMeta {
+	var meta OrganizeMeta
+	all := OrganizeSteps{
+		RenamePrefix: true, RenameSuffix: true, SpecialDelete: true, Readonly: true,
+		ContentDedup: true, ImageDedup: true, AudioDedup: true, Organize: true, EmptyDirs: true,
+	}
+	for _, mode := range []organize.OrderMode{organize.OrderStandalone, organize.OrderPreview} {
+		cfg := organize.DefaultConfig()
+		cfg.Order = mode
+		cfg.Steps = all.toSwitches()
+		res := organize.Plan(cfg, organize.Snapshot{Root: "."}, organize.Providers{})
+		steps := make([]OrganizeStepMeta, 0, len(res.Steps))
+		for _, sp := range res.Steps {
+			steps = append(steps, OrganizeStepMeta{ID: sp.ID, Title: sp.Title})
+		}
+		if mode == organize.OrderStandalone {
+			meta.Standalone = steps
+		} else {
+			meta.Preview = steps
+		}
+	}
+	return meta
+}
+
+// StartOrganize 校验参数并异步执行。返回任务 ID，结果用 GetOrganizeState 轮询。
+func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
+	absRoot, err := filepath.Abs(strings.TrimSpace(req.Root))
+	if err != nil {
+		return "", fmt.Errorf("根目录无效：%w", err)
+	}
+	if absRoot == "" {
+		return "", errors.New("请先选择要整理的目录")
+	}
+	info, err := os.Stat(absRoot)
+	if err != nil {
+		return "", fmt.Errorf("根目录不可访问：%w", err)
+	}
+	if !info.IsDir() {
+		return "", errors.New("根目录不是文件夹")
+	}
+	steps := req.Steps.toSwitches()
+	if !req.Steps.anyOn() {
+		return "", errors.New("至少启用一个步骤")
+	}
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if !validOrganizeModes[mode] {
+		return "", fmt.Errorf("未知整理方式：%s", req.Mode)
+	}
+	conflict := strings.ToLower(strings.TrimSpace(req.Conflict))
+	if !validConflictPolicies[conflict] {
+		return "", fmt.Errorf("未知冲突策略：%s", req.Conflict)
+	}
+	targetRel, err := normalizeTarget(absRoot, req.Target)
+	if err != nil {
+		return "", err
+	}
+
+	cfg := organize.Config{
+		Order:             organize.OrderStandalone,
+		Steps:             steps,
+		DryRun:            req.DryRun,
+		Conflict:          organize.ParseConflictPolicy(conflict),
+		Delete:            organize.ParseDeleteMode(req.DeleteMode),
+		HardlinkMerge:     req.Hardlink,
+		Excludes:          cleanList(req.Excludes),
+		MinSize:           maxInt64(req.MinSize, 0),
+		SkipHiddenSystem:  !req.IncludeHidden,
+		ProtectWords:      req.ProtectWords,
+		Strength:          organize.ParseStrength(req.Strength),
+		LocalWhitelist:    true,
+		KeepRule:          organize.ParseKeepRule(req.KeepPolicy),
+		ImageKeepRule:     organize.ParseKeepRule(req.ImageKeepPolicy),
+		ImageThreshold:    clampInt(req.ImageThreshold, 0, 64, 8),
+		AudioToleranceSec: clampInt(req.AudioTolerance, 0, 60, 2),
+		OrganizeMode:      organize.ParseOrganizeMode(mode),
+		Keyword:           req.Keyword,
+		Regex:             req.Regex,
+		FixedFolder:       req.FixedDir,
+	}
+
+	job := &organizeJob{state: OrganizeState{
+		ID:             newJobID(),
+		Phase:          "running",
+		Stage:          "枚举目录",
+		DryRun:         req.DryRun,
+		Order:          string(cfg.Order),
+		UsePreviewPlan: req.UsePreviewPlan,
+		Steps:          []OrganizeStepView{},
+		Actions:        []OrganizeActionView{},
+		Exec:           OrganizeExecView{Errors: []string{}},
+	}}
+
+	a.mu.Lock()
+	if a.orgJobs == nil {
+		a.orgJobs = make(map[string]*organizeJob)
+	}
+	a.orgJobs[job.state.ID] = job
+	a.mu.Unlock()
+
+	target := targetRel
+	usePreview := req.UsePreviewPlan
+	dryRun := req.DryRun
+	continueOnError := req.ContinueOnError
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				job.update(func(s *OrganizeState) {
+					s.Phase = "failed"
+					s.Error = fmt.Sprintf("内部错误：%v", r)
+					s.Stage = ""
+				})
+			}
+		}()
+		start := time.Now()
+		finish := func(s *OrganizeState) {
+			s.ElapsedMS = time.Since(start).Milliseconds()
+			s.Stage = ""
+		}
+
+		tree, err := orgscan.Collect(absRoot)
+		if err != nil {
+			job.update(func(s *OrganizeState) {
+				s.Phase = "failed"
+				s.Error = "枚举目录失败：" + err.Error()
+				finish(s)
+			})
+			return
+		}
+		providers := orgscan.PrepareProviders(tree.Entries, absRoot, cfg)
+		snap := organize.Snapshot{Root: absRoot, Target: target, Files: tree.Entries, Dirs: tree.Dirs}
+
+		job.update(func(s *OrganizeState) { s.Stage = "规划动作" })
+		if usePreview {
+			job.update(func(s *OrganizeState) { s.Stage = "生成预览计划（先去重后整理）" })
+			p := organize.BuildPreviewPlan(cfg, snap, providers)
+			snap.PreviewPlan = p.Map()
+			cfg.Order = organize.OrderPreview
+		}
+		res := organize.Plan(cfg, snap, providers)
+
+		job.update(func(s *OrganizeState) {
+			s.Order = string(res.Order)
+			s.Steps = stepViews(res)
+			s.Counters = res.Counters
+			total := 0
+			sample := make([]OrganizeActionView, 0, 200)
+			for _, sp := range res.Steps {
+				total += len(sp.Actions)
+				for _, act := range sp.Actions {
+					if len(sample) >= 200 {
+						break
+					}
+					sample = append(sample, OrganizeActionView{
+						Kind: string(act.Kind), Step: sp.Title,
+						From: act.From, To: act.To, Reason: act.Reason, Rule: act.Rule,
+					})
+				}
+			}
+			s.ActionTotal = total
+			s.Actions = sample
+			s.Stage = "执行动作"
+		})
+
+		rep, err := organize.Apply(absRoot, res, organize.ExecOptions{
+			DryRun:          dryRun,
+			ContinueOnError: continueOnError,
+		}, platformHooks(cfg.Delete))
+
+		job.update(func(s *OrganizeState) {
+			if err != nil {
+				s.Phase = "failed"
+				s.Error = "执行失败：" + err.Error()
+				finish(s)
+				return
+			}
+			s.Phase = "done"
+			s.Exec = OrganizeExecView{
+				Total: rep.Total, Applied: rep.Applied, Failed: rep.Failed, Skipped: rep.Skipped,
+				Errors: append([]string(nil), rep.Errors...),
+			}
+			finish(s)
+		})
+	}()
+
+	return job.state.ID, nil
+}
+
+// GetOrganizeState 返回任务状态；未知 ID 直接报错，避免界面静默卡住。
+func (a *App) GetOrganizeState(id string) (OrganizeState, error) {
+	a.mu.Lock()
+	job := a.orgJobs[id]
+	a.mu.Unlock()
+	if job == nil {
+		return OrganizeState{}, fmt.Errorf("整理任务 %s 不存在", id)
+	}
+	return job.snapshot(), nil
+}
+
+// platformHooks 注入平台能力；引擎本身不依赖 internal/platform。
+func platformHooks(delete organize.DeleteMode) organize.ExecHooks {
+	hooks := organize.ExecHooks{
+		IsLocked:   platform.IsLocked,
+		SameVolume: platform.SameVolume,
+		Link:       platform.Link,
+	}
+	if delete == organize.DeleteTrash {
+		hooks.Trash = platform.Trash
+	}
+	return hooks
+}
+
+func stepViews(res organize.Result) []OrganizeStepView {
+	views := make([]OrganizeStepView, 0, len(res.Steps))
+	for _, sp := range res.Steps {
+		views = append(views, OrganizeStepView{
+			ID: sp.ID, Title: sp.Title, Order: sp.Order,
+			Enabled: !sp.Skipped, Skipped: sp.Skipped, SkipReason: sp.SkipReason,
+			ActionNum: len(sp.Actions), Counters: sp.Counters,
+		})
+	}
+	sort.SliceStable(views, func(i, j int) bool { return views[i].Order < views[j].Order })
+	return views
+}
+
+// normalizeTarget 校验整理目标子目录：必须相对、且落在根目录内。
+func normalizeTarget(absRoot, target string) (string, error) {
+	t := strings.TrimSpace(target)
+	if t == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(t) {
+		return "", errors.New("整理目标请填写相对根目录的子目录名")
+	}
+	clean := filepath.Clean(t)
+	if clean == "." || strings.HasPrefix(clean, "..") {
+		return "", errors.New("整理目标不能是根目录本身或上级目录")
+	}
+	abs := filepath.Join(absRoot, clean)
+	rel, err := filepath.Rel(absRoot, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", errors.New("整理目标必须位于根目录内")
+	}
+	return filepath.ToSlash(clean), nil
+}
+
+func cleanList(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func clampInt(v, lo, hi, def int) int {
+	if v == 0 {
+		return def
+	}
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func maxInt64(v, lo int64) int64 {
+	if v < lo {
+		return lo
+	}
+	return v
+}
+
+func newJobID() string {
+	return fmt.Sprintf("org-%d", time.Now().UnixNano())
+}

@@ -21,9 +21,12 @@ cd .. && go build -tags desktop -o bin/fdedup-ui.exe ./cmd/filededup
 | 路径 | 作用 |
 | --- | --- |
 | `cmd/filededup/app.go` | 绑定到前端的门面：扫描、分页、预览、执行、状态轮询 |
+| `cmd/filededup/settings.go` | 设置持久化：读写用户配置目录、版本号与容错 |
+| `cmd/filededup/organize.go` | 整理器门面：两套顺序、九步规划、试运行/真实执行 |
 | `cmd/filededup/main_desktop.go` | Wails 入口（`//go:build desktop`） |
 | `cmd/filededup/app_smoke_test.go` | 后端接线冒烟测试（`-tags desktop`） |
-| `web/src/App.tsx` | 五步状态机与全部页面 |
+| `web/src/App.tsx` | 模块切换与查重五步状态机 |
+| `web/src/Organizer.tsx` | 九步整理页 |
 | `web/src/api.ts` | Wails 桥 / 浏览器 mock 分派 |
 | `web/src/components/VirtualList.tsx` | 固定行高虚拟滚动 |
 | `web/src/styles.css` | 中文排版与布局 |
@@ -42,6 +45,37 @@ scan.RunWithOptions → plan.FromScan → plan.Validate → apply.Executor{Trash
 引擎唯一改动：`scan.Options` 新增**可选**回调 `Progress func(scan.Progress)`，零值无开销。
 
 执行前有两道闸：前端确认弹窗 + 后端 `confirmed=false` 直接拒绝；永久删除还要额外勾选确认。
+
+## 设置持久化
+
+- 位置：`os.UserConfigDir()/FileDedup/ui-settings.json`（Windows 即 `%AppData%\FileDedup\ui-settings.json`），界面会显示真实路径。
+- 内容：`{ schemaVersion, scan, organize }`，覆盖查重页与整理页的全部选项（阈值、删除方式、保留策略、排除目录、九步开关等）。
+- 容错约定：
+  - 缺键按默认值补齐（先填默认值，再用文件里存在的键覆盖）；
+  - **多出来的键不判损坏**：读取时忽略，保存时原样保留；
+  - 枚举/范围越界拉回默认值；
+  - 只有整份文件不是合法 JSON 才回退默认并在界面上给出提示，下次保存会覆盖。
+- 写入方式：临时文件 + `Rename` 原子替换，避免半截文件。
+- 前端：启动时 `GetSettings` 恢复；扫描选项变更后 600ms 防抖写盘，整理页 500ms 防抖，输入过程不反复落盘。
+
+## 九步整理
+
+整理页接的是与 CLI 相同的引擎链路，UI 层不重新实现规则：
+
+```
+orgscan.Collect → orgscan.PrepareProviders → organize.Snapshot
+  →（可选）organize.BuildPreviewPlan → organize.Plan → organize.Apply
+```
+
+- **两套顺序原样展示**：`GetOrganizeMeta` 对空快照分别按 `OrderStandalone` / `OrderPreview` 跑一次 `Plan`，直接取引擎返回的 ID 与标题，界面不复制顺序表，避免与引擎漂移。
+  - 无预览计划（独立顺序）：改名前缀 → 改名后缀 → 特殊删除 → 去只读 → 内容/图片/音频去重 → 整理 → 清空目录。
+  - 有预览计划：内容/图片/音频去重 → 改名 → 特殊删除 → 去只读 → 整理 → 清空目录。
+- **步骤开关**：九步各自可关；关掉的步骤按 `skipped` 计数，不影响其余步骤顺序。
+- **试运行与真跑**：
+  - 试运行 `dryRun=true`，引擎只对 `move` / `ensure_dir` 建目录，其余动作计入 `skipped`，不动文件；结果页用橙色横幅与“试运行（未落盘）”标签区分。
+  - 真实执行前弹出确认框，列出根目录、整理目标、顺序、删除方式和将执行的步骤；永久删除还需额外勾选。
+  - 真实执行完成后用红色横幅与“真实执行”标签区分，并提示删除项去了回收站还是已永久删除。
+- 轮询：`GetOrganizeState` 400ms 一次，返回阶段（枚举 / 规划 / 执行）、每步动作数与计数、前 200 条动作样例、执行统计与失败明细。
 
 ## 大目录性能
 
@@ -68,14 +102,17 @@ scan.RunWithOptions → plan.FromScan → plan.Validate → apply.Executor{Trash
 
 ## 已接通 / 未实现
 
-界面首屏底部固定展示这两行，改功能时同步改这里，不要留下“点了没反应”的入口。
+界面首屏底部与整理页底部固定展示这两行，改功能时同步改这里，不要留下“点了没反应”的入口。
 
-- 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志。
-- 未实现：系统托盘、自动更新、授权与试用、蓝奏云上传、自定义保留项、执行撤销、撤销历史。
+- 已接通：目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、九步整理（两套顺序 / 步骤开关 / 试运行 / 真实执行 / 冲突与保留策略 / 结果明细）。
+- 未实现：
+  - 全局：系统托盘、自动更新、授权与试用、蓝奏云上传、自定义保留项、执行撤销、撤销历史。
+  - 整理页：存疑项逐项人工确认（引擎只把 `suggest` 记为“存疑（仅报告）”，不落盘）、整理后撤销、规则导入导出。
 
 ## 已知限制
 
 1. 桌面窗口在无桌面会话的自动化环境里无法弹出（官方 Wails 模板同样表现），桌面显示由人工复核；
-   后端用 `go test -tags desktop -run TestAppSmoke ./cmd/filededup` 覆盖真实目录的扫描→预览→执行闭环。
+   后端用 `go test -tags desktop -run "TestAppSmoke|TestSettingsTolerance|TestOrganizeJob" ./cmd/filededup` 覆盖真实目录的扫描→预览→执行闭环、设置容错与整理执行。
 2. 结果列表一次性载入全部组（分页 500 逐步拉取），超大结果集的内存占用未单独测量。
 3. 预览只展示前 200 条动作样例，完整计划在执行时才交给执行器。
+4. 整理器动作样例同样只回传前 200 条；`suggest`（存疑项）只出现在样例里，不产生文件系统变化。
