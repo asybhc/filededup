@@ -560,6 +560,91 @@ func TestPlanContentDedupShortestPath(t *testing.T) {
 	}
 }
 
+// ---- 11. 硬链接合并（C# a/K.cs，仅去重删除且带 keepPath 时触发） ----
+
+// TestPlanHardlinkMerge 验证开启硬链接合并后，去重删除改为 hardlink 动作；
+// 试运行不产出硬链接，而预览计划仍复用已有计划真实执行硬链接。
+func TestPlanHardlinkMerge(t *testing.T) {
+	files := []FileEntry{
+		{Path: "keep.txt", Size: 10, SHA256: "H"},
+		{Path: "dup/one.txt", Size: 10, SHA256: "H"},
+		{Path: "dup/another_long_name.txt", Size: 10, SHA256: "H"},
+	}
+	wantHardlinks := []string{
+		"hardlink|dup/another_long_name.txt|keep.txt",
+		"hardlink|dup/one.txt|keep.txt",
+	}
+
+	t.Run("开启硬链接合并", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Steps.ContentDedup = true
+		cfg.HardlinkMerge = true
+
+		sp := stepByID(t, Plan(cfg, snap(files...), Providers{}), StepContentDedup)
+		assertActions(t, "硬链接合并", sp.Actions, wantHardlinks)
+		// 原版硬链接成功时删除辅助仍返回 true，去重计数照常累加。
+		if sp.Counters.ContentDeleted != 2 {
+			t.Errorf("ContentDeleted = %d，期望 2", sp.Counters.ContentDeleted)
+		}
+		if sp.Counters.HardlinkMerged != 2 {
+			t.Errorf("HardlinkMerged = %d，期望 2", sp.Counters.HardlinkMerged)
+		}
+	})
+
+	t.Run("关闭时仍删除", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Steps.ContentDedup = true
+
+		sp := stepByID(t, Plan(cfg, snap(files...), Providers{}), StepContentDedup)
+		if got := actionsOf(sp, ActionHardlink); len(got) != 0 {
+			t.Errorf("未开启时不应有硬链接动作：%#v", actionTriples(got))
+		}
+		if sp.Counters.HardlinkMerged != 0 {
+			t.Errorf("HardlinkMerged = %d，期望 0", sp.Counters.HardlinkMerged)
+		}
+	})
+
+	t.Run("试运行不产出硬链接", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Steps.ContentDedup = true
+		cfg.HardlinkMerge = true
+		cfg.DryRun = true
+
+		sp := stepByID(t, Plan(cfg, snap(files...), Providers{}), StepContentDedup)
+		if got := actionsOf(sp, ActionHardlink); len(got) != 0 {
+			t.Errorf("试运行不应产出硬链接：%#v", actionTriples(got))
+		}
+		if sp.Counters.HardlinkMerged != 0 {
+			t.Errorf("试运行 HardlinkMerged = %d，期望 0", sp.Counters.HardlinkMerged)
+		}
+		if sp.Counters.ContentDeleted != 2 {
+			t.Errorf("试运行 ContentDeleted = %d，期望 2", sp.Counters.ContentDeleted)
+		}
+	})
+
+	t.Run("预览计划下仍然产出硬链接", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Order = OrderPreview
+		cfg.Steps.ContentDedup = true
+		cfg.HardlinkMerge = true
+
+		s := snap(files...)
+		s.PreviewPlan = map[string]string{
+			"keep.txt":                  "keep.txt",
+			"dup/one.txt":               "keep.txt",
+			"dup/another_long_name.txt": "keep.txt",
+		}
+		sp := stepByID(t, Plan(cfg, s, Providers{}), StepContentDedup)
+		assertActions(t, "预览计划硬链接合并", sp.Actions, wantHardlinks)
+		if sp.Counters.HardlinkMerged != 2 {
+			t.Errorf("预览计划 HardlinkMerged = %d，期望 2", sp.Counters.HardlinkMerged)
+		}
+		if sp.Counters.ContentDeleted != 2 {
+			t.Errorf("预览计划 ContentDeleted = %d，期望 2", sp.Counters.ContentDeleted)
+		}
+	})
+}
+
 // ---- 10. 音频相似去重（C# 时长容差分组） ----
 
 // TestPlanAudioDedup 验证同扩展名且时长差在 AudioToleranceSec 内的两个文件成组，删除非保留项。

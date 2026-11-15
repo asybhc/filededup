@@ -116,9 +116,9 @@ type Config struct {
 	Order    OrderMode
 	Steps    StepSwitches
 
-	DryRun       bool
-	Conflict     ConflictPolicy
-	Delete       DeleteMode
+	DryRun        bool
+	Conflict      ConflictPolicy
+	Delete        DeleteMode
 	HardlinkMerge bool
 
 	// 扫描过滤
@@ -172,6 +172,7 @@ const (
 	ActionRename        ActionKind = "rename"
 	ActionMove          ActionKind = "move"
 	ActionDelete        ActionKind = "delete"
+	ActionHardlink      ActionKind = "hardlink"
 	ActionClearReadonly ActionKind = "clear_readonly"
 	ActionRemoveDir     ActionKind = "remove_dir"
 	ActionEnsureDir     ActionKind = "ensure_dir"

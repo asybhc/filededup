@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -157,6 +159,67 @@ func TestOrgCompareClassification(t *testing.T) {
 	empty := &orgDump{Files: []orgDumpFile{}}
 	if res := compareOrgDumps(noHash, empty, 0); len(res.Unpaired) != 1 || len(res.Deleted) != 0 {
 		t.Fatalf("无法配对分类错误：unpaired=%v deleted=%v", res.Unpaired, res.Deleted)
+	}
+}
+
+// TestCollectOrgTreeSkipsReparse：重解析点（目录联接/符号链接）不枚举、不跟随、不计数。
+func TestCollectOrgTreeSkipsReparse(t *testing.T) {
+	root := t.TempDir()
+	defer makeTreeWritable(root)
+	outside := t.TempDir()
+	defer makeTreeWritable(outside)
+
+	plain := map[string]string{
+		"real.txt":      "real-payload",
+		"sub/inner.txt": "inner-payload",
+	}
+	for rel, data := range plain {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(outside, "target.txt"), []byte("target-payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	linkPath := filepath.Join(root, "link")
+	if runtime.GOOS == "windows" {
+		if out, err := exec.Command("cmd", "/c", "mklink", "/J", linkPath, outside).CombinedOutput(); err != nil {
+			t.Skipf("环境无法创建目录联接，跳过：%v %s", err, out)
+		}
+	} else {
+		if err := os.Symlink(outside, linkPath); err != nil {
+			t.Skipf("环境无法创建目录符号链接，跳过：%v", err)
+		}
+	}
+
+	tree, err := collectOrgTree(root)
+	if err != nil {
+		t.Fatalf("枚举失败：%v", err)
+	}
+	for _, f := range tree.Files {
+		if f.Path == "link" || strings.HasPrefix(f.Path, "link/") {
+			t.Fatalf("不应跟进重解析点目录内的文件：%s", f.Path)
+		}
+	}
+	for _, d := range tree.Dirs {
+		if d == "link" {
+			t.Fatalf("重解析点目录不应计入 Dirs：%v", tree.Dirs)
+		}
+	}
+
+	paths := map[string]bool{}
+	for _, f := range tree.Files {
+		paths[f.Path] = true
+	}
+	for rel := range plain {
+		if !paths[rel] {
+			t.Fatalf("普通文件被误伤，缺少 %s（实际 %v）", rel, paths)
+		}
 	}
 }
 

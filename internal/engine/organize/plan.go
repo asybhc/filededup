@@ -310,10 +310,19 @@ func (v *vfs) autoRename(p string) string {
 }
 
 // deleteAction 对齐 B/E.cs L909-980 的判定部分；返回是否真的发起删除。
-func (v *vfs) deleteAction(sp *StepPlan, path string) bool {
+//
+// keepPath 为“保留文件”的相对路径，仅去重三步传入。原版只有在开启硬链接合并时
+// 才把删除替换成硬链接（a/K.cs）；试运行不落盘；预览计划仍复用该路径真实执行硬链接。
+func (v *vfs) deleteAction(sp *StepPlan, path, keepPath string) bool {
 	if v.cfg.Conflict == ConflictSkip {
 		sp.Counters.ConflictSkip++
 		return false
+	}
+	if v.cfg.HardlinkMerge && keepPath != "" && !SamePath(path, keepPath) && !v.cfg.DryRun {
+		sp.Actions = append(sp.Actions, Action{Kind: ActionHardlink, From: path, To: keepPath, Rule: "hardlink"})
+		sp.Counters.HardlinkMerged++
+		// 硬链接后重复路径仍然存在（与原版一致），不修改虚拟文件系统。
+		return true
 	}
 	sp.Actions = append(sp.Actions, Action{Kind: ActionDelete, From: path, Rule: "delete"})
 	v.applyDelete(path)
@@ -338,12 +347,12 @@ func (v *vfs) stepSpecialDelete(sp *StepPlan) {
 		res := ClassifySpecial(stem, opt)
 		switch res.Verdict {
 		case SpecialGarbage:
-			if v.deleteAction(sp, f.Path) {
+			if v.deleteAction(sp, f.Path, "") {
 				sp.Counters.SpecialDeleted++
 			}
 		case SpecialSuspect:
 			if v.cfg.AutoDeleteConfirmed && v.cfg.ConfirmedKeys != nil && v.cfg.ConfirmedKeys[Fold(f.Path)] {
-				if v.deleteAction(sp, f.Path) {
+				if v.deleteAction(sp, f.Path, "") {
 					sp.Counters.SpecialDeleted++
 				}
 			} else {
@@ -429,7 +438,7 @@ func (v *vfs) stepContentDedup(sp *StepPlan) {
 					if !ok || SamePath(kp, f.Path) {
 						continue
 					}
-					if v.deleteAction(sp, f.Path) {
+					if v.deleteAction(sp, f.Path, kp) {
 						sp.Counters.ContentDeleted++
 					}
 					continue
@@ -437,7 +446,7 @@ func (v *vfs) stepContentDedup(sp *StepPlan) {
 				if SamePath(f.Path, keep) {
 					continue
 				}
-				if v.deleteAction(sp, f.Path) {
+				if v.deleteAction(sp, f.Path, keep) {
 					sp.Counters.ContentDeleted++
 				}
 			}
@@ -473,7 +482,7 @@ func (v *vfs) stepImageDedup(sp *StepPlan) {
 				if !ok || SamePath(kp, f.Path) {
 					continue
 				}
-				if v.deleteAction(sp, f.Path) {
+				if v.deleteAction(sp, f.Path, kp) {
 					sp.Counters.ImageDeleted++
 				}
 				continue
@@ -481,7 +490,7 @@ func (v *vfs) stepImageDedup(sp *StepPlan) {
 			if SamePath(f.Path, keep) {
 				continue
 			}
-			if v.deleteAction(sp, f.Path) {
+			if v.deleteAction(sp, f.Path, keep) {
 				sp.Counters.ImageDeleted++
 			}
 		}
@@ -599,7 +608,7 @@ func (v *vfs) stepAudioDedup(sp *StepPlan) {
 					if !ok || SamePath(kp, f.Path) {
 						continue
 					}
-					if v.deleteAction(sp, f.Path) {
+					if v.deleteAction(sp, f.Path, kp) {
 						sp.Counters.AudioDeleted++
 					}
 					continue
@@ -607,7 +616,7 @@ func (v *vfs) stepAudioDedup(sp *StepPlan) {
 				if SamePath(f.Path, keep) {
 					continue
 				}
-				if v.deleteAction(sp, f.Path) {
+				if v.deleteAction(sp, f.Path, keep) {
 					sp.Counters.AudioDeleted++
 				}
 			}
@@ -712,7 +721,7 @@ func (v *vfs) organizeMove(sp *StepPlan, from, to string, nameChanged bool) {
 			case ConflictRename:
 				to = v.autoRename(to)
 			default:
-				if v.deleteAction(sp, from) {
+				if v.deleteAction(sp, from, "") {
 					sp.Counters.SpecialDeleted++
 				} else {
 					sp.Counters.OrganizeSkip++

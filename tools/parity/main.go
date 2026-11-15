@@ -44,6 +44,8 @@ func main() {
 		os.Exit(runOrganizeCompare(os.Args[2:]))
 	case "organize-batch":
 		os.Exit(runOrganizeBatch(os.Args[2:]))
+	case "trash-e2e":
+		os.Exit(runTrashE2E(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
@@ -66,6 +68,7 @@ func usage() {
   parity organize-compare --base <csharp.json> --cand <go.json> [-json] [-max N]
   parity organize-batch --exe <FileDedupTool.exe> --work <dir> [--scenes a,b] [--orders ...]
                        [--conflicts ...] [--dry-run] [--matrix] [--out <summary.json>]
+  parity trash-e2e [--out <e2e.json>] [--keep]  真实语料：计划→回收站→还原→哈希校验（仅 Windows）
 
 选项:
   --root <dir>   语料根目录；缺省取 base.request.roots[0]

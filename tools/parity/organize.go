@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"io/fs"
 	stdimage "image"
 	stdcolor "image/color"
 	stdpng "image/png"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,6 +36,7 @@ import (
 	"filededup/internal/engine/organize"
 	"filededup/internal/engine/similar/audio"
 	imgsim "filededup/internal/engine/similar/image"
+	"filededup/internal/platform"
 )
 
 // orgCorpusEpoch 是语料的固定基准时间，保证 mtime 可复现。
@@ -83,7 +84,7 @@ func defaultOrgOptions() orgOptions {
 		Steps:          orgDefaultSteps,
 		Mode:           "category",
 		Conflict:       "overwrite",
-		Delete:         "permanent",
+		Delete:         "trash",
 		Keep:           "pathshortest",
 		ImageKeep:      "largest",
 		ImageThreshold: 8,
@@ -145,6 +146,12 @@ func (s orgScene) options() orgOptions {
 	if in.Delete != "" {
 		o.Delete = in.Delete
 	}
+	if in.Hardlink {
+		o.Hardlink = true
+	}
+	if in.Preview {
+		o.Preview = true
+	}
 	return o
 }
 
@@ -160,6 +167,7 @@ var orgScenes = []orgScene{
 	{id: "organize-keyword", args: orgOptions{Steps: "organize", Mode: "keyword", Keyword: "报告,总结"}, gen: genOrgKeyword},
 	{id: "organize-regex", args: orgOptions{Steps: "organize", Mode: "namefeature", Regex: `^img_\d+`}, gen: genOrgRegex},
 	{id: "dedup-content", args: orgOptions{Steps: "content"}, gen: genOrgDedupContent},
+	{id: "hardlink-content", args: orgOptions{Steps: "content", Hardlink: true}, gen: genOrgDedupContent},
 	{id: "dedup-image", args: orgOptions{Steps: "image", ImageKeep: "largest", ImageThreshold: 8}, gen: genOrgDedupImage},
 	{id: "dedup-audio", args: orgOptions{Steps: "audio", AudioTolerance: 2}, gen: genOrgDedupAudio},
 	{id: "emptydirs", args: orgOptions{Steps: "empty"}, gen: genOrgEmptyDirs},
@@ -293,12 +301,12 @@ func wavBytes(seconds, sampleRate int, seed byte) []byte {
 	b.WriteString("WAVE")
 	b.WriteString("fmt ")
 	writeU32(16)
-	writeU16(1)                                 // PCM
-	writeU16(1)                                 // 单声道
-	writeU32(uint32(sampleRate))                // 采样率
-	writeU32(uint32(sampleRate))                // 字节率
-	writeU16(1)                                 // 块对齐
-	writeU16(8)                                 // 位深
+	writeU16(1)                  // PCM
+	writeU16(1)                  // 单声道
+	writeU32(uint32(sampleRate)) // 采样率
+	writeU32(uint32(sampleRate)) // 字节率
+	writeU16(1)                  // 块对齐
+	writeU16(8)                  // 位深
 	b.WriteString("data")
 	writeU32(uint32(dataSize))
 	data := make([]byte, dataSize)
@@ -472,9 +480,9 @@ func genOrgDedupContent(root string) ([]string, error) {
 func genOrgDedupImage(root string) ([]string, error) {
 	b := newOrgSceneBuilder(root)
 	for _, it := range []struct {
-		rel string
-		w   int
-		h   int
+		rel  string
+		w    int
+		h    int
 		seed int
 	}{
 		{"img1.png", 64, 64, 0},
@@ -495,8 +503,8 @@ func genOrgDedupImage(root string) ([]string, error) {
 func genOrgDedupAudio(root string) ([]string, error) {
 	b := newOrgSceneBuilder(root)
 	for _, it := range []struct {
-		rel string
-		sec int
+		rel  string
+		sec  int
 		seed byte
 	}{
 		{"a.wav", 3, 0},
@@ -672,6 +680,9 @@ type orgDump struct {
 	Counters      organize.Counter `json:"counters"`
 	Dirs          []string         `json:"dirs"`
 	Files         []orgDumpFile    `json:"files"`
+	// PreviewPlan 仅预览计划模式下输出：原路径（小写）→ 保留路径（小写）。
+	// 原版应用没有该导出入口，C# 侧由 OrganizeDump.cs 的诊断重建提供。
+	PreviewPlan map[string]string `json:"previewPlan,omitempty"`
 }
 
 // orgTree 是一次完整枚举的结果（导出用 + 规划器快照用）。
@@ -689,6 +700,13 @@ func collectOrgTree(root string) (orgTree, error) {
 			return err
 		}
 		if path == root {
+			return nil
+		}
+		// 对齐 B/E.cs B_m_1：重解析点（符号链接/目录联接）不扫描、不跟随、不计数。
+		if platform.IsReparse(path) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
 			return nil
 		}
 		rel, rerr := filepath.Rel(root, path)
@@ -982,7 +1000,13 @@ func executeOrgRun(o orgOptions) (orgDump, error) {
 	res := organize.Plan(cfg, snap, providers)
 	// 即使试运行也调用 Apply：原版试运行会创建目标目录，其余动作不落盘。
 	{
-		rep, aerr := organize.Apply(root, res, organize.ExecOptions{DryRun: o.DryRun}, organize.ExecHooks{})
+		hooks := orgExecHooks()
+		if strings.EqualFold(o.Delete, "trash") {
+			// 平台回收站实现由 platform 注入，不在整理器内重写；
+			// 非 Windows 构建下 orgTrash 为 nil，退化为永久删除。
+			hooks.Trash = orgTrash
+		}
+		rep, aerr := organize.Apply(root, res, organize.ExecOptions{DryRun: o.DryRun}, hooks)
 		if aerr != nil {
 			return orgDump{}, aerr
 		}
@@ -998,7 +1022,7 @@ func executeOrgRun(o orgOptions) (orgDump, error) {
 	if err != nil {
 		return orgDump{}, err
 	}
-	return orgDump{
+	dump := orgDump{
 		SchemaVersion: 1,
 		Root:          root,
 		Target:        targetAbs,
@@ -1006,7 +1030,11 @@ func executeOrgRun(o orgOptions) (orgDump, error) {
 		Counters:      res.Counters,
 		Dirs:          after.Dirs,
 		Files:         after.Files,
-	}, nil
+	}
+	if o.Preview {
+		dump.PreviewPlan = snap.PreviewPlan
+	}
+	return dump, nil
 }
 
 // buildOrgSnapshot 把枚举结果装成规划器输入。
@@ -1104,16 +1132,21 @@ func buildOrgPreviewPlan(cfg organize.Config, snap organize.Snapshot) map[string
 	items := orgEligibleEntries(cfg, snap.Target, snap.Files)
 
 	if cfg.Steps.ContentDedup {
-		bySize := map[int64][]organize.FileEntry{}
-		var sizes []int64
+		// 按“大小 + SHA-256”分组：同大小但内容不同的文件不能配对；空 hash 不参与。
+		byContent := map[string][]organize.FileEntry{}
+		var keys []string
 		for _, f := range items {
-			if _, ok := bySize[f.Size]; !ok {
-				sizes = append(sizes, f.Size)
+			if f.SHA256 == "" {
+				continue
 			}
-			bySize[f.Size] = append(bySize[f.Size], f)
+			key := fmt.Sprintf("%d|%s", f.Size, f.SHA256)
+			if _, ok := byContent[key]; !ok {
+				keys = append(keys, key)
+			}
+			byContent[key] = append(byContent[key], f)
 		}
-		for _, size := range sizes {
-			g := bySize[size]
+		for _, key := range keys {
+			g := byContent[key]
 			if len(g) < 2 {
 				continue
 			}
@@ -1269,12 +1302,14 @@ type orgCompare struct {
 	Counters orgCompareCounters `json:"counters"`
 	Dirs     orgCompareSet      `json:"dirs"`
 	Files    orgCompareFiles    `json:"files"`
-	Renamed  []orgRenamePair    `json:"renamed"`
-	Deleted  []string           `json:"deleted"`
-	Added    []string           `json:"added"`
-	Unpaired []string           `json:"unpaired"`
-	Diffs    []diffItem         `json:"diffs"`
-	Dropped  int                `json:"dropped,omitempty"`
+	// PreviewPlan 仅在任一侧输出 previewPlan 时出现；值为“原路径 → 保留路径”的逐条比较。
+	PreviewPlan *orgCompareSet  `json:"previewPlan,omitempty"`
+	Renamed     []orgRenamePair `json:"renamed"`
+	Deleted     []string        `json:"deleted"`
+	Added       []string        `json:"added"`
+	Unpaired    []string        `json:"unpaired"`
+	Diffs       []diffItem      `json:"diffs"`
+	Dropped     int             `json:"dropped,omitempty"`
 }
 
 type orgCompareCounters struct {
@@ -1410,6 +1445,38 @@ func compareOrgDumps(base, cand *orgDump, max int) orgCompare {
 	}
 	out.Dirs.Rate = orgRate(out.Dirs.Matched, out.Dirs.Union)
 
+	// previewPlan：原版没有导出入口，C# 侧为 OrganizeDump 的诊断重建；
+	// 这里只比较两边都声称的“原路径 → 保留路径”映射。
+	if base.PreviewPlan != nil || cand.PreviewPlan != nil {
+		normPlan := func(m map[string]string, root string) map[string]string {
+			out := map[string]string{}
+			for k, v := range m {
+				out[strings.ToLower(orgRelPath(k, root))] = strings.ToLower(orgRelPath(v, root))
+			}
+			return out
+		}
+		bp, cp := normPlan(base.PreviewPlan, base.Root), normPlan(cand.PreviewPlan, cand.Root)
+		union := map[string]bool{}
+		for k := range bp {
+			union[k] = true
+		}
+		for k := range cp {
+			union[k] = true
+		}
+		set := &orgCompareSet{Union: len(union)}
+		for _, k := range sortedBoolKeys(union) {
+			bv, bok := bp[k]
+			cv, cok := cp[k]
+			if bok && cok && bv == cv {
+				set.Matched++
+				continue
+			}
+			d.add("previewPlan["+k+"]", bv, cv)
+		}
+		set.Rate = orgRate(set.Matched, set.Union)
+		out.PreviewPlan = set
+	}
+
 	// files：按折叠路径配对，逐字段比较。
 	baseFiles := map[string]orgNormFile{}
 	for _, f := range base.Files {
@@ -1525,6 +1592,15 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
+func sortedBoolKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func sortedNormKeys(m map[string]orgNormFile) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -1606,18 +1682,21 @@ func printOrgCompare(out orgCompare) {
 
 // orgBatchCase 是单个组合的对拍结论。
 type orgBatchCase struct {
-	Scene         string  `json:"scene"`
-	Order         string  `json:"order"`
-	Conflict      string  `json:"conflict"`
-	DryRun        bool    `json:"dryRun"`
-	Result        string  `json:"result"`
-	Matched       int     `json:"matched"`
-	Union         int     `json:"union"`
-	FileRate      float64 `json:"fileRate"`
-	CountersMatch bool    `json:"countersMatch"`
-	DirsMatch     bool    `json:"dirsMatch"`
-	FirstDiff     string  `json:"firstDiff,omitempty"`
-	Error         string  `json:"error,omitempty"`
+	Scene          string  `json:"scene"`
+	Order          string  `json:"order"`
+	Conflict       string  `json:"conflict"`
+	DryRun         bool    `json:"dryRun"`
+	Result         string  `json:"result"`
+	Matched        int     `json:"matched"`
+	Union          int     `json:"union"`
+	FileRate       float64 `json:"fileRate"`
+	CountersMatch  bool    `json:"countersMatch"`
+	DirsMatch      bool    `json:"dirsMatch"`
+	PreviewMatched int     `json:"previewMatched"`
+	PreviewUnion   int     `json:"previewUnion"`
+	PreviewRate    float64 `json:"previewRate"`
+	FirstDiff      string  `json:"firstDiff,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 // orgBatchSummary 是整批对拍的汇总。
@@ -1697,9 +1776,9 @@ func runOrganizeBatch(args []string) int {
 					if c.Result == "MATCH" {
 						sum.Match++
 					}
-					fmt.Printf("[%s/%s/%s/dry=%v] %s matched=%d/%d rate=%.2f%% counters=%v %s\n",
+					fmt.Printf("[%s/%s/%s/dry=%v] %s matched=%d/%d rate=%.2f%% counters=%v preview=%d/%d %.2f%% %s\n",
 						sc.id, order, conflict, dry, c.Result, c.Matched, c.Union, c.FileRate*100,
-						c.CountersMatch, c.FirstDiff)
+						c.CountersMatch, c.PreviewMatched, c.PreviewUnion, c.PreviewRate*100, c.FirstDiff)
 				}
 			}
 		}
@@ -1798,6 +1877,11 @@ func runOrgBatchCase(exe, work string, sc orgScene, order, conflict string, dry 
 	c.FileRate = cmp.Files.Rate
 	c.CountersMatch = cmp.Counters.Match
 	c.DirsMatch = cmp.Dirs.Matched == cmp.Dirs.Union
+	if cmp.PreviewPlan != nil {
+		c.PreviewMatched = cmp.PreviewPlan.Matched
+		c.PreviewUnion = cmp.PreviewPlan.Union
+		c.PreviewRate = cmp.PreviewPlan.Rate
+	}
 	if len(cmp.Diffs) > 0 {
 		c.FirstDiff = cmp.Diffs[0].String()
 	}

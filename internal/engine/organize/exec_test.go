@@ -412,3 +412,212 @@ func TestExecClearReadonlyAlreadyWritable(t *testing.T) {
 	}
 	execAssertContent(t, path, "w")
 }
+
+// ---- 硬链接合并执行（a/K.cs） ----
+
+// TestExecHardlinkMerge 成功路径：重复文件被替换为指向保留文件的硬链接。
+func TestExecHardlinkMerge(t *testing.T) {
+	root := t.TempDir()
+	keep := filepath.Join(root, "keep.txt")
+	dup := filepath.Join(root, "dup.txt")
+	execWriteFile(t, keep, "same")
+	execWriteFile(t, dup, "same")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionHardlink, From: "dup.txt", To: "keep.txt", Rule: "hardlink"},
+	}}}}
+	rep, err := Apply(root, res, ExecOptions{}, ExecHooks{})
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Total != 1 || rep.Applied != 1 || rep.Failed != 0 {
+		t.Fatalf("统计 = %+v, 期望 total=1 applied=1 failed=0（错误=%v）", rep, rep.Errors)
+	}
+	execAssertContent(t, dup, "same")
+	execAssertContent(t, keep, "same")
+	keepInfo, err := os.Stat(keep)
+	if err != nil {
+		t.Fatalf("读取保留文件失败: %v", err)
+	}
+	dupInfo, err := os.Stat(dup)
+	if err != nil {
+		t.Fatalf("读取重复文件失败: %v", err)
+	}
+	if !os.SameFile(keepInfo, dupInfo) {
+		t.Fatal("dup.txt 与 keep.txt 未指向同一文件（硬链接未生效）")
+	}
+	// 不残留备份文件。
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("读取根目录失败: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "fdedup-bak") {
+			t.Fatalf("残留备份文件：%s", e.Name())
+		}
+	}
+}
+
+// TestExecHardlinkRollback 建链接失败时必须把备份改回原名，重复文件内容不丢。
+func TestExecHardlinkRollback(t *testing.T) {
+	root := t.TempDir()
+	execWriteFile(t, filepath.Join(root, "keep.txt"), "same")
+	execWriteFile(t, filepath.Join(root, "dup.txt"), "same")
+
+	hooks := ExecHooks{Link: func(string, string) error { return errors.New("模拟建链失败") }}
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionHardlink, From: "dup.txt", To: "keep.txt", Rule: "hardlink"},
+	}}}}
+	rep, err := Apply(root, res, ExecOptions{ContinueOnError: true}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 || rep.Applied != 0 {
+		t.Fatalf("统计 = %+v, 期望 failed=1 applied=0", rep)
+	}
+	execAssertContent(t, filepath.Join(root, "dup.txt"), "same")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("读取根目录失败: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "fdedup-bak") {
+			t.Fatalf("回滚后仍残留备份：%s", e.Name())
+		}
+	}
+}
+
+// TestExecHardlinkCrossVolume 跨卷时失败，且不删除重复文件。
+func TestExecHardlinkCrossVolume(t *testing.T) {
+	root := t.TempDir()
+	execWriteFile(t, filepath.Join(root, "keep.txt"), "same")
+	execWriteFile(t, filepath.Join(root, "dup.txt"), "same")
+
+	hooks := ExecHooks{SameVolume: func(string, string) (bool, error) { return false, nil }}
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionHardlink, From: "dup.txt", To: "keep.txt", Rule: "hardlink"},
+	}}}}
+	rep, err := Apply(root, res, ExecOptions{ContinueOnError: true}, hooks)
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Fatalf("统计 = %+v, 期望 failed=1", rep)
+	}
+	execAssertContent(t, filepath.Join(root, "dup.txt"), "same")
+}
+
+// TestExecHardlinkMissingKeep 保留文件不存在时失败，不触碰重复文件。
+func TestExecHardlinkMissingKeep(t *testing.T) {
+	root := t.TempDir()
+	execWriteFile(t, filepath.Join(root, "dup.txt"), "same")
+
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionHardlink, From: "dup.txt", To: "missing.txt", Rule: "hardlink"},
+	}}}}
+	rep, err := Apply(root, res, ExecOptions{ContinueOnError: true}, ExecHooks{})
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Fatalf("统计 = %+v, 期望 failed=1", rep)
+	}
+	execAssertContent(t, filepath.Join(root, "dup.txt"), "same")
+}
+
+// ---- 占用 / 长路径 ----
+
+// TestExecDeleteLocked 被占用文件按失败处理；开启解除时才继续删除。
+func TestExecDeleteLocked(t *testing.T) {
+	newRoot := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		execWriteFile(t, filepath.Join(root, "locked.txt"), "x")
+		execWriteFile(t, filepath.Join(root, "ok.txt"), "ok")
+		return root
+	}
+	lockedHook := func(p string) bool { return strings.HasSuffix(p, "locked.txt") }
+
+	t.Run("默认不解除", func(t *testing.T) {
+		root := newRoot(t)
+		res := Result{Steps: []StepPlan{{Actions: []Action{
+			{Kind: ActionDelete, From: "locked.txt", Rule: "delete"},
+			{Kind: ActionRename, From: "ok.txt", To: "done.txt", Rule: "rename"},
+		}}}}
+		rep, err := Apply(root, res, ExecOptions{ContinueOnError: true}, ExecHooks{IsLocked: lockedHook})
+		if err != nil {
+			t.Fatalf("Apply 失败: %v", err)
+		}
+		if rep.Failed != 1 || rep.Applied != 1 {
+			t.Fatalf("统计 = %+v, 期望 failed=1 applied=1（文件占用不中止后续）", rep)
+		}
+		if !strings.Contains(rep.Errors[0], "占用") {
+			t.Fatalf("失败记录 = %q, 期望包含“占用”", rep.Errors[0])
+		}
+		execAssertContent(t, filepath.Join(root, "locked.txt"), "x")
+	})
+
+	t.Run("开启解除后删除", func(t *testing.T) {
+		root := newRoot(t)
+		var released []string
+		hooks := ExecHooks{
+			IsLocked: lockedHook,
+			ReleaseLocks: func(p string, _ func(string, []string) bool) error {
+				released = append(released, p)
+				return nil
+			},
+		}
+		res := Result{Steps: []StepPlan{{Actions: []Action{
+			{Kind: ActionDelete, From: "locked.txt", Rule: "delete"},
+		}}}}
+		rep, err := Apply(root, res, ExecOptions{ReleaseLock: true}, hooks)
+		if err != nil {
+			t.Fatalf("Apply 失败: %v", err)
+		}
+		if rep.Applied != 1 || rep.Failed != 0 {
+			t.Fatalf("统计 = %+v, 期望 applied=1 failed=0（错误=%v）", rep, rep.Errors)
+		}
+		if len(released) != 1 || !strings.HasSuffix(released[0], "locked.txt") {
+			t.Fatalf("解除占用调用 = %v, 期望 locked.txt", released)
+		}
+	})
+
+	t.Run("未接入解除能力", func(t *testing.T) {
+		root := newRoot(t)
+		res := Result{Steps: []StepPlan{{Actions: []Action{
+			{Kind: ActionDelete, From: "locked.txt", Rule: "delete"},
+		}}}}
+		rep, err := Apply(root, res, ExecOptions{ReleaseLock: true}, ExecHooks{IsLocked: lockedHook})
+		if err != nil {
+			t.Fatalf("Apply 失败: %v", err)
+		}
+		if rep.Failed != 1 || rep.Applied != 0 {
+			t.Fatalf("统计 = %+v, 期望 failed=1 applied=0", rep)
+		}
+		if !strings.Contains(rep.Errors[0], "未接入平台解除占用能力") {
+			t.Fatalf("失败记录 = %q, 期望包含“未接入平台解除占用能力”", rep.Errors[0])
+		}
+		execAssertContent(t, filepath.Join(root, "locked.txt"), "x")
+	})
+}
+
+// TestExecLongPathRejected 超过 Windows 长路径上限时判失败，不落盘。
+func TestExecLongPathRejected(t *testing.T) {
+	root := t.TempDir()
+	long := strings.Repeat("a", 33000) + ".txt"
+	res := Result{Steps: []StepPlan{{Actions: []Action{
+		{Kind: ActionDelete, From: long, Rule: "delete"},
+	}}}}
+	rep, err := Apply(root, res, ExecOptions{ContinueOnError: true}, ExecHooks{})
+	if err != nil {
+		t.Fatalf("Apply 失败: %v", err)
+	}
+	if rep.Failed != 1 || rep.Applied != 0 {
+		t.Fatalf("统计 = %+v, 期望 failed=1 applied=0", rep)
+	}
+	if !strings.Contains(rep.Errors[0], "长路径") {
+		t.Fatalf("失败记录 = %q, 期望包含“长路径”", rep.Errors[0])
+	}
+}
