@@ -10,6 +10,8 @@ import type {
   OrganizeSettings,
   OrganizeState,
   OrganizeStepMeta,
+  OrganizeUndoInfo,
+  OrganizeUndoResult,
 } from "./types";
 
 const MB = 1024 * 1024;
@@ -44,7 +46,7 @@ const KIND_LABELS: Record<string, string> = {
   clear_readonly: "去只读",
   remove_dir: "删空目录",
   ensure_dir: "建目录",
-  suggest: "存疑（仅报告）",
+  suggest: "建议（仅报告）",
 };
 
 const STEP_FIELD: Record<string, keyof OrganizeSettings["steps"]> = {
@@ -145,6 +147,15 @@ export function Organizer({
   const [jobId, setJobId] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [permanentAck, setPermanentAck] = useState(false);
+  const [planOnlyRun, setPlanOnlyRun] = useState(false);
+  // 存疑项决策：未出现在这里的项一律按“保留/驳回”处理。
+  const [decisions, setDecisions] = useState<Record<string, "delete" | "keep">>({});
+  const [undoInfo, setUndoInfo] = useState<OrganizeUndoInfo>();
+  const [undoResult, setUndoResult] = useState<OrganizeUndoResult>();
+  const [undoOpen, setUndoOpen] = useState(false);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [rulesBusy, setRulesBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
   // onPersist 每次渲染都是新函数，用 ref 固定，避免防抖 effect 反复重置。
   const persistRef = useRef(onPersist);
@@ -159,6 +170,21 @@ export function Organizer({
       })
       .catch((err) => {
         if (alive) setMetaError("步骤顺序加载失败：" + errorText(err));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .getOrganizeUndoInfo()
+      .then((info) => {
+        if (alive) setUndoInfo(info);
+      })
+      .catch(() => {
+        // 撤销信息读取失败不影响整理主流程，界面按“暂无可撤销”展示。
       });
     return () => {
       alive = false;
@@ -182,6 +208,13 @@ export function Organizer({
         if (st.phase !== "running") {
           stopped = true;
           window.clearInterval(timer);
+          if (!st.dryRun) {
+            // 真实执行后刷新“撤销上次整理”的可用性。
+            api
+              .getOrganizeUndoInfo()
+              .then(setUndoInfo)
+              .catch(() => {});
+          }
         }
       } catch (err) {
         if (stopped) return;
@@ -223,16 +256,99 @@ export function Organizer({
     }
   }
 
-  async function start(dryRun: boolean) {
+  async function start(dryRun: boolean, opts?: { planOnly?: boolean; confirmed?: string[] }) {
     setError("");
+    setNotice("");
     try {
-      const req: OrganizeRequest = { ...cfg, dryRun };
+      const confirmed = opts?.confirmed ?? (dryRun ? [] : confirmedKeys());
+      const req: OrganizeRequest = {
+        ...cfg,
+        dryRun,
+        planOnly: opts?.planOnly ?? false,
+        confirmedSuspects: confirmed,
+      };
       persistRef.current(cfg);
       const id = await api.startOrganize(req);
+      setPlanOnlyRun(Boolean(opts?.planOnly));
       setState(undefined);
       setJobId(id);
     } catch (err) {
       setError(errorText(err));
+    }
+  }
+
+  function decide(key: string, value: "delete" | "keep") {
+    setDecisions((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // 只把当前结果里仍存在、且被明确确认的存疑项交给后端。
+  function confirmedKeys(): string[] {
+    return (state?.suspects ?? [])
+      .filter((s) => decisions[s.key] === "delete")
+      .map((s) => s.path);
+  }
+
+  function decideAll(value: "delete" | "keep") {
+    const next: Record<string, "delete" | "keep"> = {};
+    for (const s of state?.suspects ?? []) next[s.key] = value;
+    setDecisions(next);
+  }
+
+  async function exportRules() {
+    setError("");
+    setNotice("");
+    setRulesBusy(true);
+    try {
+      const res = await api.exportOrganizeRules(cfg);
+      if (res.canceled) return;
+      setNotice(`规则已导出：${res.path}（${res.bytes} 字节）`);
+    } catch (err) {
+      setError("导出规则失败：" + errorText(err));
+    } finally {
+      setRulesBusy(false);
+    }
+  }
+
+  async function importRules() {
+    setError("");
+    setNotice("");
+    setRulesBusy(true);
+    try {
+      const res = await api.importOrganizeRules();
+      if (res.canceled) return;
+      // 根目录是机器相关状态，导入规则不改变当前根目录。
+      const next: OrganizeSettings = { ...res.rules, root: cfg.root };
+      setCfg(next);
+      setExcludesText((next.excludes ?? []).join(" "));
+      setDecisions({});
+      setNotice(`规则已导入：${res.path}（当前根目录保持不变）`);
+    } catch (err) {
+      setError("导入规则失败：" + errorText(err));
+    } finally {
+      setRulesBusy(false);
+    }
+  }
+
+  async function doUndo() {
+    setUndoOpen(false);
+    setError("");
+    setNotice("");
+    setUndoBusy(true);
+    try {
+      const res = await api.undoLastOrganize();
+      setUndoResult(res);
+      const info = await api.getOrganizeUndoInfo();
+      setUndoInfo(info);
+      setState(undefined);
+      setJobId("");
+    } catch (err) {
+      setError("撤销失败：" + errorText(err));
+      api
+        .getOrganizeUndoInfo()
+        .then(setUndoInfo)
+        .catch(() => {});
+    } finally {
+      setUndoBusy(false);
     }
   }
 
@@ -243,7 +359,7 @@ export function Organizer({
           <h2>九步整理</h2>
           {state && (
             <span className={`badge ${state.dryRun ? "warn" : "danger"}`}>
-              {state.dryRun ? "试运行结果" : "真实执行结果"}
+              {planOnlyRun ? "仅规划结果" : state.dryRun ? "试运行结果" : "真实执行结果"}
             </span>
           )}
         </div>
@@ -403,6 +519,18 @@ export function Organizer({
             <span>出错后继续执行剩余动作</span>
           </label>
         </div>
+
+        <div className="actions">
+          <button className="secondary" disabled={running || rulesBusy} onClick={() => void exportRules()}>
+            导出规则
+          </button>
+          <button className="secondary" disabled={running || rulesBusy} onClick={() => void importRules()}>
+            导入规则
+          </button>
+          <span className="hint">
+            规则文件带版本号；导入会拒绝未知字段与非法值，失败时不改动当前设置，也不会改变当前根目录。
+          </span>
+        </div>
       </section>
 
       <section className="card">
@@ -473,6 +601,13 @@ export function Organizer({
             </div>
 
             <div className="actions">
+              <button
+                className="secondary"
+                disabled={!cfg.root || enabledCount === 0 || running}
+                onClick={() => void start(true, { planOnly: true, confirmed: [] })}
+              >
+                分析存疑项（不改文件）
+              </button>
               <button className="secondary" disabled={!cfg.root || enabledCount === 0 || running} onClick={() => void start(true)}>
                 试运行（不改文件）
               </button>
@@ -501,6 +636,60 @@ export function Organizer({
 
         <OrganizeFeatureStatus />
       </section>
+
+      <section className="card">
+        <div className="sectionhead">
+          <h2>撤销上次整理</h2>
+          <span className={`badge ${undoInfo?.available ? "warn" : ""}`}>
+            {undoInfo?.available ? `可撤销 ${undoInfo.records} 条记录` : "暂无可撤销记录"}
+          </span>
+        </div>
+        {undoInfo?.available ? (
+          <p className="hint">
+            任务 <b>{undoInfo.id}</b>；根目录 <b>{undoInfo.root}</b>；开始时间 {undoInfo.startedAt}。
+          </p>
+        ) : (
+          <p className="hint">真实执行过一次整理后，这里会出现最近一次的撤销入口。</p>
+        )}
+        <p className="hint">
+          可回滚：改名、移动、新建目录、只读属性。不可回滚：已删除文件（回收站或永久删除）与硬链接替换；
+          这些项会在结果里单独计数，不会假装恢复成功。
+        </p>
+        <div className="actions">
+          <button
+            className="secondary"
+            disabled={!undoInfo?.available || running || undoBusy}
+            onClick={() => setUndoOpen(true)}
+          >
+            {undoBusy ? "正在撤销…" : "撤销上次整理"}
+          </button>
+          {undoResult && (
+            <span className="hint">
+              上次撤销：恢复 {undoResult.restored} · 跳过 {undoResult.skipped} · 不可恢复{" "}
+              {undoResult.unrestorable} · 失败 {undoResult.failed}（共 {undoResult.total} 条）
+            </span>
+          )}
+        </div>
+        {undoResult && undoResult.errors.length > 0 && (
+          <div className="skiplist">
+            {undoResult.errors.map((line, i) => (
+              <div className="skiprow" key={i}>
+                <span className="kind kind-warn">提示</span>
+                <p className="skippath">{line}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {notice && (
+        <div className="banner info" role="status">
+          <span>{notice}</span>
+          <button className="link" onClick={() => setNotice("")}>
+            关闭
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="banner error" role="alert">
@@ -535,7 +724,11 @@ export function Organizer({
 
           {state.error && <div className="banner error">{state.error}</div>}
 
-          {state.dryRun ? (
+          {planOnlyRun ? (
+            <div className="banner perf">
+              这是仅规划结果：只做了扫描与规划，没有创建目录、没有移动、没有删除、没有修改任何文件。
+            </div>
+          ) : state.dryRun ? (
             <div className="banner perf">
               这是试运行结果：只创建了目标目录，文件没有移动、没有删除、没有改属性。下面的动作数与计数是规划结果。
             </div>
@@ -555,6 +748,77 @@ export function Organizer({
             <span className="chip">失败 <b className={state.exec.failed ? "red" : ""}>{state.exec.failed}</b></span>
             <span className="chip">跳过 <b>{state.exec.skipped}</b></span>
           </div>
+
+          {(state.suspects.length > 0 || (planOnlyRun && cfg.steps.specialDelete)) && (
+            <>
+              <h3 className="subhead">
+                存疑项（{state.suspects.length}）
+                {planOnlyRun ? "：逐条确认或驳回后再执行" : "：默认全部保留"}
+              </h3>
+              {state.suspects.length > 0 ? (
+                <>
+                  <div className="skiplist">
+                    {state.suspects.map((s) => {
+                      const d = decisions[s.key] ?? "keep";
+                      return (
+                        <div className="skiprow" key={s.key}>
+                          <span className={`kind ${d === "delete" ? "kind-danger" : "kind-keep"}`}>
+                            {d === "delete" ? "将删除" : "保留"}
+                          </span>
+                          <div className="suspectbody">
+                            <p className="skippath">{s.path}</p>
+                            <span className="hint">
+                              {s.reason}
+                              {s.suggestion ? ` · 建议 ${s.suggestion}` : ""}
+                              {s.score ? ` · 得分 ${s.score}` : ""}
+                            </span>
+                          </div>
+                          <div className="decision">
+                            <button
+                              className={`secondary ${d === "delete" ? "active" : ""}`}
+                              onClick={() => decide(s.key, "delete")}
+                            >
+                              确认删除
+                            </button>
+                            <button
+                              className={`secondary ${d === "keep" ? "active" : ""}`}
+                              onClick={() => decide(s.key, "keep")}
+                            >
+                              保留（驳回）
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="actions">
+                    <button className="secondary" onClick={() => decideAll("delete")}>
+                      全选确认
+                    </button>
+                    <button className="secondary" onClick={() => decideAll("keep")}>
+                      全部保留
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={!canRun || running || confirmedKeys().length === 0}
+                      title={!canRun ? licenseHint : undefined}
+                      onClick={() => {
+                        setPermanentAck(false);
+                        setConfirmOpen(true);
+                      }}
+                    >
+                      执行并删除已确认项（{confirmedKeys().length}）
+                    </button>
+                  </div>
+                  <p className="hint">
+                    只有标为“确认删除”的存疑项会在下一次真实执行中删除；未确认或被驳回的一律保留。
+                  </p>
+                </>
+              ) : (
+                <p className="hint">本次扫描没有发现存疑项。</p>
+              )}
+            </>
+          )}
 
           {state.steps.length > 0 && (
             <>
@@ -629,6 +893,11 @@ export function Organizer({
               <b>{cfg.deleteMode === "trash" ? "移入回收站" : "永久删除"}</b>
               {cfg.hardlink ? "；去重改为建硬链接" : ""}
             </p>
+            {confirmedKeys().length > 0 && (
+              <p>
+                存疑项：将删除 <b>{confirmedKeys().length}</b> 个已确认项；其余存疑项一律保留。
+              </p>
+            )}
             <p className="hint">将执行以下步骤（按当前顺序）：</p>
             <ol className="confirmsteps">
               {activeOrder
@@ -665,6 +934,25 @@ export function Organizer({
           </div>
         </div>
       )}
+      {undoOpen && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="modalbodysmall">
+            <h3>确认撤销上次整理</h3>
+            <p>将把最近一次真实整理中可还原的动作反向执行：改名/移动还原、新建目录删除、只读属性恢复。</p>
+            <p className="hint">
+              已删除文件（回收站或永久删除）与硬链接替换无法由本程序还原，会在结果里如实计入“不可恢复”。
+            </p>
+            <div className="actions">
+              <button className="secondary" onClick={() => setUndoOpen(false)}>
+                取消
+              </button>
+              <button className="danger" onClick={() => void doUndo()}>
+                确认撤销
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -675,11 +963,12 @@ function OrganizeFeatureStatus() {
       <h3>本页功能状态（如实标注）</h3>
       <p>
         <span className="kind kind-keep">已接通</span> 九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/
-        特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细
+        特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、
+        存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）
       </p>
       <p>
-        <span className="kind kind-warn">未实现</span> 存疑项逐项人工确认（当前只记为“存疑（仅报告）”，不落盘）、整理后撤销、
-        规则导入导出
+        <span className="kind kind-warn">限制</span> 撤销只保留最近一次真实整理；已删除文件与硬链接替换无法还原。
+        macOS / Linux 的回收站、机器码、单实例已按平台实现并完成交叉编译验证，但尚未在真机运行。
       </p>
     </div>
   );

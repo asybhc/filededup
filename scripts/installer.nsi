@@ -9,7 +9,7 @@
 ;   - 版本号由打包脚本通过 /DAPP_VERSION=... 注入，避免与代码里的版本漂移。
 ;
 ; 用法（不要直接双击）：
-;   makensis /DAPP_VERSION=0.7.0 /DAPP_VERSION4=0.7.0.0 ^
+;   makensis /DAPP_VERSION=0.8.0 /DAPP_VERSION4=0.8.0.0 ^
 ;            /DSRC_EXE=<绝对路径>\fdedup-ui.exe /DOUT_FILE=<绝对路径>\Setup.exe scripts\installer.nsi
 
 Unicode true
@@ -18,10 +18,10 @@ Unicode true
 !include "FileFunc.nsh"
 
 !ifndef APP_VERSION
-  !define APP_VERSION "0.7.0"
+  !define APP_VERSION "0.8.0"
 !endif
 !ifndef APP_VERSION4
-  !define APP_VERSION4 "0.7.0.0"
+  !define APP_VERSION4 "0.8.0.0"
 !endif
 !ifndef SRC_EXE
   !define SRC_EXE "..\bin\fdedup-ui.exe"

@@ -10,8 +10,14 @@ import type {
   LicenseState,
   OrganizeRequest,
   OrganizeMeta,
+  OrganizeRulesExport,
+  OrganizeRulesImport,
+  OrganizeSettings,
   OrganizeState,
   OrganizeStepView,
+  OrganizeSuspect,
+  OrganizeUndoInfo,
+  OrganizeUndoResult,
   PlanPreview,
   ScanRequest,
   ScanState,
@@ -259,6 +265,36 @@ const STEP_KIND: Record<string, string> = {
 let orgSeq = 0;
 let orgJob: { id: string; startedAt: number; req: OrganizeRequest } | null = null;
 
+// 浏览器预览用固定存疑项，路径与 key（小写）都保持稳定，便于确认/驳回演示。
+const MOCK_SUSPECTS: OrganizeSuspect[] = [
+  {
+    key: "2024\\旅行\\a8f3k2x9.jpg",
+    path: "2024\\旅行\\a8f3k2x9.jpg",
+    reason: "疑似随机字符（需人工确认）",
+    suggestion: "RENAME",
+    normalized: "a8f3k2x9",
+    score: 7,
+  },
+  {
+    key: "2024\\旅行\\q7zm2v4b.png",
+    path: "2024\\旅行\\q7zm2v4b.png",
+    reason: "疑似随机字符（需人工确认）",
+    suggestion: "RENAME",
+    normalized: "q7zm2v4b",
+    score: 6,
+  },
+  {
+    key: "下载\\tmp-9x2k.dat",
+    path: "下载\\tmp-9x2k.dat",
+    reason: "疑似临时文件（需人工确认）",
+    suggestion: "KEEP",
+    normalized: "tmp-9x2k",
+    score: 5,
+  },
+];
+
+let mockUndo: { id: string; root: string; at: string; records: number } | null = null;
+
 function stepEnabled(sid: string, s: OrganizeRequest["steps"]): boolean {
   switch (sid) {
     case "rename_prefix": return s.renamePrefix;
@@ -278,7 +314,7 @@ function emptyOrgState(id: string): OrganizeState {
   return {
     id, phase: "running", stage: "枚举目录", dryRun: true, order: "standalone",
     usePreviewPlan: false, elapsedMs: 0, steps: [], counters: zeroCounter(),
-    exec: { total: 0, applied: 0, failed: 0, skipped: 0, errors: [] }, actionTotal: 0, actions: [],
+    exec: { total: 0, applied: 0, failed: 0, skipped: 0, errors: [] }, actionTotal: 0, actions: [], suspects: [],
   };
 }
 
@@ -334,6 +370,19 @@ function buildOrgState(id: string, req: OrganizeRequest, elapsed: number): Organ
     }
   }
   const total = steps.reduce((n, s) => n + s.actionNum, 0);
+  const specialOn = stepEnabled("special_delete", req.steps);
+  const confirmed = new Set(req.confirmedSuspects ?? []);
+  const suspects = specialOn ? MOCK_SUSPECTS.filter((s) => !confirmed.has(s.key)) : [];
+  if (specialOn) {
+    counters.suspectsKept += suspects.length;
+    counters.specialDeleted += MOCK_SUSPECTS.length - suspects.length;
+  }
+  const planOnly = Boolean(req.planOnly);
+  const exec = planOnly
+    ? { total, applied: 0, failed: 0, skipped: 0, errors: [] }
+    : req.dryRun
+      ? { total, applied: 0, failed: 0, skipped: total, errors: [] }
+      : { total, applied: total, failed: 0, skipped: 0, errors: [] };
   return {
     id,
     phase: "done",
@@ -344,11 +393,10 @@ function buildOrgState(id: string, req: OrganizeRequest, elapsed: number): Organ
     elapsedMs: elapsed,
     steps,
     counters,
-    exec: req.dryRun
-      ? { total, applied: 0, failed: 0, skipped: total, errors: [] }
-      : { total, applied: total, failed: 0, skipped: 0, errors: [] },
+    exec,
     actionTotal: total,
     actions,
+    suspects,
   };
 }
 
@@ -493,6 +541,9 @@ export const mock = {
   startOrganize(req: OrganizeRequest): string {
     orgSeq++;
     orgJob = { id: `mock-org-${orgSeq}`, startedAt: Date.now(), req };
+    if (!req.dryRun && !req.planOnly) {
+      mockUndo = { id: orgJob.id, root: req.root, at: new Date().toISOString(), records: 42 };
+    }
     return orgJob.id;
   },
   getOrganizeState(id: string): OrganizeState {
@@ -500,6 +551,61 @@ export const mock = {
       return { ...emptyOrgState(id), phase: "failed", error: "整理任务不存在" };
     }
     return buildOrgState(id, orgJob.req, Date.now() - orgJob.startedAt);
+  },
+  exportOrganizeRules(rules: OrganizeSettings): OrganizeRulesExport {
+    const payload = {
+      schemaVersion: 1,
+      kind: "filededup.organize.rules",
+      rules: { ...rules, root: "" },
+    };
+    const raw = JSON.stringify(payload, null, 2) + "\n";
+    try {
+      localStorage.setItem("filededup.mock.organizeRules", raw);
+    } catch {
+      // 浏览器禁用存储时仍然返回成功，规则内容已随返回值交给调用方。
+    }
+    return { canceled: false, path: "浏览器预览：内存中的规则", bytes: raw.length };
+  },
+  importOrganizeRules(): OrganizeRulesImport {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem("filededup.mock.organizeRules");
+    } catch {
+      raw = null;
+    }
+    if (!raw) {
+      throw new Error("浏览器预览还没有可导入的规则；请先在预览里导出一次。");
+    }
+    const parsed = JSON.parse(raw) as { schemaVersion: number; kind: string; rules: OrganizeSettings };
+    if (parsed.schemaVersion !== 1 || parsed.kind !== "filededup.organize.rules") {
+      throw new Error("规则文件格式或版本不受支持");
+    }
+    return { canceled: false, path: "浏览器预览：内存中的规则", rules: parsed.rules };
+  },
+  getOrganizeUndoInfo(): OrganizeUndoInfo {
+    if (!mockUndo) return { available: false, records: 0 };
+    return {
+      available: true,
+      id: mockUndo.id,
+      root: mockUndo.root,
+      startedAt: mockUndo.at,
+      records: mockUndo.records,
+    };
+  },
+  undoLastOrganize(): OrganizeUndoResult {
+    if (!mockUndo) throw new Error("没有可撤销的整理记录");
+    const result: OrganizeUndoResult = {
+      id: mockUndo.id,
+      root: mockUndo.root,
+      total: mockUndo.records,
+      restored: mockUndo.records - 4,
+      failed: 0,
+      skipped: 0,
+      unrestorable: 4,
+      errors: ["浏览器预览：4 条删除动作无法还原（合成数据）"],
+    };
+    mockUndo = null;
+    return result;
   },
   // ---- 授权：浏览器预览没有真实授权，按“试用中”展示，导入操作如实拒绝 ----
   getLicenseState(): LicenseState {

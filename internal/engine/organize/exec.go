@@ -36,6 +36,8 @@ type ExecHooks struct {
 	SameVolume func(a, b string) (bool, error)
 	// Link 创建硬链接；nil 时退化为 os.Link。
 	Link func(oldname, newname string) error
+	// Undo 接收一条“成功执行”的反向动作，供调用方持久化后回滚；nil 表示不记录。
+	Undo func(record UndoRecord)
 }
 
 // ExecOptions 是执行参数。
@@ -103,6 +105,10 @@ func Apply(root string, res Result, opt ExecOptions, hooks ExecHooks) (ExecRepor
 				rep.Skipped++
 				continue
 			}
+			var undo []UndoRecord
+			if hooks.Undo != nil {
+				undo = preUndo(absRoot, a)
+			}
 			if err := applyOne(absRoot, a, opt, hooks); err != nil {
 				if errors.Is(err, errAlreadyWritable) {
 					rep.Skipped++
@@ -116,6 +122,9 @@ func Apply(root string, res Result, opt ExecOptions, hooks ExecHooks) (ExecRepor
 				continue
 			}
 			rep.Applied++
+			for _, rec := range undo {
+				hooks.Undo(rec)
+			}
 		}
 	}
 	return rep, nil

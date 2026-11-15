@@ -6,7 +6,12 @@ import type {
   LicenseState,
   OrganizeMeta,
   OrganizeRequest,
+  OrganizeRulesExport,
+  OrganizeRulesImport,
   OrganizeState,
+  OrganizeSettings,
+  OrganizeUndoInfo,
+  OrganizeUndoResult,
   PlanPreview,
   ScanRequest,
   ScanState,
@@ -32,6 +37,10 @@ interface WailsApp {
   GetOrganizeMeta(): Promise<OrganizeMeta>;
   StartOrganize(req: OrganizeRequest): Promise<string>;
   GetOrganizeState(id: string): Promise<OrganizeState>;
+  ExportOrganizeRules(rules: OrganizeSettings): Promise<OrganizeRulesExport>;
+  ImportOrganizeRules(): Promise<OrganizeRulesImport>;
+  GetOrganizeUndoInfo(): Promise<OrganizeUndoInfo>;
+  UndoLastOrganize(): Promise<OrganizeUndoResult>;
   GetLicenseState(): Promise<LicenseState>;
   GetMachineCode(): Promise<string>;
   ImportLicenseFile(): Promise<LicenseState>;
@@ -54,7 +63,7 @@ export const api = {
   async getAppInfo(): Promise<AppInfo> {
     const b = bridge();
     if (b) return b.GetAppInfo();
-    return { version: "0.7.0 (浏览器预览)", platform: "browser" };
+    return { version: "0.8.0 (浏览器预览)", platform: "browser" };
   },
   async pickDirectory(): Promise<string> {
     const b = bridge();
@@ -125,6 +134,26 @@ export const api = {
     const b = bridge();
     if (b) return b.GetOrganizeState(id);
     return mock.getOrganizeState(id);
+  },
+  async exportOrganizeRules(rules: OrganizeSettings): Promise<OrganizeRulesExport> {
+    const b = bridge();
+    if (b) return b.ExportOrganizeRules(rules);
+    return mock.exportOrganizeRules(rules);
+  },
+  async importOrganizeRules(): Promise<OrganizeRulesImport> {
+    const b = bridge();
+    if (b) return b.ImportOrganizeRules();
+    return mock.importOrganizeRules();
+  },
+  async getOrganizeUndoInfo(): Promise<OrganizeUndoInfo> {
+    const b = bridge();
+    if (b) return b.GetOrganizeUndoInfo();
+    return mock.getOrganizeUndoInfo();
+  },
+  async undoLastOrganize(): Promise<OrganizeUndoResult> {
+    const b = bridge();
+    if (b) return b.UndoLastOrganize();
+    return mock.undoLastOrganize();
   },
   async getLicenseState(): Promise<LicenseState> {
     const b = bridge();

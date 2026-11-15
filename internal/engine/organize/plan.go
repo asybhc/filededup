@@ -357,6 +357,13 @@ func (v *vfs) stepSpecialDelete(sp *StepPlan) {
 				}
 			} else {
 				sp.Counters.SuspectsKept++
+				sp.Suspects = append(sp.Suspects, Suspect{
+					Path:       f.Path,
+					Reason:     res.Reason,
+					Suggestion: res.Suggestion,
+					Normalized: res.Normalized,
+					Score:      res.Score,
+				})
 			}
 		default:
 			// 正常：原版只记录“建议改名”，不改文件系统。

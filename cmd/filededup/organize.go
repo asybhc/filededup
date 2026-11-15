@@ -83,10 +83,12 @@ var validConflictPolicies = map[string]bool{"overwrite": true, "skip": true, "re
 
 // OrganizeRequest 是整理页的一次执行请求。
 type OrganizeRequest struct {
-	Root            string        `json:"root"`
-	Target          string        `json:"target"`
-	UsePreviewPlan  bool          `json:"usePreviewPlan"`
-	DryRun          bool          `json:"dryRun"`
+	Root           string `json:"root"`
+	Target         string `json:"target"`
+	UsePreviewPlan bool   `json:"usePreviewPlan"`
+	DryRun         bool   `json:"dryRun"`
+	// PlanOnly 只做扫描与规划，不创建目录、不改任何文件；用于先收集存疑项。
+	PlanOnly        bool          `json:"planOnly"`
 	Steps           OrganizeSteps `json:"steps"`
 	Mode            string        `json:"mode"`
 	Keyword         string        `json:"keyword"`
@@ -105,6 +107,9 @@ type OrganizeRequest struct {
 	ProtectWords    string        `json:"protectWords"`
 	Hardlink        bool          `json:"hardlink"`
 	ContinueOnError bool          `json:"continueOnError"`
+	// ConfirmedSuspects 是用户逐条确认要删除的存疑项路径（规划期的当前相对路径）。
+	// 只有出现在这里的存疑项才会在本次执行中删除；未列出的一律保留。
+	ConfirmedSuspects []string `json:"confirmedSuspects"`
 }
 
 // OrganizeStepView 是单个步骤的执行结果，Skipped 表示该步被关闭或未启用。
@@ -129,6 +134,16 @@ type OrganizeActionView struct {
 	Rule   string `json:"rule,omitempty"`
 }
 
+// OrganizeSuspectView 是存疑项；Key 为稳定的确认键（大小写折叠后的路径）。
+type OrganizeSuspectView struct {
+	Key        string `json:"key"`
+	Path       string `json:"path"`
+	Reason     string `json:"reason"`
+	Suggestion string `json:"suggestion"`
+	Normalized string `json:"normalized,omitempty"`
+	Score      int    `json:"score"`
+}
+
 // OrganizeExecView 是落盘阶段的统计。
 type OrganizeExecView struct {
 	Total   int      `json:"total"`
@@ -140,19 +155,20 @@ type OrganizeExecView struct {
 
 // OrganizeState 是一次整理任务的完整状态；界面按 400ms 轮询。
 type OrganizeState struct {
-	ID             string               `json:"id"`
-	Phase          string               `json:"phase"` // running | done | failed
-	Stage          string               `json:"stage"`
-	DryRun         bool                 `json:"dryRun"`
-	Order          string               `json:"order"` // standalone | preview
-	UsePreviewPlan bool                 `json:"usePreviewPlan"`
-	ElapsedMS      int64                `json:"elapsedMs"`
-	Error          string               `json:"error,omitempty"`
-	Steps          []OrganizeStepView   `json:"steps"`
-	Counters       organize.Counter     `json:"counters"`
-	Exec           OrganizeExecView     `json:"exec"`
-	ActionTotal    int                  `json:"actionTotal"`
-	Actions        []OrganizeActionView `json:"actions"`
+	ID             string                `json:"id"`
+	Phase          string                `json:"phase"` // running | done | failed
+	Stage          string                `json:"stage"`
+	DryRun         bool                  `json:"dryRun"`
+	Order          string                `json:"order"` // standalone | preview
+	UsePreviewPlan bool                  `json:"usePreviewPlan"`
+	ElapsedMS      int64                 `json:"elapsedMs"`
+	Error          string                `json:"error,omitempty"`
+	Steps          []OrganizeStepView    `json:"steps"`
+	Counters       organize.Counter      `json:"counters"`
+	Exec           OrganizeExecView      `json:"exec"`
+	ActionTotal    int                   `json:"actionTotal"`
+	Actions        []OrganizeActionView  `json:"actions"`
+	Suspects       []OrganizeSuspectView `json:"suspects"`
 }
 
 // OrganizeStepMeta 只用于界面渲染步骤顺序与标题。
@@ -184,6 +200,7 @@ func (j *organizeJob) snapshot() OrganizeState {
 	cp := j.state
 	cp.Steps = append([]OrganizeStepView(nil), j.state.Steps...)
 	cp.Actions = append([]OrganizeActionView(nil), j.state.Actions...)
+	cp.Suspects = append([]OrganizeSuspectView(nil), j.state.Suspects...)
 	cp.Exec.Errors = append([]string(nil), j.state.Exec.Errors...)
 	return cp
 }
@@ -246,33 +263,42 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !req.DryRun {
+	if !req.DryRun && !req.PlanOnly {
 		if err := requireLicense(auth.FeatureOrganize); err != nil {
 			return "", err
 		}
 	}
 
+	confirmed := make(map[string]bool, len(req.ConfirmedSuspects))
+	for _, p := range req.ConfirmedSuspects {
+		if p = strings.TrimSpace(p); p != "" {
+			confirmed[organize.Fold(p)] = true
+		}
+	}
+
 	cfg := organize.Config{
-		Order:             organize.OrderStandalone,
-		Steps:             steps,
-		DryRun:            req.DryRun,
-		Conflict:          organize.ParseConflictPolicy(conflict),
-		Delete:            organize.ParseDeleteMode(req.DeleteMode),
-		HardlinkMerge:     req.Hardlink,
-		Excludes:          cleanList(req.Excludes),
-		MinSize:           maxInt64(req.MinSize, 0),
-		SkipHiddenSystem:  !req.IncludeHidden,
-		ProtectWords:      req.ProtectWords,
-		Strength:          organize.ParseStrength(req.Strength),
-		LocalWhitelist:    true,
-		KeepRule:          organize.ParseKeepRule(req.KeepPolicy),
-		ImageKeepRule:     organize.ParseKeepRule(req.ImageKeepPolicy),
-		ImageThreshold:    clampInt(req.ImageThreshold, 0, 64, 8),
-		AudioToleranceSec: clampInt(req.AudioTolerance, 0, 60, 2),
-		OrganizeMode:      organize.ParseOrganizeMode(mode),
-		Keyword:           req.Keyword,
-		Regex:             req.Regex,
-		FixedFolder:       req.FixedDir,
+		Order:               organize.OrderStandalone,
+		Steps:               steps,
+		DryRun:              req.DryRun,
+		Conflict:            organize.ParseConflictPolicy(conflict),
+		Delete:              organize.ParseDeleteMode(req.DeleteMode),
+		HardlinkMerge:       req.Hardlink,
+		Excludes:            cleanList(req.Excludes),
+		MinSize:             maxInt64(req.MinSize, 0),
+		SkipHiddenSystem:    !req.IncludeHidden,
+		ProtectWords:        req.ProtectWords,
+		Strength:            organize.ParseStrength(req.Strength),
+		LocalWhitelist:      true,
+		KeepRule:            organize.ParseKeepRule(req.KeepPolicy),
+		ImageKeepRule:       organize.ParseKeepRule(req.ImageKeepPolicy),
+		ImageThreshold:      clampInt(req.ImageThreshold, 0, 64, 8),
+		AudioToleranceSec:   clampInt(req.AudioTolerance, 0, 60, 2),
+		OrganizeMode:        organize.ParseOrganizeMode(mode),
+		Keyword:             req.Keyword,
+		Regex:               req.Regex,
+		FixedFolder:         req.FixedDir,
+		ConfirmedKeys:       confirmed,
+		AutoDeleteConfirmed: len(confirmed) > 0,
 	}
 
 	job := &organizeJob{state: OrganizeState{
@@ -284,6 +310,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 		UsePreviewPlan: req.UsePreviewPlan,
 		Steps:          []OrganizeStepView{},
 		Actions:        []OrganizeActionView{},
+		Suspects:       []OrganizeSuspectView{},
 		Exec:           OrganizeExecView{Errors: []string{}},
 	}}
 
@@ -297,7 +324,9 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	target := targetRel
 	usePreview := req.UsePreviewPlan
 	dryRun := req.DryRun
+	planOnly := req.PlanOnly
 	continueOnError := req.ContinueOnError
+	jobID := job.state.ID
 
 	go func() {
 		defer func() {
@@ -356,13 +385,27 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 			}
 			s.ActionTotal = total
 			s.Actions = sample
-			s.Stage = "执行动作"
+			s.Suspects = suspectViews(res)
+			if !planOnly {
+				s.Stage = "执行动作"
+			}
 		})
 
+		if planOnly {
+			job.update(func(s *OrganizeState) {
+				s.Phase = "done"
+				finish(s)
+			})
+			return
+		}
+
+		journal := &organizeUndoJournal{}
+		hooks := platformHooks(cfg.Delete)
+		hooks.Undo = journal.record
 		rep, err := organize.Apply(absRoot, res, organize.ExecOptions{
 			DryRun:          dryRun,
 			ContinueOnError: continueOnError,
-		}, platformHooks(cfg.Delete))
+		}, hooks)
 
 		job.update(func(s *OrganizeState) {
 			if err != nil {
@@ -378,6 +421,19 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 			}
 			finish(s)
 		})
+
+		if dryRun {
+			return
+		}
+		recs := journal.snapshot()
+		if len(recs) == 0 {
+			return
+		}
+		if err := saveOrganizeUndo(jobID, absRoot, start, recs); err != nil {
+			job.update(func(s *OrganizeState) {
+				s.Exec.Errors = append(s.Exec.Errors, "撤销记录写入失败："+err.Error())
+			})
+		}
 	}()
 
 	return job.state.ID, nil
@@ -418,6 +474,24 @@ func stepViews(res organize.Result) []OrganizeStepView {
 	}
 	sort.SliceStable(views, func(i, j int) bool { return views[i].Order < views[j].Order })
 	return views
+}
+
+// suspectViews 汇总所有步骤的存疑项，Key 与引擎确认键一致（Fold 后）。
+func suspectViews(res organize.Result) []OrganizeSuspectView {
+	out := make([]OrganizeSuspectView, 0)
+	for _, sp := range res.Steps {
+		for _, su := range sp.Suspects {
+			out = append(out, OrganizeSuspectView{
+				Key:        organize.Fold(su.Path),
+				Path:       su.Path,
+				Reason:     su.Reason,
+				Suggestion: su.Suggestion,
+				Normalized: su.Normalized,
+				Score:      su.Score,
+			})
+		}
+	}
+	return out
 }
 
 // normalizeTarget 校验整理目标子目录：必须相对、且落在根目录内。

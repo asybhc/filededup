@@ -25,7 +25,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.7.0"
+const appVersion = "0.8.0"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -165,6 +165,8 @@ type App struct {
 	mu       sync.Mutex
 	sessions map[string]*scanSession
 	orgJobs  map[string]*organizeJob
+	// undoMu 串行化“撤销上次整理”，避免并发回滚同一份记录。
+	undoMu sync.Mutex
 }
 
 func NewApp() *App {

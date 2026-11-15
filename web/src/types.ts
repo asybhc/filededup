@@ -203,6 +203,10 @@ export interface LicenseState {
 export interface OrganizeRequest extends Omit<OrganizeSettings, "root"> {
   root: string;
   dryRun: boolean;
+  // 只扫描与规划，不创建目录、不改文件；用于先收集存疑项。
+  planOnly?: boolean;
+  // 用户逐条确认要删除的存疑项路径；未列出的一律保留。
+  confirmedSuspects?: string[];
 }
 
 export interface OrganizeStepMeta {
@@ -260,6 +264,15 @@ export interface OrganizeExecView {
   errors: string[];
 }
 
+export interface OrganizeSuspect {
+  key: string;
+  path: string;
+  reason: string;
+  suggestion: string;
+  normalized?: string;
+  score: number;
+}
+
 export interface OrganizeState {
   id: string;
   phase: "running" | "done" | "failed";
@@ -274,4 +287,38 @@ export interface OrganizeState {
   exec: OrganizeExecView;
   actionTotal: number;
   actions: OrganizeActionView[];
+  suspects: OrganizeSuspect[];
+}
+
+// ---------- 整理规则导入导出 / 撤销（对应 cmd/filededup/organize_rules.go、organize_undo.go） ----------
+
+export interface OrganizeRulesExport {
+  canceled: boolean;
+  path: string;
+  bytes: number;
+}
+
+export interface OrganizeRulesImport {
+  canceled: boolean;
+  path: string;
+  rules: OrganizeSettings;
+}
+
+export interface OrganizeUndoInfo {
+  available: boolean;
+  id?: string;
+  root?: string;
+  startedAt?: string;
+  records: number;
+}
+
+export interface OrganizeUndoResult {
+  id: string;
+  root: string;
+  total: number;
+  restored: number;
+  failed: number;
+  skipped: number;
+  unrestorable: number;
+  errors: string[];
 }

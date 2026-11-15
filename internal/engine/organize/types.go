@@ -188,6 +188,17 @@ type Action struct {
 	Rule   string     `json:"rule,omitempty"`
 }
 
+// Suspect 是特殊删除步骤中判定为“存疑”的文件。
+// 引擎默认只保留并记录它；只有调用方把 Fold(Path) 放进 Config.ConfirmedKeys
+// 且 Config.AutoDeleteConfirmed=true 时，才会在后续执行中删除。
+type Suspect struct {
+	Path       string `json:"path"`
+	Reason     string `json:"reason"`
+	Suggestion string `json:"suggestion"`
+	Normalized string `json:"normalized,omitempty"`
+	Score      int    `json:"score"`
+}
+
 // Counter 对齐原版 b.E 的计数项。
 type Counter struct {
 	Renamed        int `json:"renamed"`        // A
@@ -226,13 +237,14 @@ func (c *Counter) Add(o Counter) {
 
 // StepPlan 是单步规划结果。
 type StepPlan struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	Order      int      `json:"order"`
-	Actions    []Action `json:"actions"`
-	Counters   Counter  `json:"counters"`
-	Skipped    bool     `json:"skipped,omitempty"`
-	SkipReason string   `json:"skipReason,omitempty"`
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	Order      int       `json:"order"`
+	Actions    []Action  `json:"actions"`
+	Suspects   []Suspect `json:"suspects,omitempty"`
+	Counters   Counter   `json:"counters"`
+	Skipped    bool      `json:"skipped,omitempty"`
+	SkipReason string    `json:"skipReason,omitempty"`
 }
 
 // Result 是整体规划结果。

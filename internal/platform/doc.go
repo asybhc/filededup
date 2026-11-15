@@ -1,9 +1,11 @@
 // Package platform 是平台适配层：trash / hardlink / open / instance / machineid。
 // 按 GOOS 分文件实现，engine 不得反向依赖本包。
 //
-// 里程碑：M2 已实现 Windows 端 trash（IFileOperation）、hardlink、open、instance
-// 与机器码 v2 采集；非 Windows 端除 hardlink/open/instance 的等价实现外，
-// trash 与机器码采集按里程碑顺序后续补齐（未实现时返回 ErrUnsupported）。
+// 里程碑：Windows 端 trash（IFileOperation）、hardlink、open、instance 与机器码 v2 采集已实现。
+// Linux 端 trash 走 XDG Trash（同卷 $XDG_DATA_HOME/Trash，跨卷 .Trash/$uid 或 .Trash-$uid），
+// macOS 端 trash 走 ~/.Trash（跨卷 .Trashes/$uid）；两端的机器码采集分别读 /etc/machine-id
+// 与 IOPlatformUUID。三者均已通过交叉编译与 go vet 验证，但未在真机运行验证。
+// 其余平台在未实现时返回 ErrUnsupported。
 package platform
 
 import "errors"

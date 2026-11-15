@@ -779,6 +779,33 @@ button.link {
   border-bottom: 1px solid #f1f5f9;
 }
 
+.suspectbody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.decision {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.decision button.secondary {
+  padding: 4px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.decision button.secondary.active {
+  border-color: var(--accent);
+  background: #eff6ff;
+  color: var(--accent);
+}
+
 .skippath {
   margin: 0;
   word-break: break-all;
