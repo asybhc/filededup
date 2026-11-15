@@ -723,6 +723,27 @@ export default function App() {
     setDeleteSel(defaultDeleteSelection(groups));
   }
 
+  // 全局反选：逐组把“未勾选”变“勾选”；若某组反选后变成整组删除，自动留出该组的保留项。
+  function invertAllSelection() {
+    setSelNote("");
+    const next = new Set<string>();
+    let adjusted = 0;
+    for (const g of groups) {
+      for (const m of g.members) {
+        if (!deleteSel.has(m.path)) next.add(m.path);
+      }
+      if (g.members.every((m) => next.has(m.path))) {
+        const fallback = g.members.find((m) => m.keep) ?? g.members[0];
+        next.delete(fallback.path);
+        adjusted++;
+      }
+    }
+    if (adjusted > 0) {
+      setSelNote(`反选后有 ${adjusted} 组会变成整组删除，已自动留出每组一个保留项。`);
+    }
+    setDeleteSel(next);
+  }
+
   function clearAllSelection() {
     setSelNote("");
     setDeleteSel(new Set());
@@ -1145,6 +1166,9 @@ export default function App() {
                 <div className="actions inline">
                   <button className="link" onClick={selectAllDeletable}>
                     全选可删除项
+                  </button>
+                  <button className="link" onClick={invertAllSelection}>
+                    反选
                   </button>
                   <button className="link" onClick={clearAllSelection}>
                     全不选
