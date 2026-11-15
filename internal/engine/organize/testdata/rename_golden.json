@@ -1,0 +1,362 @@
+[
+  {
+    "name": "2024-01-02 \u62A5\u544A.docx",
+    "prefix": "\u62A5\u544A",
+    "suffix": "2024-01-02 \u62A5\u544A",
+    "sanitize": "2024-01-02 \u62A5\u544A.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "20240102_\u4F1A\u8BAE.mp4",
+    "prefix": "\u4F1A\u8BAE",
+    "suffix": "20240102_\u4F1A\u8BAE",
+    "sanitize": "20240102_\u4F1A\u8BAE.mp4",
+    "category": "\u89C6\u9891",
+    "extUpper": "MP4"
+  },
+  {
+    "name": "20240102093000 \u8BB0\u5F55.txt",
+    "prefix": "\u8BB0\u5F55",
+    "suffix": "20240102093000 \u8BB0\u5F55",
+    "sanitize": "20240102093000 \u8BB0\u5F55.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "copy 3 - \u63D0\u6848.pdf",
+    "prefix": "\u63D0\u6848",
+    "suffix": "copy 3 - \u63D0\u6848",
+    "sanitize": "copy 3 - \u63D0\u6848.pdf",
+    "category": "PDF",
+    "extUpper": "PDF"
+  },
+  {
+    "name": "\u526F\u672C2_\u5408\u540C.docx",
+    "prefix": "\u5408\u540C",
+    "suffix": "\u526F\u672C2_\u5408\u540C",
+    "sanitize": "\u526F\u672C2_\u5408\u540C.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u65B0\u5EFA\u6587\u4EF6\u59391.txt",
+    "prefix": "\u65B0\u5EFA\u6587\u4EF6\u59391",
+    "suffix": "\u65B0\u5EFA\u6587\u4EF6\u59391",
+    "sanitize": "\u65B0\u5EFA\u6587\u4EF6\u59391.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "(3) \u8BBE\u8BA1\u7A3F.psd",
+    "prefix": "\u8BBE\u8BA1\u7A3F",
+    "suffix": "(3) \u8BBE\u8BA1\u7A3F",
+    "sanitize": "(3) \u8BBE\u8BA1\u7A3F.psd",
+    "category": "\u8BBE\u8BA1\u7A3F",
+    "extUpper": "PSD"
+  },
+  {
+    "name": "12_\u65B9\u6848.docx",
+    "prefix": "\u65B9\u6848",
+    "suffix": "12_\u65B9\u6848",
+    "sanitize": "12_\u65B9\u6848.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "007-\u62A5\u544A.pdf",
+    "prefix": "\u62A5\u544A",
+    "suffix": "007-\u62A5\u544A",
+    "sanitize": "007-\u62A5\u544A.pdf",
+    "category": "PDF",
+    "extUpper": "PDF"
+  },
+  {
+    "name": "\u9879\u76EE-3-\u7EC8\u7A3F.docx",
+    "prefix": "\u9879\u76EE-\u7EC8\u7A3F",
+    "suffix": "\u9879\u76EE-3-\u7EC8\u7A3F",
+    "sanitize": "\u9879\u76EE-3-\u7EC8\u7A3F.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u9879\u76EE_5_\u7EC8\u7A3F.docx",
+    "prefix": "\u9879\u76EE_\u7EC8\u7A3F",
+    "suffix": "\u9879\u76EE_5_\u7EC8\u7A3F",
+    "sanitize": "\u9879\u76EE_5_\u7EC8\u7A3F.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A (3).docx",
+    "prefix": "\u62A5\u544A",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A (3).docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A-2024-01-02.docx",
+    "prefix": "\u62A5\u544A-2024-02",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A-2024-01-02.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A_20240102.docx",
+    "prefix": "\u62A5\u544A_20240102",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A_20240102.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "IMG_1234.JPG",
+    "prefix": "IMG_1234",
+    "suffix": "IMG_1234",
+    "sanitize": "IMG_1234.JPG",
+    "category": "\u56FE\u7247",
+    "extUpper": "JPG"
+  },
+  {
+    "name": "DSC00123.png",
+    "prefix": "DSC00123",
+    "suffix": "DSC00123",
+    "sanitize": "DSC00123.png",
+    "category": "\u56FE\u7247",
+    "extUpper": "PNG"
+  },
+  {
+    "name": "Screenshot_2024-01-02.png",
+    "prefix": "Screenshot_2024-02",
+    "suffix": "Screenshot",
+    "sanitize": "Screenshot_2024-01-02.png",
+    "category": "\u56FE\u7247",
+    "extUpper": "PNG"
+  },
+  {
+    "name": "a.tar.gz",
+    "prefix": "a.tar",
+    "suffix": "a.tar",
+    "sanitize": "a.tar.gz",
+    "category": "\u538B\u7F29\u5305",
+    "extUpper": "TAR.GZ"
+  },
+  {
+    "name": "x.zip.001",
+    "prefix": "x.zip",
+    "suffix": "x.zip",
+    "sanitize": "x.zip.001",
+    "category": "\u538B\u7F29\u5305",
+    "extUpper": "ZIP"
+  },
+  {
+    "name": "archive.tar.gz.001",
+    "prefix": "archive.tar.gz",
+    "suffix": "archive.tar.gz",
+    "sanitize": "archive.tar.gz.001",
+    "category": "\u538B\u7F29\u5305",
+    "extUpper": "TAR.GZ"
+  },
+  {
+    "name": "\u65E0\u6269\u5C55\u540D",
+    "prefix": "\u65E0\u6269\u5C55\u540D",
+    "suffix": "\u65E0\u6269\u5C55\u540D",
+    "sanitize": "\u65E0\u6269\u5C55\u540D",
+    "category": "\u5176\u4ED6",
+    "extUpper": "\u65E0\u6269\u5C55\u540D"
+  },
+  {
+    "name": "(1)(2)(3)(4) \u6807\u9898.txt",
+    "prefix": "\u6807\u9898",
+    "suffix": "(1)(2)(3)(4) \u6807\u9898",
+    "sanitize": "1234 \u6807\u9898.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "(1)(2) \u6807\u9898.txt",
+    "prefix": "\u6807\u9898",
+    "suffix": "(1)(2) \u6807\u9898",
+    "sanitize": "(1)(2) \u6807\u9898.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "a(b)c(d)e(f).txt",
+    "prefix": "a(b)c(d)e(f)",
+    "suffix": "a(b)c(d)e(f)",
+    "sanitize": "abcdef.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "a\u003Cb\u003Ec:d.txt",
+    "prefix": "a\u003Cb\u003Ec:d",
+    "suffix": "a\u003Cb\u003Ec:d",
+    "sanitize": "a\u003Cb\u003Ec:d.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "\u62A5\u544A (\u526F\u672C).docx",
+    "prefix": "\u62A5\u544A (\u526F\u672C)",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A (\u526F\u672C).docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A copy2.docx",
+    "prefix": "\u62A5\u544A copy2",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A copy2.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A final.docx",
+    "prefix": "\u62A5\u544A final",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A final.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A version3.docx",
+    "prefix": "\u62A5\u544A version3",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A version3.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A 2024.1.2.docx",
+    "prefix": "\u62A5\u544A 2024.1.2",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A 2024.1.2.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A 20240102.docx",
+    "prefix": "\u62A5\u544A 20240102",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A 20240102.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "\u62A5\u544A 20240102093000.txt",
+    "prefix": "\u62A5\u544A 20240102093000",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A 20240102093000.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "\u62A5\u544A 001.docx",
+    "prefix": "\u62A5\u544A 001",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A 001.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": ".gitignore",
+    "prefix": "",
+    "suffix": "",
+    "sanitize": ".gitignore",
+    "category": "\u5176\u4ED6",
+    "extUpper": "GITIGNORE"
+  },
+  {
+    "name": "trailingdot.",
+    "prefix": "trailingdot",
+    "suffix": "trailingdot",
+    "sanitize": "trailingdot.",
+    "category": "\u5176\u4ED6",
+    "extUpper": "\u65E0\u6269\u5C55\u540D"
+  },
+  {
+    "name": "hello-world-3-test.txt",
+    "prefix": "hello-world-test",
+    "suffix": "hello-world-3-test",
+    "sanitize": "hello-world-3-test.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "\u4E2D\u6587-12-\u6807\u9898.txt",
+    "prefix": "\u4E2D\u6587-\u6807\u9898",
+    "suffix": "\u4E2D\u6587-12-\u6807\u9898",
+    "sanitize": "\u4E2D\u6587-12-\u6807\u9898.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "12345678901.docx",
+    "prefix": "12345678901",
+    "suffix": "123",
+    "sanitize": "12345678901.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "  \u7A7A\u683C  .txt",
+    "prefix": "\u7A7A\u683C",
+    "suffix": "\u7A7A\u683C",
+    "sanitize": "  \u7A7A\u683C  .txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "a.b.c.tar.gz",
+    "prefix": "a.b.c.tar",
+    "suffix": "a.b.c.tar",
+    "sanitize": "a.b.c.tar.gz",
+    "category": "\u538B\u7F29\u5305",
+    "extUpper": "TAR.GZ"
+  },
+  {
+    "name": "x.2024",
+    "prefix": "x",
+    "suffix": "x",
+    "sanitize": "x.2024",
+    "category": "\u5176\u4ED6",
+    "extUpper": "2024"
+  },
+  {
+    "name": "\u62A5\u544A\uFF083\uFF09.docx",
+    "prefix": "\u62A5\u544A",
+    "suffix": "\u62A5\u544A",
+    "sanitize": "\u62A5\u544A\uFF083\uFF09.docx",
+    "category": "\u6587\u6863",
+    "extUpper": "DOCX"
+  },
+  {
+    "name": "Copy 2024-1-2 file.txt",
+    "prefix": "file",
+    "suffix": "Copy 2024-1-2 file",
+    "sanitize": "Copy 2024-1-2 file.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  },
+  {
+    "name": "2024.1.2",
+    "prefix": "1",
+    "suffix": "2024",
+    "sanitize": "2024.1.2",
+    "category": "\u5176\u4ED6",
+    "extUpper": "2"
+  },
+  {
+    "name": "0001.txt",
+    "prefix": "0001",
+    "suffix": "0001",
+    "sanitize": "0001.txt",
+    "category": "\u6587\u6863",
+    "extUpper": "TXT"
+  }
+]

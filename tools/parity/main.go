@@ -36,6 +36,14 @@ func main() {
 		os.Exit(runSimilar(os.Args[2:]))
 	case "plans":
 		os.Exit(runPlans(os.Args[2:]))
+	case "organize-scenes":
+		os.Exit(runOrganizeScenes(os.Args[2:]))
+	case "organize-run":
+		os.Exit(runOrganizeRun(os.Args[2:]))
+	case "organize-compare":
+		os.Exit(runOrganizeCompare(os.Args[2:]))
+	case "organize-batch":
+		os.Exit(runOrganizeBatch(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
@@ -53,6 +61,11 @@ func usage() {
   parity scenes [-write] [-plans] [-only <ids>]  13 组场景对拍；-write 生成 golden，-plans 追加计划对拍
   parity plans [-groups N]  生成多组语料，对拍 C#/Go 计划并用 C# 计划驱动 Go 执行器
   parity similar --csharp <similar.json> [--root <dir>] [-allow <relpaths>]  逐文件指纹/时长对拍
+  parity organize-scenes [--list] [--scene <id>] [--dest <dir>]  列出/生成确定性语料
+  parity organize-run --root <dir> [--out <json>] [--target <相对子目录>] [整理器参数]
+  parity organize-compare --base <csharp.json> --cand <go.json> [-json] [-max N]
+  parity organize-batch --exe <FileDedupTool.exe> --work <dir> [--scenes a,b] [--orders ...]
+                       [--conflicts ...] [--dry-run] [--matrix] [--out <summary.json>]
 
 选项:
   --root <dir>   语料根目录；缺省取 base.request.roots[0]

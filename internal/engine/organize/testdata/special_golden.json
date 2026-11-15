@@ -1,0 +1,1672 @@
+[
+  {
+    "stem": "年度总结报告",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "项目计划书",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "会议纪要",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "财务报表",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "合同模板",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "简历",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "照片",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "毕业论文",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "培训资料",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "产品需求文档",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "report",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "invoice",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "README",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "budget2024",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 3,
+    "hardRule": false
+  },
+  {
+    "stem": "meeting-notes",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "download",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "hello",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "world",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "quarTerlyReport",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "suspect",
+    "suggestion": "SCORE_MID",
+    "reason": "疑似随机字符（需人工确认）",
+    "score": 4,
+    "hardRule": false
+  },
+  {
+    "stem": "CONTRACT",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "IMG_1234",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "IMG_8231",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "DSC00123",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "DSCN0042",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "Screenshot_2024-01-02",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "Screen Shot 2024-01-02",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "微信图片_20240102",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "QQ图片20240102",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "截图2024-01-02",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "VID_20240102_123456",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "PXL_20240102_123456",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "MVIMG_2024",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "12345",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALL_DIGITS",
+    "reason": "全数字文件名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "20240102",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2024-01-02",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "20240102123045",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2024",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "1999",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2026",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "001",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "1234567890123",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALL_DIGITS",
+    "reason": "全数字文件名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "2023.12.31",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "010203",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告2024",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "第3集",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "共10个",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "3KB",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "10个",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "5分钟",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2024年",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "第12章",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "100元",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "20MB",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "合同(1)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "合同（1）",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告（副本）",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告 - 副本",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "notes-copy",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "notes_copy",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "项目(12)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "预算（副本）",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "照片(3)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "data(1)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "@#$%^&*",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "！！！？？？",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "...---...",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "###",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "^_^",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "★☆※§",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "a8Fk2Lm9",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "Xk3pQz7",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "bcdfghjkl",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "NO_VOWEL",
+    "reason": "无元音乱码字母串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "AbCdEfGh",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "RANDOM_CASE",
+    "reason": "随机大小写字母串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "qwertyuiop",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 3,
+    "hardRule": false
+  },
+  {
+    "stem": "Zx9Yw8Vr7",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "7f3b9a2c1d",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "d41d8cd98f00b204e9800998ecf8427e",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "aB3xY7pQ9",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "4f9c2a7b8e1d3c6f",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "中",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "表",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "档案",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "说明书",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "介绍信",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "项目Report2024",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALNUM_HANZI2",
+    "reason": "字母+数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "2024年度Report",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "会议meeting纪要",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告v2",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALNUM_HANZI2",
+    "reason": "字母+数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "合同final版",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "IMG照片",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "（重要）年度总结",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "【重要】会议纪要",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "〖草稿〗项目计划",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告\uD83D\uDE00",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "数据(备份)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "（1）报告",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "(草案)合同",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题中文标题",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "suspect",
+    "suggestion": "SCORE_MID",
+    "reason": "疑似随机字符（需人工确认）",
+    "score": 5,
+    "hardRule": false
+  },
+  {
+    "stem": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIjKlMnOpQrStUvWxYz01234",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "SCORE_HIGH",
+    "reason": "随机字符打分过高",
+    "score": 8,
+    "hardRule": false
+  },
+  {
+    "stem": "  报告  ",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告 2024  第三季度",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "\u3000报告\u3000",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "a b c d e",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告\uD83D\uDE00\uD83D\uDE00",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "\uD83C\uDF89\uD83C\uDF89\uD83C\uDF89",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "IMG_1234\uD83D\uDE00",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "\uD83D\uDCC1文件夹",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "ＡＢＣ１２３",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告２０２４",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "DIGITS_HANZI2",
+    "reason": "数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "全角（括号）测试",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告a8Fk2Lm9",
+    "strength": 1,
+    "protectWords": "报告,项目",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "Xk3pQz7报告",
+    "strength": 1,
+    "protectWords": "报告",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "bcdfghjkl报告",
+    "strength": 1,
+    "protectWords": "报告,合同",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "项目2024-01-02",
+    "strength": 1,
+    "protectWords": "项目",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "合同Xk3pQz7",
+    "strength": 1,
+    "protectWords": "合同;项目",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2024-01-02报告",
+    "strength": 1,
+    "protectWords": "报告",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "AbCdEfGh项目",
+    "strength": 1,
+    "protectWords": "项目，合同",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "qwertyuiop报告",
+    "strength": 1,
+    "protectWords": "报告 项目",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "Zx9Yw8Vr7合同",
+    "strength": 1,
+    "protectWords": "报告 项目 合同",
+    "verdict": "normal",
+    "suggestion": "PROTECT_USER",
+    "reason": "用户保护词",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "a8Fk2Lm9",
+    "strength": 1,
+    "protectWords": "报告,项目,合同",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "报告2024",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "a8Fk2Lm9",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "a8Fk2Lm9",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "Xk3pQz7",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "20240102",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "12345",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALL_DIGITS",
+    "reason": "全数字文件名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "会议纪要",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "会议纪要",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_CHINESE",
+    "reason": "纯中文标题",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "report",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "report",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "IMG_1234",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "bcdfghjkl",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "NO_VOWEL",
+    "reason": "无元音乱码字母串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "AbCdEfGh",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "RANDOM_CASE",
+    "reason": "随机大小写字母串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "第3集",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "3KB",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_UNIT",
+    "reason": "数字+量词/单位",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "a8Fk2Lm9-x",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "e",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "xy",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "中a",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "中a文",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "中abc",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "A1中",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "中文2字",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "12汉字",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "ab12汉字",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALNUM_HANZI2",
+    "reason": "字母+数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "汉字ab12",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALNUM_HANZI2",
+    "reason": "字母+数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "【标签】【标签】报告2024",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告 (1)(2)",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_EMPTY",
+    "reason": "剥掉标记后为空",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "    ",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_EMPTY",
+    "reason": "剥掉标记后为空",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "a8Fk2中Lm9",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "HANZI_INSIDE",
+    "reason": "汉字夹在乱码字母数字中",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "中a8Fk2Lm9",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "7f3b9a2c1d汉字",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ALNUM_HANZI2",
+    "reason": "字母+数字+2汉字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "ABCDfg",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "LOW_VOWEL_UPPER",
+    "reason": "低元音大写随机串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "ABcDeF",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "RANDOM_CASE",
+    "reason": "随机大小写字母串",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "（╯°□°）╯",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "ODD_SYMBOL",
+    "reason": "含异常符号的乱码名",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "【】",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "报告【附件】",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "2024-01-02 报告",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DATE",
+    "reason": "日期或年份",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "abc123def456ghi789",
+    "strength": 2,
+    "protectWords": "",
+    "verdict": "garbage",
+    "suggestion": "MEANINGLESS_ALNUM",
+    "reason": "无意义字母数字组合",
+    "score": 10,
+    "hardRule": true
+  },
+  {
+    "stem": "３ＫＢ",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_SHORT",
+    "reason": "长度不超过 3 个字符",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "'quote'",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "KEEP",
+    "reason": "未发现明显垃圾特征",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "copy",
+    "strength": 1,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_WORD",
+    "reason": "常见英文词/缩写",
+    "score": 0,
+    "hardRule": false
+  },
+  {
+    "stem": "IMG",
+    "strength": 0,
+    "protectWords": "",
+    "verdict": "normal",
+    "suggestion": "PROTECT_DEVICE",
+    "reason": "设备/软件编号前缀",
+    "score": 0,
+    "hardRule": false
+  }
+]

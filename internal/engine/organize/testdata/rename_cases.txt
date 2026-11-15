@@ -1,0 +1,45 @@
+2024-01-02 报告.docx
+20240102_会议.mp4
+20240102093000 记录.txt
+copy 3 - 提案.pdf
+副本2_合同.docx
+新建文件夹1.txt
+(3) 设计稿.psd
+12_方案.docx
+007-报告.pdf
+项目-3-终稿.docx
+项目_5_终稿.docx
+报告 (3).docx
+报告-2024-01-02.docx
+报告_20240102.docx
+IMG_1234.JPG
+DSC00123.png
+Screenshot_2024-01-02.png
+a.tar.gz
+x.zip.001
+archive.tar.gz.001
+无扩展名
+(1)(2)(3)(4) 标题.txt
+(1)(2) 标题.txt
+a(b)c(d)e(f).txt
+a<b>c:d.txt
+报告 (副本).docx
+报告 copy2.docx
+报告 final.docx
+报告 version3.docx
+报告 2024.1.2.docx
+报告 20240102.docx
+报告 20240102093000.txt
+报告 001.docx
+.gitignore
+trailingdot.
+hello-world-3-test.txt
+中文-12-标题.txt
+12345678901.docx
+  空格  .txt
+a.b.c.tar.gz
+x.2024
+报告（3）.docx
+Copy 2024-1-2 file.txt
+2024.1.2
+0001.txt
