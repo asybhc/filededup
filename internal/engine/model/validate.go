@@ -51,8 +51,8 @@ func (r *Request) Validate() error {
 		add("imageKeepPolicy 不受支持：%s", r.ImageKeepPolicy)
 	}
 	if r.SimilarImage != nil {
-		if r.SimilarImage.Threshold < 0 || r.SimilarImage.Threshold > 64 {
-			add("similarImage.threshold 必须在 0..64：%d", r.SimilarImage.Threshold)
+		if r.SimilarImage.Threshold < 0 || r.SimilarImage.Threshold > MaxImageThreshold {
+			add("similarImage.threshold 必须在 0..%d：%d", MaxImageThreshold, r.SimilarImage.Threshold)
 		}
 		if r.SimilarImage.Enabled && r.QuickHash {
 			add("similarImage 不能与 quickHash 同时启用：相似判定必须先有完整内容指纹")
@@ -127,8 +127,8 @@ func (r *OrganizeRequest) Validate() error {
 	if r.ImageKeepPolicy != "" && !organizeKeepPolicies[r.ImageKeepPolicy] {
 		add("imageKeepPolicy 不受支持：%s", r.ImageKeepPolicy)
 	}
-	if r.ImageThreshold < 0 || r.ImageThreshold > 64 {
-		add("imageThreshold 必须在 0..64：%d", r.ImageThreshold)
+	if r.ImageThreshold < 0 || r.ImageThreshold > MaxImageThreshold {
+		add("imageThreshold 必须在 0..%d：%d", MaxImageThreshold, r.ImageThreshold)
 	}
 	if r.AudioToleranceSec < 0 || r.AudioToleranceSec > 60 {
 		add("audioToleranceSec 必须在 0..60：%d", r.AudioToleranceSec)

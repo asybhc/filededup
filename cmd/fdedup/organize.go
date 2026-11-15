@@ -38,7 +38,7 @@ func runOrganize(args []string) int {
 	protect := fs.String("protect", "", "保护词（含这些词的文件在改名/特殊删除中跳过）")
 	keep := fs.String("keep", "pathShortest", "去重保留规则：pathShortest|newest|oldest|largest|nameShortest")
 	imageKeep := fs.String("image-keep", "largest", "相似图片保留规则")
-	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-64）")
+	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-16，默认 8；调大更宽松）")
 	audioTolerance := fs.Int("audio-tolerance", 2, "音频时长容差（秒）")
 	strength := fs.Int("strength", 1, "垃圾识别强度：0 低 / 1 中 / 2 高")
 	minSize := fs.Int64("min-size", 0, "最小文件大小（字节），0=不限")

@@ -20,10 +20,18 @@ type Request struct {
 	UseCache        bool       `json:"useCache"`
 }
 
+// MaxImageThreshold 是相似图片汉明距离阈值的上限。
+//
+// dHash 是 64 位指纹，互不相关的两张图距离近似 Binomial(64, 0.5)：
+// 阈值 16 时随机命中率约 3.9e-5，20 时约 1.8e-3，24 时约 3%，32 时约 55%。
+// 上限取 16（1/4 位）既能允许比默认 8 更宽松的判定，又不会把大量无关图片当相似；
+// 组内直径约束（与组内每个成员都 <= 阈值）继续生效，避免链式传递导致整组膨胀。
+const MaxImageThreshold = 16
+
 // ImageOpts 是相似图片判定参数。C# A_1.E / A_1.A_5。
 type ImageOpts struct {
 	Enabled   bool `json:"enabled"`
-	Threshold int  `json:"threshold"` // 汉明距离阈值 0..64，默认 8，判定为 <=
+	Threshold int  `json:"threshold"` // 汉明距离阈值 0..MaxImageThreshold，默认 8，判定为 <=
 	// SkipUniform 为 true 时，无行内梯度的退化指纹（全 0 或纯色图产生的 0x0101…01）不参与相似分组。
 	// 原版没有该规则（互不相关的纯色图会被并入同组），默认 false 保持等价；开启后会在 Skipped 中
 	// 登记 code=uniform_fingerprint。详见 docs/similar-image.md。

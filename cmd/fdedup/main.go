@@ -144,7 +144,7 @@ func runScan(args []string) int {
 	keep := fs.String("keep", "", "保留策略")
 	noExact := fs.Bool("no-exact", false, "关闭精确查重")
 	image := fs.Bool("image", false, "开启相似图片判定")
-	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-64）")
+	imageThreshold := fs.Int("image-threshold", 8, "图片 dHash 汉明阈值（0-16，默认 8；调大更宽松）")
 	imageKeep := fs.String("image-keep", "", "相似图片保留策略")
 	imageSkipUniform := fs.Bool("image-skip-uniform", false, "退化指纹（纯色图）不参与相似分组")
 	audio := fs.Bool("audio", false, "开启相似音频判定")

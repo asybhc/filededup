@@ -445,13 +445,15 @@ export function Organizer({
             </select>
           </label>
           <label>
-            <span>相似图片阈值（0 = 完全相同，8 = 默认）</span>
+            <span title="0 = 指纹完全相同；数值越大判定越宽松，越容易把不同的图片当成相似；范围 0-16，默认 8">
+              相似图片阈值（0 = 完全相同，越大越宽松；默认 8，上限 16）
+            </span>
             <input
               type="number"
               min={0}
-              max={64}
+              max={16}
               value={cfg.imageThreshold}
-              onChange={(e) => patch({ imageThreshold: Math.max(0, Math.min(64, Number(e.target.value) || 0)) })}
+              onChange={(e) => patch({ imageThreshold: Math.max(0, Math.min(16, Number(e.target.value) || 0)) })}
             />
           </label>
           <label>

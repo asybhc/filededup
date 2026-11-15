@@ -225,7 +225,7 @@ function mockDefaultSettings(): UISettings {
       root: SAMPLE_ROOT,
       keepPolicy: "pathShortest",
       deleteMode: "trash",
-      similarImage: true,
+      similarImage: false,
       imageThreshold: 8,
       similarAudio: true,
       audioTolerance: 2,

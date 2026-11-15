@@ -24,6 +24,8 @@ import (
 	"strings"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"filededup/internal/engine/model"
 )
 
 const (
@@ -219,8 +221,8 @@ func validateOrganizeRules(r OrganizeSettings) error {
 	if !validOrganizeKeepPolicies[strings.ToLower(r.ImageKeepPolicy)] {
 		add("imageKeepPolicy=%q 不是合法的保留规则", r.ImageKeepPolicy)
 	}
-	if r.ImageThreshold < 0 || r.ImageThreshold > 64 {
-		add("imageThreshold=%d 超出 0-64", r.ImageThreshold)
+	if r.ImageThreshold < 0 || r.ImageThreshold > model.MaxImageThreshold {
+		add("imageThreshold=%d 超出 0-%d", r.ImageThreshold, model.MaxImageThreshold)
 	}
 	if r.AudioTolerance < 0 || r.AudioTolerance > 60 {
 		add("audioTolerance=%d 超出 0-60", r.AudioTolerance)

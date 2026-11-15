@@ -39,7 +39,9 @@ func TestRequestValidation(t *testing.T) {
 		{"负最小大小", func(r *model.Request) { r.MinSize = -1 }, "minSize"},
 		{"非法保留策略", func(r *model.Request) { r.KeepPolicy = "largest" }, "keepPolicy 不受支持"},
 		{"无查重方式", func(r *model.Request) { r.Exact = false }, "至少启用一种查重方式"},
-		{"阈值越界", func(r *model.Request) { r.SimilarImage = &model.ImageOpts{Enabled: true, Threshold: 65} }, "threshold"},
+		{"阈值越界", func(r *model.Request) {
+			r.SimilarImage = &model.ImageOpts{Enabled: true, Threshold: model.MaxImageThreshold + 1}
+		}, "threshold"},
 		{"快筛与图片冲突", func(r *model.Request) {
 			r.QuickHash = true
 			r.SimilarImage = model.EnabledImageOpts()

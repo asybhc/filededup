@@ -146,7 +146,7 @@ export default function App() {
   const [req, setReq] = useState<ScanRequest & { minSizeMB: number }>({
     root: "",
     keepPolicy: "pathShortest",
-    similarImage: true,
+    similarImage: false,
     imageThreshold: 8,
     similarAudio: false,
     audioTolerance: 2,
@@ -1108,14 +1108,16 @@ export default function App() {
                 <span>相似图片（dHash）</span>
               </label>
               <label>
-                <span>相似阈值（0 = 完全相同，8 = 默认）</span>
+                <span title="0 = 指纹完全相同；数值越大判定越宽松，越容易把不同的图片当成相似；范围 0-16，默认 8">
+                  相似阈值（0 = 完全相同，越大越宽松；默认 8，上限 16）
+                </span>
                 <input
                   type="number"
                   min={0}
-                  max={64}
+                  max={16}
                   value={req.imageThreshold}
                   disabled={!req.similarImage}
-                  onChange={(e) => setReq({ ...req, imageThreshold: Math.max(0, Math.min(64, Number(e.target.value) || 0)) })}
+                  onChange={(e) => setReq({ ...req, imageThreshold: Math.max(0, Math.min(16, Number(e.target.value) || 0)) })}
                 />
               </label>
               <label className="checkline">
@@ -1146,6 +1148,11 @@ export default function App() {
                 <span>包含隐藏/系统文件</span>
               </label>
             </div>
+
+            <p className="hint">
+              相似图片默认关闭，勾选后才参与查重。阈值 0 表示指纹完全相同；数值越大判定越宽松，
+              更容易把不同的图片当成相似（误判风险更高），数值越小越严格；可调范围 0-16，默认 8。
+            </p>
 
             <p className="hint">
               {settingsPath ? (

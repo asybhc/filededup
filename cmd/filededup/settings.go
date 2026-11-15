@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"filededup/internal/engine/model"
 	"filededup/internal/secret"
 )
 
@@ -143,7 +144,7 @@ func DefaultSettings() UISettings {
 		Scan: ScanSettings{
 			KeepPolicy:     "pathShortest",
 			DeleteMode:     "trash",
-			SimilarImage:   true,
+			SimilarImage:   false,
 			ImageThreshold: 8,
 			SimilarAudio:   true,
 			AudioTolerance: 2,
@@ -277,12 +278,14 @@ func LoadSettings() (UISettings, string) {
 		}
 	}
 
-	normalizeSettings(&out, def)
+	warns = append(warns, normalizeSettings(&out, def)...)
 	return out, strings.Join(warns, "；")
 }
 
 // normalizeSettings 把越界或未知的枚举值拉回默认，避免坏值流进引擎。
-func normalizeSettings(s *UISettings, def UISettings) {
+// 返回值是需要提示用户的收敛说明；旧配置里合法的值原样保留。
+func normalizeSettings(s *UISettings, def UISettings) []string {
+	var warns []string
 	if s.Scan.Excludes == nil {
 		s.Scan.Excludes = []string{}
 	}
@@ -295,7 +298,14 @@ func normalizeSettings(s *UISettings, def UISettings) {
 	if s.Scan.DeleteMode != "permanent" {
 		s.Scan.DeleteMode = "trash"
 	}
-	if s.Scan.ImageThreshold < 0 || s.Scan.ImageThreshold > 64 {
+	// 旧版本允许 0..64，上限收紧后按可预期规则收敛到新上限并提示，不静默截断。
+	if s.Scan.ImageThreshold > model.MaxImageThreshold {
+		warns = append(warns, fmt.Sprintf("相似图片阈值 %d 超出新上限 %d，已收敛为 %d",
+			s.Scan.ImageThreshold, model.MaxImageThreshold, model.MaxImageThreshold))
+		s.Scan.ImageThreshold = model.MaxImageThreshold
+	} else if s.Scan.ImageThreshold < 0 {
+		warns = append(warns, fmt.Sprintf("相似图片阈值 %d 无效，已回退默认值 %d",
+			s.Scan.ImageThreshold, def.Scan.ImageThreshold))
 		s.Scan.ImageThreshold = def.Scan.ImageThreshold
 	}
 	if s.Scan.AudioTolerance < 0 || s.Scan.AudioTolerance > 60 {
@@ -320,7 +330,13 @@ func normalizeSettings(s *UISettings, def UISettings) {
 	if !validConflictPolicies[s.Organize.Conflict] {
 		s.Organize.Conflict = def.Organize.Conflict
 	}
-	if s.Organize.ImageThreshold < 0 || s.Organize.ImageThreshold > 64 {
+	if s.Organize.ImageThreshold > model.MaxImageThreshold {
+		warns = append(warns, fmt.Sprintf("整理页相似图片阈值 %d 超出新上限 %d，已收敛为 %d",
+			s.Organize.ImageThreshold, model.MaxImageThreshold, model.MaxImageThreshold))
+		s.Organize.ImageThreshold = model.MaxImageThreshold
+	} else if s.Organize.ImageThreshold < 0 {
+		warns = append(warns, fmt.Sprintf("整理页相似图片阈值 %d 无效，已回退默认值 %d",
+			s.Organize.ImageThreshold, def.Organize.ImageThreshold))
 		s.Organize.ImageThreshold = def.Organize.ImageThreshold
 	}
 	if s.Organize.AudioTolerance < 0 || s.Organize.AudioTolerance > 60 {
@@ -395,6 +411,7 @@ func normalizeSettings(s *UISettings, def UISettings) {
 	if s.Logs.RetentionDays < 1 || s.Logs.RetentionDays > 365 {
 		s.Logs.RetentionDays = def.Logs.RetentionDays
 	}
+	return warns
 }
 
 // validDailyTime 校验 HH:MM（24 小时制）。

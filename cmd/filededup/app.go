@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.7"
+const appVersion = "0.9.8"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -306,8 +306,8 @@ func (a *App) StartScan(req ScanRequest) (string, error) {
 	if req.MinSize < 0 {
 		return "", errors.New("最小文件大小不能为负")
 	}
-	if req.ImageThreshold < 0 || req.ImageThreshold > 64 {
-		return "", fmt.Errorf("相似阈值必须在 0..64：%d", req.ImageThreshold)
+	if req.ImageThreshold < 0 || req.ImageThreshold > model.MaxImageThreshold {
+		return "", fmt.Errorf("相似阈值必须在 0..%d：%d", model.MaxImageThreshold, req.ImageThreshold)
 	}
 	if req.AudioTolerance < 0 || req.AudioTolerance > 60 {
 		return "", fmt.Errorf("音频容差必须在 0..60 秒：%d", req.AudioTolerance)

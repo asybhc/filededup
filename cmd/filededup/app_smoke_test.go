@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"filededup/internal/engine/model"
 )
 
 // 冒烟测试要真删文件、真整理，关闭授权门控以保证测试可重复。
@@ -168,10 +171,14 @@ func TestSettingsTolerance(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if DefaultSettings().Scan.SimilarImage {
+		t.Fatal("相似图片应默认关闭")
+	}
+
 	// 旧配置：缺 organize 段、scan 只有两个键，另有未知键。
 	old := `{
   "schemaVersion": 1,
-  "scan": {"keepPolicy": "newest", "imageThreshold": 12},
+  "scan": {"keepPolicy": "newest", "similarImage": true, "imageThreshold": 12},
   "unknownTop": {"keep": true}
 }`
 	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
@@ -210,6 +217,29 @@ func TestSettingsTolerance(t *testing.T) {
 	again, warn := LoadSettings()
 	if warn != "" || again.Scan.DeleteMode != "permanent" {
 		t.Fatalf("回读不一致: warn=%q settings=%+v", warn, again.Scan)
+	}
+
+	// 旧配置没写过 similarImage 时，升级后应保持新默认（关闭）。
+	old2 := `{"schemaVersion": 1, "scan": {"keepPolicy": "newest"}}`
+	if err := os.WriteFile(path, []byte(old2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got2, warn2 := LoadSettings()
+	if warn2 != "" || got2.Scan.SimilarImage {
+		t.Fatalf("缺失键应按新默认关闭: warn=%q settings=%+v", warn2, got2.Scan)
+	}
+
+	// 旧版允许的越界阈值 32 应收敛到新上限并提示，不能静默截断。
+	old3 := `{"schemaVersion": 1, "scan": {"similarImage": true, "imageThreshold": 32}}`
+	if err := os.WriteFile(path, []byte(old3), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got3, warn3 := LoadSettings()
+	if !got3.Scan.SimilarImage || got3.Scan.ImageThreshold != model.MaxImageThreshold {
+		t.Fatalf("越界阈值未按预期收敛: %+v", got3.Scan)
+	}
+	if !strings.Contains(warn3, "上限") || !strings.Contains(warn3, "16") {
+		t.Fatalf("越界收敛应提示用户: %q", warn3)
 	}
 
 	// 坏 JSON：回退默认并给出提示。

@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"golang.org/x/image/tiff"
+
+	"filededup/internal/engine/model"
 )
 
 func writeTemp(t *testing.T, name string, data []byte) string {
@@ -155,6 +157,23 @@ func TestGroupThreshold(t *testing.T) {
 	}
 	if groups[1][0] != "c.png" || groups[1][1] != "d.png" {
 		t.Fatalf("成员应按路径排序: %v", groups[1])
+	}
+}
+
+// 阈值放宽到上限 16 时仍要守住组内直径：a-b、b-c 都可相似，但 a-c 超阈值时
+// 不能靠传递把 c 并进 a 的组，否则放宽阈值会导致组大小膨胀。
+func TestGroupDiameterAtMaxThreshold(t *testing.T) {
+	items := []Hashed{
+		{Path: "a.png", Hash: 0},
+		{Path: "b.png", Hash: 0x0000FFFF}, // 与 a 距离 16
+		{Path: "c.png", Hash: 0x00FFFFFF}, // 与 a 距离 24，与 b 距离 8
+	}
+	groups := Group(items, model.MaxImageThreshold)
+	if len(groups) != 1 {
+		t.Fatalf("应只有 [a b] 一组，实际 %d 组: %v", len(groups), groups)
+	}
+	if len(groups[0]) != 2 || groups[0][0] != "a.png" || groups[0][1] != "b.png" {
+		t.Fatalf("c 不应靠传递并入组: %v", groups[0])
 	}
 }
 

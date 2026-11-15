@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"filededup/internal/auth"
+	"filededup/internal/engine/model"
 	"filededup/internal/engine/organize"
 	"filededup/internal/orgscan"
 	"filededup/internal/platform"
@@ -291,7 +292,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 		LocalWhitelist:      true,
 		KeepRule:            organize.ParseKeepRule(req.KeepPolicy),
 		ImageKeepRule:       organize.ParseKeepRule(req.ImageKeepPolicy),
-		ImageThreshold:      clampInt(req.ImageThreshold, 0, 64, 8),
+		ImageThreshold:      clampInt(req.ImageThreshold, 0, model.MaxImageThreshold, 8),
 		AudioToleranceSec:   clampInt(req.AudioTolerance, 0, 60, 2),
 		OrganizeMode:        organize.ParseOrganizeMode(mode),
 		Keyword:             req.Keyword,

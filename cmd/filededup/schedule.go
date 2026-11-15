@@ -224,7 +224,7 @@ func scanRequestFromSettings(sc ScanSettings, root string) model.Request {
 	mreq.ImageKeepPolicy = model.KeepLargest
 	if sc.SimilarImage {
 		threshold := sc.ImageThreshold
-		if threshold < 0 || threshold > 64 {
+		if threshold < 0 || threshold > model.MaxImageThreshold {
 			threshold = 8
 		}
 		mreq.SimilarImage = &model.ImageOpts{Enabled: true, Threshold: threshold}
