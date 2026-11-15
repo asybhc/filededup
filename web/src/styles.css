@@ -1,7 +1,8 @@
-:root {
+﻿:root {
   color-scheme: light;
   --bg: #f5f6f8;
   --card: #ffffff;
+  --soft: #f1f5f9;
   --border: #e2e6ec;
   --text: #1f2937;
   --muted: #6b7280;
@@ -54,7 +55,7 @@ button:disabled {
 code {
   font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: 12px;
-  background: #f1f5f9;
+  background: var(--soft);
   padding: 1px 4px;
   border-radius: 4px;
 }
@@ -119,7 +120,7 @@ code {
 .badge {
   font-size: 12px;
   color: var(--muted);
-  background: #f1f5f9;
+  background: var(--soft);
   border-radius: 999px;
   padding: 2px 10px;
   white-space: nowrap;
@@ -292,7 +293,7 @@ code {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   width: 100%;
   min-width: 0;
 }
@@ -353,7 +354,7 @@ button.primary:hover:not(:disabled) {
 }
 
 button.secondary {
-  background: #fff;
+  background: var(--card);
   border-color: var(--border);
   color: var(--text);
 }
@@ -425,7 +426,7 @@ button.link {
 }
 
 .chip {
-  background: #f8fafc;
+  background: var(--soft);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 12px;
@@ -495,7 +496,7 @@ button.link {
   height: 36px;
   font-size: 12px;
   color: var(--muted);
-  background: #f8fafc;
+  background: var(--soft);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   border-radius: 8px 8px 0 0;
@@ -509,7 +510,7 @@ button.link {
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 8px 8px;
-  background: #fff;
+  background: var(--card);
 }
 
 /* 固定行高的虚拟列表行：隔离布局与绘制，滚动时避免整表重排。 */
@@ -519,7 +520,7 @@ button.link {
 
 .row {
   cursor: pointer;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
 
@@ -625,7 +626,7 @@ button.link {
 }
 
 .kind-del {
-  background: #f1f5f9;
+  background: var(--soft);
   color: #475569;
 }
 
@@ -645,7 +646,7 @@ button.link {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
 }
 
 .sample {
@@ -653,7 +654,7 @@ button.link {
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 
@@ -727,7 +728,7 @@ button.link {
   right: 0;
   bottom: 0;
   width: min(460px, 92vw);
-  background: #fff;
+  background: var(--card);
   border-left: 1px solid var(--border);
   box-shadow: -12px 0 30px rgba(15, 23, 42, 0.12);
   padding: 18px 20px;
@@ -750,7 +751,7 @@ button.link {
   word-break: break-all;
   line-height: 1.8;
   margin-top: 12px;
-  background: #f8fafc;
+  background: var(--soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
@@ -768,7 +769,7 @@ button.link {
 }
 
 .modalbodysmall {
-  background: #fff;
+  background: var(--card);
   border-radius: 14px;
   padding: 20px;
   width: min(720px, 96vw);
@@ -793,7 +794,7 @@ button.link {
   display: flex;
   gap: 10px;
   padding: 8px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
 }
 
 .suspectbody {
@@ -863,7 +864,7 @@ button.link {
 }
 
 .tabs button:hover {
-  background: #f1f5f9;
+  background: var(--soft);
 }
 
 .tabs button.active {
@@ -975,7 +976,7 @@ button.link {
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   min-width: 0;
   cursor: pointer;
@@ -1144,7 +1145,7 @@ button.link {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   color: inherit;
   font: inherit;
   resize: vertical;
@@ -1401,4 +1402,71 @@ button.link {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* 夜间主题：与日间保持同样的语义色名，只换取值，避免出现浅底白字。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --card: #1a2233;
+  --soft: #212c40;
+  --border: #2c3850;
+  --text: #e5e9f0;
+  --muted: #9aa7bd;
+  --accent: #60a5fa;
+  --accent-weak: #1e2f52;
+  --danger: #f87171;
+  --danger-weak: #3b1d22;
+  --warn: #fbbf24;
+  --warn-weak: #3a2f14;
+  --ok: #4ade80;
+  --ok-weak: #14301f;
+}
+
+/* 设置对话框 */
+.settingsdialog section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 12px;
+}
+.settingsdialog h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.dialoghead,
+.dialogfoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dialogfoot {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.fieldrow {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 13px;
+}
+.fieldrow input,
+.fieldrow select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+.checkrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+.hint.ok {
+  color: var(--ok);
 }

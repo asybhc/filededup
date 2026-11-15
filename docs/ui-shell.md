@@ -1,6 +1,6 @@
 # 桌面 UI 外壳（Wails v2 + React/TS）
 
-当前版本：`0.8.2`（Go 版独立版本序列，从 `0.6.0-ui` 起算；见文末“版本号”）。功能范围见“已接通 / 未实现”。
+当前版本：`0.9.1`（Go 版独立版本序列，从 `0.6.0-ui` 起算；见文末“版本号”）。功能范围见“已接通 / 未实现”。
 
 ## 构建与运行
 
@@ -27,7 +27,12 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | 路径 | 作用 |
 | --- | --- |
 | `cmd/filededup/app.go` | 绑定到前端的门面：扫描、分页、预览、执行、状态轮询 |
-| `cmd/filededup/settings.go` | 设置持久化：读写用户配置目录、版本号与容错 |
+| `cmd/filededup/settings.go` | 设置持久化：读写用户配置目录、版本号与容错；AI/窗口/定时/日志段 |
+| `cmd/filededup/runtime_settings.go` | 设置落到运行时：关闭行为拦截、托盘启停、定时任务重启 |
+| `cmd/filededup/tray_windows.go` | Win32 托盘图标与右键菜单（打开 / 扫描 / 退出） |
+| `cmd/filededup/tray_other.go` | 非 Windows 托盘占位（无托盘时关闭行为按退出处理） |
+| `cmd/filededup/schedule.go` | 定时任务：按间隔或每日触发只读扫描，执行状态落盘 |
+| `internal/secret/` | AI 密钥的 DPAPI 加密存储（非 Windows 返回不可用） |
 | `cmd/filededup/organize.go` | 整理器门面：两套顺序、九步规划、试运行/真实执行、存疑项确认 |
 | `cmd/filededup/organize_undo.go` | 最近一次整理的撤销记录落盘与回滚接口 |
 | `cmd/filededup/organize_rules.go` | 整理规则导入导出（版本化 JSON、未知键与非法值校验） |
@@ -44,6 +49,7 @@ cd .. && powershell -File scripts/build-desktop.ps1
 | `web/src/App.tsx` | 模块切换与查重五步状态机 |
 | `web/src/Organizer.tsx` | 九步整理页 |
 | `web/src/Lanzou.tsx` | 蓝奏云上传页（登录、浏览、预检、上传进度、报告） |
+| `web/src/Settings.tsx` | 设置对话框（外观 / 窗口与托盘 / 定时任务 / AI / 日志） |
 | `web/src/api.ts` | Wails 桥 / 浏览器 mock 分派 |
 | `web/src/components/VirtualList.tsx` | 固定行高虚拟滚动 |
 | `web/src/styles.css` | 中文排版与布局 |
@@ -74,6 +80,53 @@ scan.RunWithOptions → plan.FromScan → plan.Validate → apply.Executor{Trash
   - 只有整份文件不是合法 JSON 才回退默认并在界面上给出提示，下次保存会覆盖。
 - 写入方式：临时文件 + `Rename` 原子替换，避免半截文件。
 - 前端：启动时 `GetSettings` 恢复；扫描选项变更后 600ms 防抖写盘，整理页 500ms 防抖，输入过程不反复落盘。
+- `0.9.0` 起新增 `ai` / `window` / `schedule` / `logs` 四段，仍遵守同一套兼容策略：老文件没有这些键就补默认值，
+  新键之外的旧键（含未来版本写入的未知键）原样保留，只有整份不是合法 JSON 才回退并提示。
+
+## 设置面板与托盘
+
+设置对话框（`web/src/Settings.tsx`）分五段，保存时先写密钥再写设置，避免“设置已开但密钥没存”：
+
+| 段 | 字段 | 说明 |
+| --- | --- | --- |
+| 外观 | `window.theme` | 跟随系统 / 日间 / 夜间 |
+| 窗口与托盘 | `window.closeAction`、`window.trayEnabled` | 关闭窗口时退出或最小化到托盘；托盘图标开关 |
+| 定时任务 | `schedule.*` | 见下节 |
+| AI 配置 | `ai.enabled/endpoint/model/timeoutSeconds` + 密钥 | 密钥单独 DPAPI 存储，界面只显示 `****后四位` |
+| 运行日志 | `logs.retentionDays` | 保留天数（默认 14，范围 1–365） |
+
+- **AI 密钥**：`internal/secret` 用 Windows DPAPI（`CryptProtectData`，当前用户范围）加密写到
+  `%AppData%\FileDedup\ai\key.bin`；目录 `0700`、临时文件 `0600` 后 `Rename` 替换。设置文件里**不出现**密钥，
+  只有读取时按密钥文件算出的 `keyHint`（仅后四位）。`SaveAIKey("")` 等价于清除。非 Windows 平台
+  `SupportsProtection()` 返回 false，界面显示“当前平台不支持加密存储”，不落明文。
+- **关闭行为**：Wails `OnBeforeClose` 里判断；`closeAction=tray` 且托盘可用时隐藏窗口并阻止关闭，否则正常退出。
+  托盘不可用（非 Windows / 创建失败）时自动降级为退出，不设置“关闭后无窗口也无托盘”的死角。
+- **托盘右键菜单**：打开主界面 / 扫描（打开窗口并开始扫描）/ 退出。双击托盘图标等同“打开”。
+  实现是隐藏窗口 + 独立 OS 线程消息循环（`runtime.LockOSThread`），图标用系统 `IDI_APPLICATION`，不额外打包资源。
+  “扫描”不在后端复制扫描逻辑，而是 `EventsEmit("tray:scan")`，由前端用当前界面参数触发同一套扫描。
+- **应用方式**：`App.SaveSettings` 保存成功后调用 `applyRuntimeSettings`，立即启停托盘并重启定时任务；
+  启动时也会读一次设置并应用，不必等用户打开设置面板。
+
+## 主题（日夜切换）
+
+- 颜色全部走 CSS 变量：`--bg/--card/--soft/--border/--text/--muted/--accent/--danger/--warn/--ok` 及各自的
+  `*-weak` 弱底。深色是 `:root[data-theme="dark"]` 的整套覆盖，组件不写死颜色。
+- `theme=system` 时用 `matchMedia("(prefers-color-scheme: dark)")` 并监听 `change`，系统切换立即跟随；
+  `light` / `dark` 时移除监听。
+- 持久化分两处：设置文件是唯一事实来源；`localStorage["filededup.theme"]` 只是镜像，供 [index.html](file:///f:/我的软件项目/文件去重/2026-11-13/go-port/filededup/web/index.html)
+  的内联脚本在 React 挂载前先定 `data-theme`，避免刷新闪一下浅色。localStorage 不可写（隐私模式）时忽略。
+
+## 定时任务（只读扫描）
+
+- 触发方式二选一：按间隔（10 分钟–7 天）或每日固定 `HH:MM`；可启停。保存后立即重启调度循环，无需重启应用。
+- **只做只读扫描**：动作字段目前强制 `scan`，不提供自动删除/整理。取舍：定时任务无人值守，删除/整理一旦参数被误改
+  不可挽回；扫描是只读的，最坏结果只是占一点 CPU。要自动整理需要先有“变更前快照 + 一键回滚”的完整闭环。
+- 根目录：任务可单独指定绝对路径；留空则用查重页保存的根目录。两者都为空时本轮记 `skipped`，不报错。
+- 参数映射：直接用设置里的保留策略、最小大小、是否含隐藏、相似图片/音频阈值与排除目录，`Exact=true`。
+- 上次执行结果落在 `%AppData%\FileDedup\schedule-state.json`（临时文件 + `Rename`），字段：
+  `startedAt/finishedAt/status/message/root/files/groups/reclaimable/elapsedMs`，`status` 为 `ok/failed/cancelled/skipped`。
+  设置面板读 `GetScheduleState` 展示；执行完成后也会 `EventsEmit("schedule:done")` 刷新界面。
+- 关闭窗口到托盘时调度继续跑；彻底退出应用后不再有后台进程。
 
 ## 九步整理
 
@@ -340,10 +393,13 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
   最近一次整理撤销 / 规则导入导出）、蓝奏云上传一期（老版登录 / Cookie 降级 / C# 凭据导入 / 目录浏览 / 只读预检 /
   并发上传与取消 / 云端同名同大小去重 / 七类结果与汇总 / 报告导出，**登录、预检与上传均已用真实账号实测**）、
   自动更新（ed25519 清单与安装包验签、长度与 SHA-256 校验、备份与回滚、跳过版本、安装包缓存清理）、
-  exe 与安装包版本资源、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控）。
+  exe 与安装包版本资源、授权与试用（Ed25519 导入与状态、旧版只读兼容、机器码、试用加固、未授权门控、
+  标准版 / 专业版功能集与未解锁说明）、设置面板（AI 配置与 DPAPI 密钥、关闭行为、托盘、定时任务、日志保留天数）、
+  系统托盘（打开 / 扫描 / 退出）、日夜主题（跟随系统 / 日间 / 夜间）。
 - 未实现：
-  - 全局：系统托盘、自定义保留项、查重侧执行撤销、撤销历史。
+  - 全局：自定义保留项、查重侧执行撤销、撤销历史、定时任务执行删除或整理（当前只读扫描）。
   - 蓝奏云：优享版（二期）、网盘查重（三期，原版默认只列不删、删除需二次确认）、分享创建（C# 版没有、服务端接口不可用）。
+  - AI 分析：设置项与密钥存储已就绪，分析调用在 `0.9.x` 后续块接入。
 
 ## 已知限制
 
@@ -373,10 +429,17 @@ go run ./cmd/fdedup-update-sign sign-manifest -key <私钥> -in bin\update.json
     上传目录字段是 `folder_id`、文件部件必须叫 `upload_file`；子目录为空时 `task=47` 返回 `zt=2` 但带目录自身 info；
     文件列表 `page` 会被服务端忽略、`info` 是总页数，已按此停止翻页。
     本机缓存键不含 MD5（与 C# 版不同），内容变但大小/修改时间不变会误判为已传，可用「强制重传」绕过。
+13. 设置面板、托盘图标与右键菜单、关闭到托盘、日夜主题：后端逻辑与前端构建都通过编译、`go vet` 与 `go test -tags desktop`，
+    **托盘图标显示、菜单点击、双击还原、关闭拦截与深色配色未做人工点击验证**（自动化会话不驱动桌面交互），需人工复核。
+14. 定时任务：调度循环、参数映射与状态落盘有代码路径覆盖，但**没有等待一个真实周期到点触发**；
+    “间隔 / 每日”两种模式的实际触发时间点、托盘隐藏期间后台运行未真机验证。任务只做只读扫描，不做删除或整理。
+15. AI 密钥 DPAPI 加密只验证了 `go vet` / 编译与 `SupportsProtection` 分支，**没有在真机上写入并重启读回**；
+    非 Windows 平台明确不支持加密存储，界面会提示，不会退回明文。
+16. 深色主题的对比度按 CSS 变量成对设计（浅底深字 / 深底浅字），**没有做对比度工具测量**，也未覆盖所有第三方内联样式。
 
 ## 版本号
 
-Go 版走自己的序列，当前 `0.8.2`：
+Go 版走自己的序列，当前 `0.9.1`：
 
 - `0.7.0` 补齐整理器三项（存疑项逐条确认、最近一次整理撤销、规则导入导出）；
 - `0.8.0` 加自动更新与 exe/安装包版本资源，并按语义化版本升次版本号；
@@ -384,5 +447,9 @@ Go 版走自己的序列，当前 `0.8.2`：
   （保留最近 2 个包，删除 `.part`/`.new`/`.old`），并补上真实安装目录的更新闭环与 8 万文件扫描实测数据；
 - `0.8.2` 带蓝奏云真实上传联调的修复：上传字段（`folder_id` + `upload_file`）、空子目录 `zt=2` 识别、
   汇总重复计数、报告文件被当待上传、`done` 早于报告路径；含只读联调的根目录 `folder_id=-1` 与分页修正；
+- `0.9.0` 授权分级：标准版 / 专业版两个版本名与默认功能集，未解锁功能在界面上可见并给出原因与机器码；
+  旧许可证缺 `edition` 时按标准版处理且不失效；
+- `0.9.1` 设置面板与托盘、日夜主题、定时任务（只读扫描）：新增 `ai/window/schedule/logs` 四段设置，
+  AI 密钥 DPAPI 存储（仅显后四位）、关闭到托盘、Win32 托盘菜单、跟随系统的深浅色；
 - 仍是 `0.x`：整理器撤销范围有限（删除与硬链接替换不可恢复），macOS / Linux 未做真机验证，不足以标 1.0；
-- 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.8.2` 为准）。
+- 刻意不用 C# 版的 `1.2.x`，避免两个实现共用同一版本号造成混淆（安装包、日志、问题反馈都以 `0.9.1` 为准）。

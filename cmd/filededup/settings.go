@@ -15,7 +15,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"filededup/internal/secret"
 )
 
 const settingsSchemaVersion = 1
@@ -80,6 +83,37 @@ type LanzouSettings struct {
 	LastFolderName string `json:"lastFolderName"`
 }
 
+// AISettings 是 AI 分析配置。密钥不在这里：单独用 DPAPI 存到 FileDedup/ai/key.bin。
+type AISettings struct {
+	Enabled        bool   `json:"enabled"`
+	Endpoint       string `json:"endpoint"`
+	Model          string `json:"model"`
+	TimeoutSeconds int    `json:"timeoutSeconds"`
+	KeyHint        string `json:"keyHint"` // 只读：由后端从密钥文件算出，界面只显后四位
+}
+
+// WindowSettings 是窗口关闭行为、托盘与主题。
+type WindowSettings struct {
+	CloseAction string `json:"closeAction"` // exit | tray
+	TrayEnabled bool   `json:"trayEnabled"`
+	Theme       string `json:"theme"` // system | light | dark
+}
+
+// ScheduleSettings 是定时任务配置。动作目前只支持只读扫描（不做自动删除/整理）。
+type ScheduleSettings struct {
+	Enabled         bool   `json:"enabled"`
+	Mode            string `json:"mode"`            // interval | daily
+	IntervalMinutes int    `json:"intervalMinutes"` // 10–10080
+	DailyTime       string `json:"dailyTime"`       // HH:MM（24 小时制）
+	Action          string `json:"action"`          // scan
+	Root            string `json:"root"`            // 留空时用查重页保存的根目录
+}
+
+// LogSettings 是运行日志配置。
+type LogSettings struct {
+	RetentionDays int `json:"retentionDays"`
+}
+
 // UISettings 是整份配置。
 type UISettings struct {
 	SchemaVersion int              `json:"schemaVersion"`
@@ -87,13 +121,19 @@ type UISettings struct {
 	Organize      OrganizeSettings `json:"organize"`
 	Update        UpdateSettings   `json:"update"`
 	Lanzou        LanzouSettings   `json:"lanzou"`
+	AI            AISettings       `json:"ai"`
+	Window        WindowSettings   `json:"window"`
+	Schedule      ScheduleSettings `json:"schedule"`
+	Logs          LogSettings      `json:"logs"`
 }
 
 // SettingsResult 把“加载结果 + 提示”一起返回，界面可如实展示警告。
 type SettingsResult struct {
-	Settings UISettings `json:"settings"`
-	Path     string     `json:"path"`
-	Warning  string     `json:"warning,omitempty"`
+	Settings        UISettings `json:"settings"`
+	Path            string     `json:"path"`
+	Warning         string     `json:"warning,omitempty"`
+	KeyStoragePath  string     `json:"keyStoragePath"`
+	KeyProtectionOK bool       `json:"keyProtectionOk"`
 }
 
 // DefaultSettings 返回与界面初始值一致的默认设置。
@@ -129,6 +169,23 @@ func DefaultSettings() UISettings {
 			Workers:    3,
 			IntervalMS: 1500,
 		},
+		AI: AISettings{
+			Enabled:        false,
+			TimeoutSeconds: 45,
+		},
+		Window: WindowSettings{
+			CloseAction: "exit",
+			TrayEnabled: true,
+			Theme:       "system",
+		},
+		Schedule: ScheduleSettings{
+			Enabled:         false,
+			Mode:            "interval",
+			IntervalMinutes: 60,
+			DailyTime:       "09:00",
+			Action:          "scan",
+		},
+		Logs: LogSettings{RetentionDays: 14},
 	}
 }
 
@@ -193,6 +250,30 @@ func LoadSettings() (UISettings, string) {
 		if err := json.Unmarshal(v, &out.Lanzou); err != nil {
 			out.Lanzou = def.Lanzou
 			warns = append(warns, "lanzou 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["ai"]; ok {
+		if err := json.Unmarshal(v, &out.AI); err != nil {
+			out.AI = def.AI
+			warns = append(warns, "ai 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["window"]; ok {
+		if err := json.Unmarshal(v, &out.Window); err != nil {
+			out.Window = def.Window
+			warns = append(warns, "window 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["schedule"]; ok {
+		if err := json.Unmarshal(v, &out.Schedule); err != nil {
+			out.Schedule = def.Schedule
+			warns = append(warns, "schedule 段无法解析，已整体使用默认值")
+		}
+	}
+	if v, ok := top["logs"]; ok {
+		if err := json.Unmarshal(v, &out.Logs); err != nil {
+			out.Logs = def.Logs
+			warns = append(warns, "logs 段无法解析，已整体使用默认值")
 		}
 	}
 
@@ -279,6 +360,58 @@ func normalizeSettings(s *UISettings, def UISettings) {
 	s.Lanzou.LastLocalDir = strings.TrimSpace(s.Lanzou.LastLocalDir)
 	s.Lanzou.LastFolderID = strings.TrimSpace(s.Lanzou.LastFolderID)
 	s.Lanzou.LastFolderName = strings.TrimSpace(s.Lanzou.LastFolderName)
+
+	s.AI.Endpoint = strings.TrimSpace(s.AI.Endpoint)
+	s.AI.Model = strings.TrimSpace(s.AI.Model)
+	if s.AI.TimeoutSeconds < 5 || s.AI.TimeoutSeconds > 300 {
+		s.AI.TimeoutSeconds = def.AI.TimeoutSeconds
+	}
+
+	if s.Window.CloseAction != "tray" {
+		s.Window.CloseAction = "exit"
+	}
+	switch s.Window.Theme {
+	case "light", "dark", "system":
+	default:
+		s.Window.Theme = def.Window.Theme
+	}
+
+	if s.Schedule.Mode != "daily" {
+		s.Schedule.Mode = "interval"
+	}
+	if s.Schedule.IntervalMinutes < 10 || s.Schedule.IntervalMinutes > 10080 {
+		s.Schedule.IntervalMinutes = def.Schedule.IntervalMinutes
+	}
+	if !validDailyTime(s.Schedule.DailyTime) {
+		s.Schedule.DailyTime = def.Schedule.DailyTime
+	}
+	// 只实现只读扫描：不接受其他动作，避免把未验证的自动删除带进定时任务。
+	s.Schedule.Action = "scan"
+	s.Schedule.Root = strings.TrimSpace(s.Schedule.Root)
+	if s.Schedule.Root != "" && !filepath.IsAbs(s.Schedule.Root) {
+		s.Schedule.Root = ""
+	}
+
+	if s.Logs.RetentionDays < 1 || s.Logs.RetentionDays > 365 {
+		s.Logs.RetentionDays = def.Logs.RetentionDays
+	}
+}
+
+// validDailyTime 校验 HH:MM（24 小时制）。
+func validDailyTime(v string) bool {
+	parts := strings.Split(strings.TrimSpace(v), ":")
+	if len(parts) != 2 || len(parts[0]) != 2 || len(parts[1]) != 2 {
+		return false
+	}
+	h, err := strconv.Atoi(parts[0])
+	if err != nil || h < 0 || h > 23 {
+		return false
+	}
+	m, err := strconv.Atoi(parts[1])
+	if err != nil || m < 0 || m > 59 {
+		return false
+	}
+	return true
 }
 
 func validKeepPolicy(s string) bool {
@@ -296,6 +429,9 @@ func SaveSettings(s UISettings) error {
 		return err
 	}
 	s.SchemaVersion = settingsSchemaVersion
+	// 掩码只用于界面展示，不落盘；每次读取时按密钥文件重新计算。
+	s.AI.KeyHint = ""
+	normalizeSettings(&s, DefaultSettings())
 
 	top := map[string]json.RawMessage{}
 	if raw, rerr := os.ReadFile(path); rerr == nil {
@@ -319,6 +455,10 @@ func SaveSettings(s UISettings) error {
 		put("organize", s.Organize),
 		put("update", s.Update),
 		put("lanzou", s.Lanzou),
+		put("ai", s.AI),
+		put("window", s.Window),
+		put("schedule", s.Schedule),
+		put("logs", s.Logs),
 	} {
 		if err != nil {
 			return err
@@ -348,10 +488,30 @@ func SaveSettings(s UISettings) error {
 func (a *App) GetSettings() SettingsResult {
 	settings, warning := LoadSettings()
 	path, _ := settingsPath()
-	return SettingsResult{Settings: settings, Path: path, Warning: warning}
+	keyPath, _ := secret.Path()
+	res := SettingsResult{
+		Settings:        settings,
+		Path:            path,
+		Warning:         warning,
+		KeyStoragePath:  keyPath,
+		KeyProtectionOK: secret.SupportsProtection(),
+	}
+	if key, err := secret.Load(); err == nil {
+		res.Settings.AI.KeyHint = secret.Hint(key)
+	}
+	return res
 }
 
-// SaveSettings 保存设置。
+// SaveAIKey 保存 AI 密钥（DPAPI）。传空字符串表示清除。
+func (a *App) SaveAIKey(key string) error {
+	return secret.Save(key)
+}
+
+// SaveSettings 保存设置并同步运行时行为（托盘、定时任务、日志保留）。
 func (a *App) SaveSettings(s UISettings) error {
-	return SaveSettings(s)
+	if err := SaveSettings(s); err != nil {
+		return err
+	}
+	a.applyRuntimeSettings(s)
+	return nil
 }

@@ -1,9 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, isDesktop } from "./api";
+import { onAppEvent } from "./api";
 import { mock } from "./mock";
 import { VirtualList } from "./components/VirtualList";
 import { Organizer } from "./Organizer";
 import { Lanzou } from "./Lanzou";
+import { SettingsDialog } from "./Settings";
 import type {
   AppInfo,
   DeleteMode,
@@ -163,6 +165,7 @@ export default function App() {
   const settingsRef = useRef<UISettings | undefined>(undefined);
   const [license, setLicense] = useState<LicenseState>();
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [licenseText, setLicenseText] = useState("");
   const [licenseNote, setLicenseNote] = useState("");
   const licenseStop = Boolean(license && !license.canApply);
@@ -218,6 +221,28 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  // 主题：system 时监听系统深浅色变化；值来自设置，切换后写一份 localStorage 镜像，
+  // 供 index.html 的早期脚本在 React 挂载前就选定配色，刷新不闪白。
+  const theme = settings?.window.theme ?? "system";
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark = theme === "dark" || (theme === "system" && mq.matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      try {
+        localStorage.setItem("filededup.theme", theme);
+      } catch {
+        /* 隐私模式下 localStorage 可能不可写，忽略即可 */
+      }
+    };
+    apply();
+    if (theme === "system") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+  }, [theme]);
 
   // 扫描选项变更后自动落盘（600ms 防抖），不阻塞输入。
   useEffect(() => {
@@ -590,6 +615,22 @@ export default function App() {
     }
   }
 
+  // 托盘菜单“扫描”：后端只负责把窗口置前并发出事件，实际扫描参数用界面当前选择。
+  const startScanRef = useRef(startScan);
+  startScanRef.current = startScan;
+  useEffect(() => {
+    const offScan = onAppEvent("tray:scan", () => {
+      void startScanRef.current();
+    });
+    const offSched = onAppEvent("schedule:done", (payload: { message?: string; status?: string }) => {
+      setSettingsNote(`定时扫描：${payload?.message ?? payload?.status ?? "已结束"}`);
+    });
+    return () => {
+      offScan();
+      offSched();
+    };
+  }, []);
+
   async function cancelScan() {
     // 本地先置为 cancelling：按钮立即变灰，不等下一次 300ms 轮询。
     // 若取消失败，轮询会把状态刷回 running，界面自愈。
@@ -720,6 +761,9 @@ export default function App() {
             }}
           >
             {licenseLabel(license)}
+          </button>
+          <button className="badge" title="设置：外观、托盘、定时任务、AI、日志" onClick={() => setSettingsOpen(true)}>
+            设置
           </button>
           <span className="badge">v{info.version || "—"}</span>
           <button
@@ -1207,6 +1251,16 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {settingsOpen && (
+        <SettingsDialog
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(next) => {
+            settingsRef.current = next;
+            setSettings(next);
+          }}
+        />
       )}
 
       {licenseOpen && (

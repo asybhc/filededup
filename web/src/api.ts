@@ -20,6 +20,7 @@ import type {
   PlanPreview,
   ScanRequest,
   ScanState,
+  ScheduleRunState,
   SettingsResult,
   SkippedPage,
   UISettings,
@@ -27,6 +28,14 @@ import type {
   UpdateInstallView,
 } from "./types";
 import { mock } from "./mock";
+
+// onAppEvent 订阅 Wails 后端事件（托盘、定时任务）；浏览器预览下是空实现。
+export function onAppEvent(name: string, cb: (payload: any) => void): () => void {
+  const rt = (window as any).runtime;
+  if (!rt || typeof rt.EventsOn !== "function") return () => undefined;
+  const off = rt.EventsOn(name, cb);
+  return typeof off === "function" ? off : () => rt.EventsOff?.(name);
+}
 
 interface WailsApp {
   GetAppInfo(): Promise<AppInfo>;
@@ -41,6 +50,8 @@ interface WailsApp {
   GetExecuteState(id: string): Promise<ExecuteState>;
   GetSettings(): Promise<SettingsResult>;
   SaveSettings(s: UISettings): Promise<void>;
+  SaveAIKey(key: string): Promise<void>;
+  GetScheduleState(): Promise<ScheduleRunState>;
   GetOrganizeMeta(): Promise<OrganizeMeta>;
   StartOrganize(req: OrganizeRequest): Promise<string>;
   GetOrganizeState(id: string): Promise<OrganizeState>;
@@ -144,6 +155,16 @@ export const api = {
     const b = bridge();
     if (b) return b.SaveSettings(s);
     mock.saveSettings(s);
+  },
+  async saveAIKey(key: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.SaveAIKey(key);
+    mock.saveAIKey(key);
+  },
+  async getScheduleState(): Promise<ScheduleRunState> {
+    const b = bridge();
+    if (b) return b.GetScheduleState();
+    return mock.getScheduleState();
   },
   async getOrganizeMeta(): Promise<OrganizeMeta> {
     const b = bridge();

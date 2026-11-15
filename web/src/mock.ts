@@ -28,6 +28,7 @@ import type {
   PlanPreview,
   ScanRequest,
   ScanState,
+  ScheduleRunState,
   SettingsResult,
   SkippedPage,
   UISettings,
@@ -218,6 +219,17 @@ function mockDefaultSettings(): UISettings {
       lastFolderId: "0",
       lastFolderName: "",
     },
+    ai: { enabled: false, endpoint: "", model: "", timeoutSeconds: 45, keyHint: "" },
+    window: { closeAction: "exit", trayEnabled: true, theme: "system" },
+    schedule: {
+      enabled: false,
+      mode: "interval",
+      intervalMinutes: 60,
+      dailyTime: "09:00",
+      action: "scan",
+      root: "",
+    },
+    logs: { retentionDays: 14 },
   };
 }
 
@@ -237,6 +249,10 @@ function readSettings(): UISettings {
       },
       update: { ...def.update, ...(parsed.update ?? {}) },
       lanzou: { ...def.lanzou, ...(parsed.lanzou ?? {}) },
+      ai: { ...def.ai, ...(parsed.ai ?? {}) },
+      window: { ...def.window, ...(parsed.window ?? {}) },
+      schedule: { ...def.schedule, ...(parsed.schedule ?? {}) },
+      logs: { ...def.logs, ...(parsed.logs ?? {}) },
     };
   } catch {
     return def;
@@ -753,10 +769,33 @@ export const mock = {
 
   // ---- 设置持久化：浏览器里用 localStorage 模拟用户配置目录 ----
   getSettings(): SettingsResult {
-    return { settings: readSettings(), path: "localStorage:" + SETTINGS_KEY, warning: undefined };
+    const s = readSettings();
+    return {
+      settings: s,
+      path: "localStorage:" + SETTINGS_KEY,
+      warning: undefined,
+      keyStoragePath: "（浏览器预览不保存密钥）",
+      keyProtectionOk: false,
+    };
   },
   saveSettings(s: UISettings): void {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  },
+  saveAIKey(_key: string): void {
+    // 浏览器预览不保存 AI 密钥。
+  },
+  getScheduleState(): ScheduleRunState {
+    return {
+      startedAt: "",
+      finishedAt: "",
+      status: "skipped",
+      message: "浏览器预览不运行定时任务",
+      root: "",
+      files: 0,
+      groups: 0,
+      reclaimable: 0,
+      elapsedMs: 0,
+    };
   },
   checkForUpdate(manual: boolean): UpdateCheckView {
     const s = readSettings();

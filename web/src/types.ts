@@ -180,18 +180,63 @@ export interface LanzouSettings {
   lastFolderName: string;
 }
 
+export interface AISettings {
+  enabled: boolean;
+  endpoint: string;
+  model: string;
+  timeoutSeconds: number;
+  keyHint: string;
+}
+
+export interface WindowSettings {
+  closeAction: "exit" | "tray";
+  trayEnabled: boolean;
+  theme: "system" | "light" | "dark";
+}
+
+export interface ScheduleSettings {
+  enabled: boolean;
+  mode: "interval" | "daily";
+  intervalMinutes: number;
+  dailyTime: string;
+  action: "scan";
+  root: string;
+}
+
+export interface LogSettings {
+  retentionDays: number;
+}
+
 export interface UISettings {
   schemaVersion: number;
   scan: ScanSettings;
   organize: OrganizeSettings;
   update: UpdateSettings;
   lanzou: LanzouSettings;
+  ai: AISettings;
+  window: WindowSettings;
+  schedule: ScheduleSettings;
+  logs: LogSettings;
 }
 
 export interface SettingsResult {
   settings: UISettings;
   path: string;
   warning?: string;
+  keyStoragePath: string;
+  keyProtectionOk: boolean;
+}
+
+export interface ScheduleRunState {
+  startedAt: string;
+  finishedAt: string;
+  status: "ok" | "failed" | "skipped" | "cancelled";
+  message?: string;
+  root: string;
+  files: number;
+  groups: number;
+  reclaimable: number;
+  elapsedMs: number;
 }
 
 // ---------- 授权（对应 internal/auth） ----------

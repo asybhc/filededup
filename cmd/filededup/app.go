@@ -27,7 +27,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.9.0"
+const appVersion = "0.9.1"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -177,6 +177,13 @@ type App struct {
 	lanzouClient *lanzou.Client
 	lanzouSource string
 	lanzouPreps  map[string]*lanzouPrepare
+
+	// quitting 由托盘“退出”置位：OnBeforeClose 据此放行，不再最小化到托盘。
+	quittingMu sync.Mutex
+	quitting   bool
+	// schedCancel 取消当前定时任务循环；设置为空表示没有启用定时任务。
+	schedMu     sync.Mutex
+	schedCancel context.CancelFunc
 }
 
 func NewApp() *App {
@@ -205,9 +212,19 @@ func (a *App) startup(ctx context.Context) {
 	if err := auth.TouchTrial(); err != nil {
 		log.Printf("试用记录更新失败：%v", err)
 	}
+	// 托盘与定时任务按保存的设置启动。
+	a.applyRuntimeSettings(mustLoadSettings())
+}
+
+// mustLoadSettings 读取设置，失败时退回默认值；启动阶段不能让设置问题阻塞窗口。
+func mustLoadSettings() UISettings {
+	s, _ := LoadSettings()
+	return s
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	stopTray()
+	a.stopScheduler()
 	a.mu.Lock()
 	sessions := make([]*scanSession, 0, len(a.sessions))
 	for _, s := range a.sessions {
