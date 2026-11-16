@@ -770,3 +770,12 @@ export interface EnvCheckItem {
   detail: string;
   fix: string;
 }
+
+// ---------- 结果页大图预览（对应 cmd/filededup/preview.go） ----------
+
+export interface ImagePreview {
+  dataUrl: string;
+  width: number;
+  height: number;
+  format: string;
+}

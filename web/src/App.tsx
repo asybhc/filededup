@@ -18,6 +18,7 @@ import type {
   ExportFormat,
   ExportResult,
   GroupView,
+  ImagePreview,
   KeepPolicy,
   LanzouSettings,
   LicenseState,
@@ -111,6 +112,12 @@ function ratio(done: number, total: number): number {
   return Math.max(0, Math.min(1, done / total));
 }
 
+const IMAGE_EXTS = /\.(jpe?g|png|bmp|gif|webp|tiff?)$/i;
+
+function isImagePath(path: string): boolean {
+  return IMAGE_EXTS.test(path);
+}
+
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -189,6 +196,15 @@ export default function App() {
   const [perfRows, setPerfRows] = useState<Row[]>([]);
   const [perfActive, setPerfActive] = useState(false);
   const [fps, setFps] = useState(0);
+  // 结果页排序与筛选：只影响显示顺序/可见组，不改变勾选状态与执行范围。
+  const [resultSort, setResultSort] = useState<"default" | "size" | "reclaimable" | "name" | "time">("default");
+  const [resultDesc, setResultDesc] = useState(true);
+  const [resultQuery, setResultQuery] = useState("");
+  const [resultKind, setResultKind] = useState("all");
+  // 大图预览：按需解码，不自动加载，避免大目录卡顿。
+  const [imagePreview, setImagePreview] = useState<ImagePreview>();
+  const [imagePreviewBusy, setImagePreviewBusy] = useState(false);
+  const [imagePreviewError, setImagePreviewError] = useState("");
   const [view, setView] = useState<"dedup" | "organize" | "timeline" | "lanzou" | "search">("dedup");
   const [settings, setSettings] = useState<UISettings>();
   const [settingsReady, setSettingsReady] = useState(false);
@@ -990,7 +1006,61 @@ export default function App() {
     setDetail("");
   }
 
-  const rows = useMemo(() => (perfActive ? perfRows : flatten(groups)), [perfActive, perfRows, groups]);
+  const visibleGroups = useMemo(() => {
+    let out = groups;
+    if (resultKind !== "all") out = out.filter((g) => g.kind === resultKind);
+    const q = resultQuery.trim().toLowerCase();
+    if (q) {
+      out = out.filter(
+        (g) =>
+          g.keep.toLowerCase().includes(q) ||
+          g.members.some((m) => m.path.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)),
+      );
+    }
+    if (resultSort === "default") return out;
+    const maxSize = (g: GroupView) => g.members.reduce((acc, m) => Math.max(acc, m.size), 0);
+    const maxTime = (g: GroupView) => g.members.reduce((acc, m) => (m.modTime > acc ? m.modTime : acc), "");
+    const keepName = (g: GroupView) => g.keep.slice(g.keep.lastIndexOf("\\") + 1).toLowerCase();
+    const sorted = [...out].sort((a, b) => {
+      let cmp = 0;
+      switch (resultSort) {
+        case "size":
+          cmp = maxSize(a) - maxSize(b);
+          break;
+        case "reclaimable":
+          cmp = a.reclaimable - b.reclaimable;
+          break;
+        case "name":
+          cmp = keepName(a).localeCompare(keepName(b), "zh-CN");
+          break;
+        case "time":
+          cmp = maxTime(a).localeCompare(maxTime(b));
+          break;
+      }
+      return resultDesc ? -cmp : cmp;
+    });
+    return sorted;
+  }, [groups, resultKind, resultQuery, resultSort, resultDesc]);
+
+  useEffect(() => {
+    setImagePreview(undefined);
+    setImagePreviewError("");
+  }, [detail]);
+
+  async function loadImagePreview() {
+    if (!detail) return;
+    setImagePreviewBusy(true);
+    setImagePreviewError("");
+    try {
+      setImagePreview(await api.readImagePreview(detail, 1600));
+    } catch (err) {
+      setImagePreviewError(errorText(err));
+    } finally {
+      setImagePreviewBusy(false);
+    }
+  }
+
+  const rows = useMemo(() => (perfActive ? perfRows : flatten(visibleGroups)), [perfActive, perfRows, visibleGroups]);
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
   return (
@@ -1376,6 +1446,41 @@ export default function App() {
               </div>
             )}
 
+            {!perfActive && (
+              <div className="toolbar filterbar">
+                <span className="filterfields">
+                  <input
+                    className="search"
+                    placeholder="筛选：路径或文件名包含…"
+                    value={resultQuery}
+                    onChange={(e) => setResultQuery(e.target.value)}
+                    aria-label="筛选结果"
+                  />
+                  <select value={resultKind} onChange={(e) => setResultKind(e.target.value)} aria-label="按类型筛选">
+                    <option value="all">全部类型</option>
+                    {Object.entries(KIND_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={resultSort} onChange={(e) => setResultSort(e.target.value as typeof resultSort)} aria-label="排序方式">
+                    <option value="default">默认顺序</option>
+                    <option value="size">按文件大小</option>
+                    <option value="reclaimable">按可回收空间</option>
+                    <option value="name">按保留项文件名</option>
+                    <option value="time">按修改时间</option>
+                  </select>
+                  <button className="secondary" onClick={() => setResultDesc((v) => !v)} title="切换升序/降序">
+                    {resultDesc ? "降序 ↓" : "升序 ↑"}
+                  </button>
+                </span>
+                <span className="hint">
+                  显示 {visibleGroups.length} / {groupsTotal} 组（筛选只影响显示，勾选与执行范围不变）
+                </span>
+              </div>
+            )}
+
             <div className="tablehead">
               <span>选择 / 状态</span>
               <span>文件 / 组</span>
@@ -1608,6 +1713,24 @@ export default function App() {
             </button>
           </div>
           <p className="fullpath">{detail}</p>
+          {isImagePath(detail) && (
+            <div className="previewbox">
+              <div className="actions">
+                <button className="secondary" disabled={imagePreviewBusy} onClick={() => void loadImagePreview()}>
+                  {imagePreviewBusy ? "正在解码…" : imagePreview ? "重新加载预览" : "加载大图预览（≤1600px）"}
+                </button>
+              </div>
+              {imagePreviewError && <p className="hint warn">{imagePreviewError}</p>}
+              {imagePreview && (
+                <>
+                  <img className="bigpreview" src={imagePreview.dataUrl} alt={`预览：${detail}`} />
+                  <p className="hint">
+                    原图 {imagePreview.width} × {imagePreview.height} · 解码格式 {imagePreview.format}（预览已按 EXIF 方向校正）
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </aside>
       )}
 

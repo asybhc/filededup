@@ -10,6 +10,7 @@ import type {
   ClearLogsResult,
   EnvCheckItem,
   GroupsPage,
+  ImagePreview,
   LogOverview,
   LanzouListing,
   LanzouOptions,
@@ -116,6 +117,7 @@ interface WailsApp {
   ReadLogFile(name: string): Promise<string>;
   ClearLogs(): Promise<ClearLogsResult>;
   RunEnvironmentCheck(): Promise<EnvCheckItem[]>;
+  ReadImagePreview(path: string, maxEdge: number): Promise<ImagePreview>;
 }
 
 declare global {
@@ -497,5 +499,16 @@ export const api = {
     return [
       { name: "运行环境", status: "warn", detail: "浏览器预览：仅展示界面，未连接桌面后端。", fix: "" },
     ];
+  },
+  async readImagePreview(path: string, maxEdge: number): Promise<ImagePreview> {
+    const b = bridge();
+    if (b) return b.ReadImagePreview(path, maxEdge);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800"><rect width="100%" height="100%" fill="#1f2937"/><text x="50%" y="46%" fill="#e5e7eb" font-size="28" text-anchor="middle">浏览器预览占位</text><text x="50%" y="56%" fill="#9ca3af" font-size="18" text-anchor="middle">${path}</text></svg>`;
+    return {
+      dataUrl: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg),
+      width: 1280,
+      height: 800,
+      format: "svg",
+    };
   },
 };

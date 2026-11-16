@@ -1824,3 +1824,40 @@ button.link {
   margin-top: 2px;
   color: var(--text);
 }
+
+/* 结果页排序/筛选与大图预览。 */
+.filterbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filterfields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterfields .search {
+  min-width: 260px;
+}
+
+.previewbox {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.bigpreview {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  margin-top: 10px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--soft);
+}
