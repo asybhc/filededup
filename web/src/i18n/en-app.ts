@@ -58,6 +58,7 @@ const enApp: Record<string, string> = {
     "Inverting would delete {count} whole groups; one file per group was kept automatically.",
   "已导出 {format}：{path}": "Exported {format}: {path}",
   "导出失败：{error}": "Export failed: {error}",
+  "打开所在位置失败：{error}": "Failed to show the file location: {error}",
   "回收站已被清空，删除的文件无法自动恢复。":
     "The Recycle Bin has been emptied; deleted files cannot be restored automatically.",
   "有 {count} 个文件未能恢复，原因见下方逐条说明。":

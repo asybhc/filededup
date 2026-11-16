@@ -969,6 +969,15 @@ export default function App() {
     }
   }
 
+  // 结果页逐文件「打开所在位置」：在文件管理器中定位该文件。
+  async function revealResult(path: string) {
+    try {
+      await api.revealPath(path);
+    } catch (err) {
+      setError(t("打开所在位置失败：{error}", { error: errorText(err) }));
+    }
+  }
+
   async function doDedupUndo() {
     setUndoConfirm(false);
     setUndoBusy(true);
@@ -1654,6 +1663,7 @@ export default function App() {
               <span>{t("完整路径")}</span>
               <span className="num">{t("大小")}</span>
               <span>{t("修改时间")}</span>
+              <span>{t("操作")}</span>
             </div>
             <VirtualList
               className="tablebody"
@@ -1668,6 +1678,7 @@ export default function App() {
                   selected={deleteSel}
                   onToggle={toggleMember}
                   onGroupAction={applyGroupSelection}
+                  onReveal={perfActive ? undefined : revealResult}
                 />
               )}
             />
@@ -2336,6 +2347,7 @@ const ResultRow = memo(function ResultRow({
   selected,
   onToggle,
   onGroupAction,
+  onReveal,
 }: {
   row: Row;
   onSelect: (path: string) => void;
@@ -2343,6 +2355,7 @@ const ResultRow = memo(function ResultRow({
   selected?: Set<string>;
   onToggle?: (group: GroupView, path: string) => void;
   onGroupAction?: (group: GroupView, action: "all" | "none" | "invert" | "keep") => void;
+  onReveal?: (path: string) => void;
 }) {
   const t = useT();
   if (row.type === "group") {
@@ -2415,6 +2428,13 @@ const ResultRow = memo(function ResultRow({
       </span>
       <span className="num">{formatBytes(m.size)}</span>
       <span className="mtime">{formatTime(m.modTime)}</span>
+      <span className="mreveal" onClick={(e) => e.stopPropagation()}>
+        {onReveal && (
+          <button className="link" onClick={() => onReveal(m.path)}>
+            {t("打开所在位置")}
+          </button>
+        )}
+      </span>
     </div>
   );
 });

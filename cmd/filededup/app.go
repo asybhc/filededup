@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.10.9"
+const appVersion = "0.10.10"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -313,6 +313,9 @@ func (a *App) StartScan(req ScanRequest) (string, error) {
 		}
 		if !info.IsDir() {
 			return "", fmt.Errorf("不是目录：%s", root)
+		}
+		if err := rejectDangerousRoot(root, "扫描"); err != nil {
+			return "", err
 		}
 		roots = []string{root}
 	}

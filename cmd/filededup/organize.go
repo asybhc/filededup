@@ -257,6 +257,9 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 	if !info.IsDir() {
 		return "", errors.New("根目录不是文件夹")
 	}
+	if err := rejectDangerousRoot(absRoot, "整理"); err != nil {
+		return "", err
+	}
 	steps := req.Steps.toSwitches()
 	if !req.Steps.anyOn() {
 		return "", errors.New("至少启用一个步骤")

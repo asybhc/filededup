@@ -500,11 +500,11 @@ button.link {
 .tablehead,
 .row.memberrow {
   display: grid;
-  grid-template-columns: 112px 300px minmax(420px, 1fr) 110px 168px;
+  grid-template-columns: 112px 300px minmax(420px, 1fr) 110px 168px 96px;
   gap: 12px;
   align-items: center;
   padding: 0 16px;
-  min-width: 1268px;
+  min-width: 1364px;
 }
 
 /* 逐文件勾选：勾选 = 将删除，未勾选 = 保留。 */
@@ -629,6 +629,11 @@ button.link {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+}
+
+.row.memberrow .mreveal {
+  font-size: 12px;
+  text-align: left;
 }
 
 .mname {
