@@ -750,3 +750,24 @@ Go 版走自己的序列，当前 `0.9.9`：
   未改动指纹计算路径）。
 - 未实测项：真实桌面下筛选/排序与抽屉预览的点击路径、超大图与损坏图的提示、超大分组的排序耗时；
   已记入未验证清单。
+
+### 0.10.5 全盘查重（硬排除 + 64KB 快筛）
+
+- 「选择目录」步骤新增两个勾选项：
+  - 全盘查重：勾选后忽略手选目录，扫描所有本地固定磁盘（GetDriveTypeW 只取 DRIVE_FIXED，
+    不含 U 盘、光驱、网络映射盘与内存盘）；勾选时实时展示卷清单、各卷可用空间与强制排除项数量。
+  - 64KB 快筛：先对同尺寸文件算前 64KB 的 SHA-256，只有指纹相同的才进入完整 SHA-256 复核。
+    分组、保留项与删除判断仍以完整哈希为准，快筛仅减少需要完整读取的文件数量。
+- 强制排除（不受用户排除设置影响）：Windows、Program Files、Program Files (x86)、ProgramData、
+  $Recycle.Bin、System Volume Information、Recovery、PerfLogs、MSOCache、Windows.old、Config.Msi、
+  $WinREAgent，以及各卷根下的 pagefile.sys、hiberfil.sys、swapfile.sys、DumpStack.log.tmp。
+  实现为在 StartScan 时把硬排除项追加到引擎 excludes，不改枚举/排除的既有语义。
+- 快筛与相似图片查重互斥（模型层既有校验）：前端在勾选相似图片时自动取消快筛并禁用该复选框，
+  后端对被构造出的非法组合直接返回原因。
+- 引擎改动：scan.hashAll 拆出 hashTargets/hashTargetsInto；新增 scan_quick.go（快筛指纹 + 候选桶 +
+  全量复核），快筛读失败的文件登记为 Skipped。新增绑定 GetFullDiskPlan。
+- 新增单测：快筛与全量在同一目录下分组/保留/统计一致；前 64KB 相同但尾部不同的文件不被误合并；
+  同尺寸且前 64KB 均不同时全量哈希数为 0；快筛读失败登记 Skipped 且不参与分组；快筛结果快照完整。
+- 未实测项：真实 Windows 上固定卷枚举与全盘扫描（未真跑全盘，避免长时间占用机器）；
+  桌面上两个复选框与卷清单的点击/刷新路径（代码路径已核对、构建通过，未真实点击）；
+  U 盘/光驱/网络盘的驱动类型过滤仅按 API 语义实现，未插拔设备验证。

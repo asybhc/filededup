@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.10.4"
+const appVersion = "0.10.5"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -41,6 +41,10 @@ type ScanRequest struct {
 	MinSize        int64    `json:"minSize"`
 	IncludeHidden  bool     `json:"includeHidden"`
 	Excludes       []string `json:"excludes"`
+	// FullDisk 为 true 时忽略 Root，扫描全部本地固定卷，并追加系统目录/系统文件的强制排除项。
+	FullDisk bool `json:"fullDisk"`
+	// QuickHash 为 true 时先算前 64KB 指纹缩小候选集合，再对候选项做完整 SHA-256 复核。
+	QuickHash bool `json:"quickHash"`
 }
 
 // ScanState 是扫描进度的只读快照，前端轮询获取。
@@ -285,19 +289,35 @@ func (a *App) PickDirectory() (string, error) {
 
 // StartScan 启动异步扫描并立即返回会话 ID。进度用 GetScanState 轮询。
 func (a *App) StartScan(req ScanRequest) (string, error) {
-	root := strings.TrimSpace(req.Root)
-	if root == "" {
-		return "", errors.New("请先选择目录")
+	var roots []string
+	// 全盘查重会在用户排除项之外追加系统目录/系统文件，避免扫到不可读或不该动的区域。
+	var hardExcludes []string
+	if req.FullDisk {
+		volumes, err := listFixedVolumes()
+		if err != nil {
+			return "", err
+		}
+		roots = volumes
+		hardExcludes = fullDiskExcludes(volumes)
+	} else {
+		root := strings.TrimSpace(req.Root)
+		if root == "" {
+			return "", errors.New("请先选择目录")
+		}
+		if !filepath.IsAbs(root) {
+			return "", fmt.Errorf("目录必须是绝对路径：%s", root)
+		}
+		info, err := os.Stat(root)
+		if err != nil {
+			return "", fmt.Errorf("无法访问目录：%w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("不是目录：%s", root)
+		}
+		roots = []string{root}
 	}
-	if !filepath.IsAbs(root) {
-		return "", fmt.Errorf("目录必须是绝对路径：%s", root)
-	}
-	info, err := os.Stat(root)
-	if err != nil {
-		return "", fmt.Errorf("无法访问目录：%w", err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("不是目录：%s", root)
+	if req.QuickHash && req.SimilarImage {
+		return "", errors.New("64KB 快筛与相似图片查重不能同时启用：相似图片需要解码整张图片")
 	}
 	keep := model.KeepPolicy(req.KeepPolicy)
 	if keep == "" {
@@ -320,11 +340,12 @@ func (a *App) StartScan(req ScanRequest) (string, error) {
 
 	mreq := model.DefaultRequest()
 	mreq.RequestID = fmt.Sprintf("ui-%d", time.Now().UnixNano())
-	mreq.Roots = []string{root}
-	mreq.Excludes = append([]string{}, req.Excludes...)
+	mreq.Roots = roots
+	mreq.Excludes = append(append([]string{}, req.Excludes...), hardExcludes...)
 	mreq.MinSize = req.MinSize
 	mreq.IncludeHidden = req.IncludeHidden
 	mreq.Exact = true
+	mreq.QuickHash = req.QuickHash
 	mreq.KeepPolicy = keep
 	mreq.ImageKeepPolicy = model.KeepLargest
 	if req.SimilarImage {

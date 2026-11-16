@@ -7,6 +7,7 @@ import type {
   ExportFormat,
   ExportResult,
   DropPathResult,
+  FullDiskPlan,
   ClearLogsResult,
   EnvCheckItem,
   GroupsPage,
@@ -59,6 +60,7 @@ interface WailsApp {
   PickDirectory(): Promise<string>;
   InspectDroppedPath(path: string): Promise<DropPathResult>;
   StartScan(req: ScanRequest): Promise<string>;
+  GetFullDiskPlan(): Promise<FullDiskPlan>;
   GetScanState(id: string): Promise<ScanState>;
   CancelScan(id: string): Promise<void>;
   GetGroups(id: string, offset: number, limit: number): Promise<GroupsPage>;
@@ -152,6 +154,11 @@ export const api = {
     const b = bridge();
     if (b) return b.StartScan(req);
     return mock.startScan(req);
+  },
+  async getFullDiskPlan(): Promise<FullDiskPlan> {
+    const b = bridge();
+    if (b) return b.GetFullDiskPlan();
+    return { supported: false, volumes: [], hardExcludes: [], message: "浏览器预览不支持全盘查重" };
   },
   async getScanState(id: string): Promise<ScanState> {
     const b = bridge();

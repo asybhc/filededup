@@ -17,6 +17,7 @@ import type {
   ExecuteState,
   ExportFormat,
   ExportResult,
+  FullDiskPlan,
   GroupView,
   ImagePreview,
   KeepPolicy,
@@ -162,9 +163,14 @@ export default function App() {
     minSize: 0,
     includeHidden: false,
     excludes: [],
+    fullDisk: false,
+    quickHash: false,
     minSizeMB: 0,
   });
   const [excludesText, setExcludesText] = useState("");
+  // 全盘查重预检：可选卷与后端追加的强制排除项。
+  const [fullDiskPlan, setFullDiskPlan] = useState<FullDiskPlan>();
+  const [fullDiskNote, setFullDiskNote] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [scan, setScan] = useState<ScanState>();
   const [groups, setGroups] = useState<GroupView[]>([]);
@@ -729,6 +735,27 @@ export default function App() {
     }
   }
 
+  async function toggleFullDisk(next: boolean) {
+    setFullDiskNote("");
+    if (!next) {
+      setReq((prev) => ({ ...prev, fullDisk: false }));
+      return;
+    }
+    try {
+      const plan = await api.getFullDiskPlan();
+      setFullDiskPlan(plan);
+      if (!plan.supported) {
+        setFullDiskNote(plan.message || "当前环境不支持全盘查重");
+        setReq((prev) => ({ ...prev, fullDisk: false }));
+        return;
+      }
+      setReq((prev) => ({ ...prev, fullDisk: true }));
+    } catch (err) {
+      setFullDiskNote(errorText(err));
+      setReq((prev) => ({ ...prev, fullDisk: false }));
+    }
+  }
+
   async function startScan() {
     setError("");
     setScan(undefined);
@@ -1209,8 +1236,15 @@ export default function App() {
           <section className="card">
             <h2>1. 选择目录与扫描设置</h2>
             <div className="dirrow dropzone">
-              <input className="path" readOnly value={req.root} placeholder="尚未选择目录（也可把文件夹拖到这里）" aria-label="扫描目录" />
-              <button className="secondary" onClick={pickDirectory}>
+              <input
+                className="path"
+                readOnly
+                value={req.fullDisk ? `全盘：${(fullDiskPlan?.volumes ?? []).map((v) => v.path).join("、")}` : req.root}
+                placeholder="尚未选择目录（也可把文件夹拖到这里）"
+                aria-label="扫描目录"
+                disabled={req.fullDisk}
+              />
+              <button className="secondary" onClick={pickDirectory} disabled={req.fullDisk}>
                 选择目录
               </button>
             </div>
@@ -1254,8 +1288,34 @@ export default function App() {
               <label className="checkline">
                 <input
                   type="checkbox"
+                  checked={req.fullDisk}
+                  onChange={(e) => void toggleFullDisk(e.target.checked)}
+                />
+                <span>全盘查重（扫描所有本地固定磁盘，自动跳过系统目录与卷根系统文件）</span>
+              </label>
+              <label className="checkline">
+                <input
+                  type="checkbox"
+                  checked={req.quickHash}
+                  disabled={req.similarImage}
+                  onChange={(e) => setReq({ ...req, quickHash: e.target.checked })}
+                />
+                <span>
+                  64KB 快筛（先用前 64KB 指纹滤掉不可能重复的文件，候选项仍做完整 SHA-256 复核）
+                  {req.similarImage ? "（相似图片开启时不可用）" : ""}
+                </span>
+              </label>
+              <label className="checkline">
+                <input
+                  type="checkbox"
                   checked={req.similarImage}
-                  onChange={(e) => setReq({ ...req, similarImage: e.target.checked })}
+                  onChange={(e) =>
+                    setReq({
+                      ...req,
+                      similarImage: e.target.checked,
+                      quickHash: e.target.checked ? false : req.quickHash,
+                    })
+                  }
                 />
                 <span>相似图片（dHash）</span>
               </label>
@@ -1305,6 +1365,22 @@ export default function App() {
               排除项只匹配目录：填目录名会跳过所有同名目录及其内容，填带路径的项按路径前缀匹配；不会按文件名子串过滤。
             </p>
 
+            {fullDiskNote && <p className="hint">{fullDiskNote}</p>}
+            {req.fullDisk && fullDiskPlan?.supported && (
+              <p className="hint">
+                全盘范围：
+                {fullDiskPlan.volumes.map((v) => `${v.path}（可用 ${formatBytes(v.free)}）`).join("、")}
+                。强制排除 {fullDiskPlan.hardExcludes.length} 项：Windows、Program Files、Program Files (x86)、
+                ProgramData、$Recycle.Bin、System Volume Information、Recovery 等系统目录，以及各卷根下的
+                pagefile.sys、hiberfil.sys、swapfile.sys。这些项不受上方排除设置影响。
+              </p>
+            )}
+            {req.quickHash && (
+              <p className="hint">
+                快筛只减少需要完整哈希的文件数量；最终分组与保留/删除判断仍以完整 SHA-256 结果为准。
+              </p>
+            )}
+
             <p className="hint">
               相似图片默认关闭，勾选后才参与查重。阈值 0 表示指纹完全相同；数值越大判定越宽松，
               更容易把不同的图片当成相似（误判风险更高），数值越小越严格；可调范围 0-16，默认 8。
@@ -1322,7 +1398,7 @@ export default function App() {
             </p>
 
             <div className="actions">
-              <button className="primary" disabled={!req.root} onClick={startScan}>
+              <button className="primary" disabled={!req.fullDisk && !req.root} onClick={startScan}>
                 开始扫描
               </button>
             </div>
@@ -1334,8 +1410,8 @@ export default function App() {
         {step === "scan" && (
           <section className="card">
             <h2>2. 扫描中</h2>
-            <p className="mono ellipsis" title={req.root}>
-              {req.root}
+            <p className="mono ellipsis" title={req.fullDisk ? "全盘查重" : req.root}>
+              {req.fullDisk ? "全盘查重：所有本地固定磁盘" : req.root}
             </p>
             <ScanProgress scan={scan} onCancel={cancelScan}>
               <button className="secondary" onClick={reset}>

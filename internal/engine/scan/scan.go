@@ -101,7 +101,11 @@ func run(ctx context.Context, req model.Request, d deps) (*model.Result, error) 
 	var results []hashResult
 	var stats hashStats
 	if req.Exact {
-		results, stats, err = hashAll(ctx, files, cache, workers, d.open, d.progress)
+		if req.QuickHash {
+			results, stats, err = hashAllQuick(ctx, files, cache, workers, d.open, d.progress)
+		} else {
+			results, stats, err = hashAll(ctx, files, cache, workers, d.open, d.progress)
+		}
 		if err != nil {
 			// 取消：返回部分结果，由调用方决定是否落盘。
 			res := buildResult(req, files, results, skipped, stats, workers, started)
@@ -253,8 +257,11 @@ type hashResult struct {
 // hashAll 对同尺寸桶（成员数 >= 2）计算 SHA-256。返回与 files 等长的结果切片。
 func hashAll(ctx context.Context, files []fileEntry, cache *hashCache, workers int,
 	open func(string) (io.ReadCloser, error), progress func(Progress)) ([]hashResult, hashStats, error) {
-	results := make([]hashResult, len(files))
+	return hashTargets(ctx, files, sizeTargets(files), cache, workers, open, progress)
+}
 
+// sizeTargets 返回所有“同尺寸至少两个”的文件下标。
+func sizeTargets(files []fileEntry) []int {
 	buckets := make(map[int64][]int, len(files))
 	for i, f := range files {
 		if f.size < 0 {
@@ -269,6 +276,18 @@ func hashAll(ctx context.Context, files []fileEntry, cache *hashCache, workers i
 		}
 	}
 	sort.Ints(targets)
+	return targets
+}
+
+// hashTargets 只对给定下标计算完整 SHA-256。results 与 files 等长，可由调用方预填
+// 已有的错误/结果（快筛路径会预先记录读失败），未涉及的条目保持零值。
+func hashTargets(ctx context.Context, files []fileEntry, targets []int, cache *hashCache, workers int,
+	open func(string) (io.ReadCloser, error), progress func(Progress)) ([]hashResult, hashStats, error) {
+	return hashTargetsInto(ctx, files, targets, make([]hashResult, len(files)), cache, workers, open, progress)
+}
+
+func hashTargetsInto(ctx context.Context, files []fileEntry, targets []int, results []hashResult, cache *hashCache, workers int,
+	open func(string) (io.ReadCloser, error), progress func(Progress)) ([]hashResult, hashStats, error) {
 	if len(targets) == 0 {
 		return results, hashStats{}, nil
 	}

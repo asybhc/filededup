@@ -13,6 +13,20 @@ export interface ScanRequest {
   minSize: number;
   includeHidden: boolean;
   excludes: string[];
+  fullDisk: boolean;
+  quickHash: boolean;
+}
+
+export interface FullDiskVolume {
+  path: string;
+  free: number;
+}
+
+export interface FullDiskPlan {
+  supported: boolean;
+  volumes: FullDiskVolume[];
+  hardExcludes: string[];
+  message?: string;
 }
 
 export interface ScanState {
