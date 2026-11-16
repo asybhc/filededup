@@ -346,6 +346,17 @@ export function Organizer({
     setDecisions(next);
   }
 
+  async function openTarget() {
+    const dir = state?.openDir;
+    if (!dir) return;
+    setError("");
+    try {
+      await api.openPath(dir);
+    } catch (err) {
+      setError(t("打开目标文件夹失败：{error}", { error: errorText(err) }));
+    }
+  }
+
   async function refreshPresets() {
     try {
       const res = await api.listOrganizePresets();
@@ -1036,6 +1047,17 @@ export function Organizer({
             )
           )}
 
+          {!running && !state.dryRun && !planOnlyRun && state.phase === "done" && state.openDir && (
+            <div className="actions">
+              <button className="secondary" onClick={() => void openTarget()}>
+                {t("打开目标文件夹")}
+              </button>
+              <span className="hint" title={state.openDir}>
+                {state.openDir}
+              </span>
+            </div>
+          )}
+
           <div className="chips">
             <span className="chip">
               {t("规划动作")} <b>{state.actionTotal}</b>
@@ -1283,7 +1305,7 @@ function OrganizeFeatureStatus() {
       <h3>{t("本页功能状态（如实标注）")}</h3>
       <p>
         <span className="kind kind-keep">{t("已接通")}</span>{" "}
-        {t("九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）")}
+        {t("九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）、整理完成后打开目标文件夹")}
       </p>
       <p>
         <span className="kind kind-warn">{t("限制")}</span>{" "}

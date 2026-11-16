@@ -222,8 +222,8 @@ const enOrganize: Record<string, string> = {
 
   // 功能状态
   "本页功能状态（如实标注）": "Feature status on this page (as implemented)",
-  "九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）":
-    "Nine-step toggles and both orders, dry run, real run, pre-run confirmation, dedup/rename/special delete/clear read-only/organize/empty-folder cleanup, conflict policies, Recycle Bin and permanent delete, excludes and size filter, result details, per-item suspect confirm/reject feeding into the run, undo of the latest organize, versioned JSON rule import/export with unknown-field and invalid-value validation, named configuration presets (overwrite by name, root folder excluded), and a rule tester (pure calculation on samples: rename/junk verdict/organize destination)",
+  "九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）、整理完成后打开目标文件夹":
+    "Nine-step toggles and both orders, dry run, real run, pre-run confirmation, dedup/rename/special delete/clear read-only/organize/empty-folder cleanup, conflict policies, Recycle Bin and permanent delete, excludes and size filter, result details, per-item suspect confirm/reject feeding into the run, undo of the latest organize, versioned JSON rule import/export with unknown-field and invalid-value validation, named configuration presets (overwrite by name, root folder excluded), a rule tester (pure calculation on samples: rename/junk verdict/organize destination), and opening the destination folder after a run",
   "限制": "Limitations",
   "撤销只保留最近一次真实整理；已删除文件与硬链接替换无法还原。":
     "Only the latest real organize run can be undone; deleted files and hardlink replacements cannot be restored.",
@@ -306,6 +306,10 @@ const enOrganize: Record<string, string> = {
   "未填写正则": "No regular expression entered",
   "正则无效": "Invalid regular expression",
   "未命中正则": "Did not match the regular expression",
+
+  // 整理完成后打开目标文件夹
+  "打开目标文件夹": "Open destination folder",
+  "打开目标文件夹失败：{error}": "Failed to open the destination folder: {error}",
 
   // 按时间整理
   "按时间整理": "Organize by time",

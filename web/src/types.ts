@@ -448,6 +448,8 @@ export interface OrganizeState {
   targetExternal: boolean;
   /** 整理目标与根目录的卷关系；空表示未启用第五步。 */
   moveMode: "" | "move" | "copy" | "unknown";
+  /** 整理完成后可打开的绝对目标路径；整理步骤关闭或未设目标时为空。 */
+  openDir?: string;
   elapsedMs: number;
   error?: string;
   steps: OrganizeStepView[];

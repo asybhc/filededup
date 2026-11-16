@@ -168,7 +168,9 @@ type OrganizeState struct {
 	TargetDir      string `json:"targetDir"`
 	TargetExternal bool   `json:"targetExternal"`
 	// MoveMode 是整理目标与根目录的卷关系：move / copy / unknown（空表示未启用整理步骤）。
-	MoveMode    string                `json:"moveMode"`
+	MoveMode string `json:"moveMode"`
+	// OpenDir 是整理完成后可在文件管理器中打开的绝对路径（整理步骤关闭或未设目标时为空）。
+	OpenDir     string                `json:"openDir,omitempty"`
 	ElapsedMS   int64                 `json:"elapsedMs"`
 	Error       string                `json:"error,omitempty"`
 	Steps       []OrganizeStepView    `json:"steps"`
@@ -321,6 +323,7 @@ func (a *App) StartOrganize(req OrganizeRequest) (string, error) {
 		TargetDir:      displayTarget(targetSpec),
 		TargetExternal: targetSpec.External,
 		MoveMode:       moveMode,
+		OpenDir:        organizeOpenDir(absRoot, targetSpec, req.Steps.Organize),
 		Steps:          []OrganizeStepView{},
 		Actions:        []OrganizeActionView{},
 		Suspects:       []OrganizeSuspectView{},
@@ -517,6 +520,18 @@ func displayTarget(spec organize.TargetSpec) string {
 		return spec.Abs
 	}
 	return spec.Rel
+}
+
+// organizeOpenDir 返回整理完成后「打开目标文件夹」应指向的绝对路径。
+// 整理步骤关闭、或没有指定目标时返回空串（界面不显示该按钮）。
+func organizeOpenDir(absRoot string, spec organize.TargetSpec, organizeOn bool) string {
+	if !organizeOn || (spec.Rel == "" && spec.Abs == "") {
+		return ""
+	}
+	if spec.External {
+		return filepath.FromSlash(spec.Abs)
+	}
+	return filepath.Join(absRoot, filepath.FromSlash(spec.Rel))
 }
 
 // organizeMoveMode 判断整理目标与根目录的卷关系。

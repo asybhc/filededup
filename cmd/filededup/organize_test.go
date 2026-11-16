@@ -89,3 +89,24 @@ func TestStartOrganizeExternalTargetPlan(t *testing.T) {
 		t.Fatalf("未找到指向根外目标的 move 动作：%+v", st.Actions)
 	}
 }
+
+// TestOrganizeOpenDir 覆盖「整理完成后打开目标文件夹」的路径解析。
+func TestOrganizeOpenDir(t *testing.T) {
+	root := `C:\data`
+	cases := []struct {
+		name string
+		spec organize.TargetSpec
+		on   bool
+		want string
+	}{
+		{"步骤关闭", organize.TargetSpec{Rel: "out"}, false, ""},
+		{"未设目标", organize.TargetSpec{}, true, ""},
+		{"根内相对路径", organize.TargetSpec{Rel: "out/sub"}, true, filepath.Join(root, "out", "sub")},
+		{"根外绝对路径", organize.TargetSpec{Abs: "/tmp/out", External: true}, true, filepath.FromSlash("/tmp/out")},
+	}
+	for _, c := range cases {
+		if got := organizeOpenDir(root, c.spec, c.on); got != c.want {
+			t.Fatalf("%s: organizeOpenDir = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
