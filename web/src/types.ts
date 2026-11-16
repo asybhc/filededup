@@ -104,6 +104,14 @@ export interface AppInfo {
   platform: string;
 }
 
+// 拖放落点解析结果（对应 cmd/filededup/drop.go 的 DropPathResult）。
+export interface DropPathResult {
+  path: string;
+  isDir: boolean;
+  fromFile: boolean;
+  message: string;
+}
+
 export type Row =
   | { type: "group"; key: string; group: GroupView }
   | { type: "member"; key: string; groupId: string; group: GroupView; member: MemberView };

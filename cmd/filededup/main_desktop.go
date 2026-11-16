@@ -32,10 +32,13 @@ func main() {
 			Assets: filededup.Assets,
 		},
 		BackgroundColour: &options.RGBA{R: 245, G: 246, B: 248, A: 255},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
-		OnBeforeClose:    app.beforeClose,
-		Bind:             []interface{}{app},
+		// 允许把文件夹直接拖进窗口：Wails 把绝对路径交给前端，只有标了
+		// --wails-drop-target 的区域接收，避免误拖文件到其它控件。
+		DragAndDrop:   &options.DragAndDrop{EnableFileDrop: true},
+		OnStartup:     app.startup,
+		OnShutdown:    app.shutdown,
+		OnBeforeClose: app.beforeClose,
+		Bind:          []interface{}{app},
 	})
 	if err != nil {
 		log.Fatal(err)

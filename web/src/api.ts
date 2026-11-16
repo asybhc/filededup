@@ -6,6 +6,7 @@ import type {
   ExecuteState,
   ExportFormat,
   ExportResult,
+  DropPathResult,
   GroupsPage,
   LanzouListing,
   LanzouOptions,
@@ -48,6 +49,7 @@ export function onAppEvent(name: string, cb: (payload: any) => void): () => void
 interface WailsApp {
   GetAppInfo(): Promise<AppInfo>;
   PickDirectory(): Promise<string>;
+  InspectDroppedPath(path: string): Promise<DropPathResult>;
   StartScan(req: ScanRequest): Promise<string>;
   GetScanState(id: string): Promise<ScanState>;
   CancelScan(id: string): Promise<void>;
@@ -122,6 +124,11 @@ export const api = {
     const b = bridge();
     if (b) return b.PickDirectory();
     return mock.pickDirectory();
+  },
+  async inspectDroppedPath(path: string): Promise<DropPathResult> {
+    const b = bridge();
+    if (b) return b.InspectDroppedPath(path);
+    return { path, isDir: true, fromFile: false, message: "浏览器预览：已采用 " + path };
   },
   async startScan(req: ScanRequest): Promise<string> {
     const b = bridge();

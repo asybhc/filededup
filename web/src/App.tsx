@@ -196,6 +196,9 @@ export default function App() {
   const [license, setLicense] = useState<LicenseState>();
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // 拖放目录的结果提示：成功/不是文件夹/读取失败都在这里说明。
+  const [dropNote, setDropNote] = useState("");
   const [licenseText, setLicenseText] = useState("");
   const [licenseNote, setLicenseNote] = useState("");
   const licenseStop = Boolean(license && !license.canApply);
@@ -274,6 +277,66 @@ export default function App() {
       return () => mq.removeEventListener("change", apply);
     }
   }, [theme]);
+
+  // 拖放文件夹：Wails 原生拖放事件给绝对路径；只有“选择目录”步骤、且落点带
+  // --wails-drop-target 的元素才接收，其余区域保持默认拖放行为。
+  useEffect(() => {
+    if (!isDesktop) return;
+    const rt = (window as any).runtime;
+    if (!rt || typeof rt.OnFileDrop !== "function") return;
+    rt.OnFileDrop((_x: number, _y: number, paths: string[]) => {
+      if (view !== "dedup" || step !== "pick" || !paths || !paths.length) return;
+      api
+        .inspectDroppedPath(paths[0])
+        .then((r) => {
+          setDropNote(r.message);
+          if (r.path && (r.isDir || r.fromFile)) setReq((prev) => ({ ...prev, root: r.path }));
+        })
+        .catch((err) => setDropNote("拖放处理失败：" + errorText(err)));
+    });
+    return () => {
+      if (typeof rt.OnFileDropOff === "function") rt.OnFileDropOff();
+    };
+  }, [view, step]);
+
+  // F1 打开帮助，Esc 收起最上层的浮层；只处理键盘事件，不改业务状态。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F1") {
+        e.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
+      if (e.key !== "Escape") return;
+      if (helpOpen) {
+        setHelpOpen(false);
+        return;
+      }
+      if (updateOpen) {
+        setUpdateOpen(false);
+        return;
+      }
+      if (licenseOpen) {
+        setLicenseOpen(false);
+        return;
+      }
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return;
+      }
+      if (skipOpen) {
+        setSkipOpen(false);
+        return;
+      }
+      if (undoConfirm) {
+        setUndoConfirm(false);
+        return;
+      }
+      if (confirmOpen) setConfirmOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [helpOpen, updateOpen, licenseOpen, settingsOpen, skipOpen, undoConfirm, confirmOpen]);
 
   // 扫描选项变更后自动落盘（600ms 防抖），不阻塞输入。
   useEffect(() => {
@@ -948,6 +1011,9 @@ export default function App() {
           <button className="badge" title="设置：外观、托盘、定时任务、AI、日志" onClick={() => setSettingsOpen(true)}>
             设置
           </button>
+          <button className="badge" title="帮助（快捷键 F1）" onClick={() => setHelpOpen(true)}>
+            帮助 F1
+          </button>
           <span className="badge">v{info.version || "—"}</span>
           <button
             className={`badge update-badge ${updateCheck?.status === "available" ? "has-update" : ""}`}
@@ -1057,12 +1123,13 @@ export default function App() {
         {step === "pick" && (
           <section className="card">
             <h2>1. 选择目录与扫描设置</h2>
-            <div className="dirrow">
-              <input className="path" readOnly value={req.root} placeholder="尚未选择目录" aria-label="扫描目录" />
+            <div className="dirrow dropzone">
+              <input className="path" readOnly value={req.root} placeholder="尚未选择目录（也可把文件夹拖到这里）" aria-label="扫描目录" />
               <button className="secondary" onClick={pickDirectory}>
                 选择目录
               </button>
             </div>
+            {dropNote && <p className="hint">{dropNote}</p>}
 
             <div className="formgrid">
               <label>
@@ -1615,6 +1682,34 @@ export default function App() {
               </button>
               <button className="primary" disabled={undoBusy} onClick={doDedupUndo}>
                 确认撤销
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {helpOpen && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="modalbodysmall">
+            <h3>帮助与快捷键</h3>
+            <dl className="licenseinfo">
+              <dt>F1</dt>
+              <dd>打开本帮助（任何界面都可用）</dd>
+              <dt>Esc</dt>
+              <dd>收起最上层浮层：帮助 → 更新 → 授权 → 设置 → 跳过列表 → 撤销确认 → 删除确认</dd>
+              <dt>拖放</dt>
+              <dd>在「选择目录」步骤把文件夹拖到路径框区域，等同于点击「选择目录」；拖入单个文件会改用其所在目录。</dd>
+            </dl>
+            <p className="hint">
+              查重流程：选择目录与设置 → 扫描 → 预览分组 → 勾选要删除的文件 → 确认执行（移入回收站可撤销，
+              永久删除不可恢复）。所有删除范围以勾选为准，未勾选的文件一律保留。
+            </p>
+            <p className="hint">
+              九步整理、网盘上传、本地搜索各有独立页签；具体参数与限制见对应页面的说明文字。
+            </p>
+            <div className="actions">
+              <button className="primary" onClick={() => setHelpOpen(false)}>
+                关闭
               </button>
             </div>
           </div>
