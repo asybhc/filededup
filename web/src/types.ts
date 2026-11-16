@@ -472,6 +472,59 @@ export interface OrganizeRulesImport {
   rules: OrganizeSettings;
 }
 
+// ---------- 配置方案预设 / 规则测试器（对应 cmd/filededup/organize_presets.go、organize_tester.go） ----------
+
+export interface OrganizePreset {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  rules: OrganizeSettings;
+}
+
+export interface OrganizePresetsResult {
+  path: string;
+  presets: OrganizePreset[];
+}
+
+export interface OrganizeTestRequest {
+  rules: OrganizeSettings;
+  samples: string[];
+}
+
+// SpecialAction / OrganizeSkip 是稳定键，界面按词典翻译。
+export interface OrganizeTestRow {
+  original: string;
+  finalName: string;
+  renamed: boolean;
+  specialAction: "disabled" | "garbage" | "suspect" | "keep" | "excluded";
+  specialReason?: string;
+  specialSuggestion?: string;
+  specialScore?: number;
+  organizeDir?: string;
+  organizeSkip?:
+    | "deleted"
+    | "disabled"
+    | "no-target"
+    | "keyword-empty"
+    | "keyword-miss"
+    | "regex-empty"
+    | "regex-invalid"
+    | "regex-miss";
+  destPath?: string;
+}
+
+export interface OrganizeTestResult {
+  rows: OrganizeTestRow[];
+  renamed: number;
+  garbage: number;
+  suspects: number;
+  kept: number;
+  excluded: number;
+  organized: number;
+  skipped: number;
+}
+
 export interface OrganizeUndoInfo {
   available: boolean;
   id?: string;

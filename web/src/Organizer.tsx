@@ -7,10 +7,13 @@ import type {
   Counter,
   KeepRule,
   OrganizeMeta,
+  OrganizePreset,
   OrganizeRequest,
   OrganizeSettings,
   OrganizeState,
   OrganizeStepMeta,
+  OrganizeTestResult,
+  OrganizeTestRow,
   OrganizeUndoInfo,
   OrganizeUndoResult,
 } from "./types";
@@ -60,6 +63,25 @@ const STEP_FIELD: Record<string, keyof OrganizeSettings["steps"]> = {
   audio_dedup: "audioDedup",
   organize: "organize",
   empty_dirs: "emptyDirs",
+};
+
+const SPECIAL_ACTION_LABELS: Record<OrganizeTestRow["specialAction"], string> = {
+  disabled: "未启用",
+  garbage: "垃圾文件（将被删除）",
+  suspect: "存疑（默认保留，需人工确认）",
+  keep: "保留",
+  excluded: "命中保护词（排除）",
+};
+
+const ORGANIZE_SKIP_LABELS: Record<NonNullable<OrganizeTestRow["organizeSkip"]>, string> = {
+  deleted: "已在特殊删除步骤删除",
+  disabled: "整理步骤未启用",
+  "no-target": "未选择整理目标",
+  "keyword-empty": "未填写关键字",
+  "keyword-miss": "未命中任一关键字",
+  "regex-empty": "未填写正则",
+  "regex-invalid": "正则无效",
+  "regex-miss": "未命中正则",
 };
 
 const COUNTER_LABELS: [keyof Counter, string][] = [
@@ -158,6 +180,17 @@ export function Organizer({
   const [undoBusy, setUndoBusy] = useState(false);
   const [rulesBusy, setRulesBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  // 配置方案预设：命名保存在用户配置目录（浏览器预览落 localStorage）。
+  const [presets, setPresets] = useState<OrganizePreset[]>([]);
+  const [presetsPath, setPresetsPath] = useState("");
+  const [presetsError, setPresetsError] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [presetBusy, setPresetBusy] = useState(false);
+  // 规则测试器：纯计算，不落盘、不建任务。
+  const [samplesText, setSamplesText] = useState("");
+  const [testResult, setTestResult] = useState<OrganizeTestResult>();
+  const [testerError, setTesterError] = useState("");
+  const [testerBusy, setTesterBusy] = useState(false);
 
   // onPersist 每次渲染都是新函数，用 ref 固定，避免防抖 effect 反复重置。
   const persistRef = useRef(onPersist);
@@ -187,6 +220,23 @@ export function Organizer({
       })
       .catch(() => {
         // 撤销信息读取失败不影响整理主流程，界面按“暂无可撤销”展示。
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .listOrganizePresets()
+      .then((res) => {
+        if (!alive) return;
+        setPresets(res.presets);
+        setPresetsPath(res.path);
+      })
+      .catch((err) => {
+        if (alive) setPresetsError(t("读取预设失败：{error}", { error: errorText(err) }));
       });
     return () => {
       alive = false;
@@ -295,6 +345,87 @@ export function Organizer({
     for (const s of state?.suspects ?? []) next[s.key] = value;
     setDecisions(next);
   }
+
+  async function refreshPresets() {
+    try {
+      const res = await api.listOrganizePresets();
+      setPresets(res.presets);
+      setPresetsPath(res.path);
+    } catch (err) {
+      setPresetsError(t("读取预设失败：{error}", { error: errorText(err) }));
+    }
+  }
+
+  async function savePreset() {
+    const clean = presetName.trim();
+    if (!clean) {
+      setPresetsError(t("请输入预设名称"));
+      return;
+    }
+    setError("");
+    setNotice("");
+    setPresetsError("");
+    setPresetBusy(true);
+    try {
+      const entry = await api.saveOrganizePreset(clean, cfg);
+      setPresetName("");
+      setNotice(t("预设已保存：{name}", { name: entry.name }));
+      await refreshPresets();
+    } catch (err) {
+      setPresetsError(t("保存预设失败：{error}", { error: errorText(err) }));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
+  function applyPreset(p: OrganizePreset) {
+    // 预设只存规则，不绑定机器：应用时保留当前根目录。
+    const next: OrganizeSettings = { ...p.rules, root: cfg.root };
+    setCfg(next);
+    setExcludesText((next.excludes ?? []).join(" "));
+    setDecisions({});
+    setError("");
+    setNotice(t("已应用预设：{name}（当前根目录保持不变）", { name: p.name }));
+  }
+
+  async function deletePreset(p: OrganizePreset) {
+    setError("");
+    setNotice("");
+    setPresetsError("");
+    setPresetBusy(true);
+    try {
+      await api.deleteOrganizePreset(p.id);
+      setNotice(t("预设已删除：{name}", { name: p.name }));
+      await refreshPresets();
+    } catch (err) {
+      setPresetsError(t("删除预设失败：{error}", { error: errorText(err) }));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
+  async function runTester() {
+    setTesterError("");
+    setTestResult(undefined);
+    const samples = samplesText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (samples.length === 0) {
+      setTesterError(t("请输入至少一个样例文件名"));
+      return;
+    }
+    setTesterBusy(true);
+    try {
+      const res = await api.testOrganizeRules({ rules: cfg, samples });
+      setTestResult(res);
+    } catch (err) {
+      setTesterError(t("测试失败：{error}", { error: errorText(err) }));
+    } finally {
+      setTesterBusy(false);
+    }
+  }
+
 
   async function exportRules() {
     setError("");
@@ -549,6 +680,127 @@ export function Organizer({
             {t("规则文件带版本号；导入会拒绝未知字段与非法值，失败时不改动当前设置，也不会改变当前根目录。")}
           </span>
         </div>
+      </section>
+
+      <section className="card">
+        <div className="sectionhead">
+          <h2>{t("配置方案预设")}</h2>
+          <span className="hint">{t("预设保存当前整理规则（不含根目录），可一键切换；校验口径与导出规则相同。")}</span>
+        </div>
+        <div className="actions">
+          <input
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder={t("预设名称")}
+            maxLength={60}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void savePreset();
+            }}
+          />
+          <button className="secondary" disabled={presetBusy || !presetName.trim()} onClick={() => void savePreset()}>
+            {t("保存为预设")}
+          </button>
+          <button className="secondary" disabled={presetBusy} onClick={() => void refreshPresets()}>
+            {t("刷新预设")}
+          </button>
+          <span className="hint">{t("同名预设会被覆盖（不区分大小写）。")}</span>
+        </div>
+        {presetsError && <div className="banner error">{presetsError}</div>}
+        {presets.length === 0 ? (
+          <p className="hint">{t("还没有保存的预设。")}</p>
+        ) : (
+          <div className="presetlist">
+            {presets.map((p) => (
+              <div className="presetrow" key={p.id}>
+                <span className="presetname" title={`${p.createdAt} → ${p.updatedAt}`}>
+                  {p.name}
+                </span>
+                <span className="hint">
+                  {t(MODE_LABELS[p.rules.mode] ?? p.rules.mode)} ·{" "}
+                  {t("启用 {n} 个步骤", { n: Object.values(p.rules.steps).filter(Boolean).length })}
+                </span>
+                <button className="secondary" disabled={presetBusy} onClick={() => applyPreset(p)}>
+                  {t("应用")}
+                </button>
+                <button className="secondary" disabled={presetBusy} onClick={() => void deletePreset(p)}>
+                  {t("删除")}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {presetsPath && <p className="hint">{t("预设文件：{path}", { path: presetsPath })}</p>}
+      </section>
+
+      <section className="card">
+        <div className="sectionhead">
+          <h2>{t("规则测试器")}</h2>
+          <span className="hint">{t("对样例文件名做纯计算：不读磁盘、不改文件，只用当前页面的开关与规则。")}</span>
+        </div>
+        <label className="field">
+          <span>{t("样例文件名（每行一个，可带路径）")}</span>
+          <textarea
+            className="testertextarea"
+            value={samplesText}
+            onChange={(e) => setSamplesText(e.target.value)}
+            placeholder={t("例如：001-2024-03-08-照片.jpg")}
+          />
+        </label>
+        <div className="actions">
+          <button className="secondary" disabled={testerBusy} onClick={() => void runTester()}>
+            {t("运行测试")}
+          </button>
+          <span className="hint">{t("测试结果只反映当前配置，不代表已执行任何改动。")}</span>
+        </div>
+        {testerError && <div className="banner error">{testerError}</div>}
+        {testResult && (
+          <>
+            <p className="hint">
+              {t(
+                "样例 {total} 个：改名 {renamed}，垃圾 {garbage}，存疑 {suspects}，保留 {kept}，保护词排除 {excluded}，可整理 {organized}，跳过 {skipped}。",
+                {
+                  total: testResult.rows.length,
+                  renamed: testResult.renamed,
+                  garbage: testResult.garbage,
+                  suspects: testResult.suspects,
+                  kept: testResult.kept,
+                  excluded: testResult.excluded,
+                  organized: testResult.organized,
+                  skipped: testResult.skipped,
+                },
+              )}
+            </p>
+            <div className="tlwrap">
+              <table className="tl-table">
+                <thead>
+                  <tr>
+                    <th>{t("原名")}</th>
+                    <th>{t("改名后")}</th>
+                    <th>{t("特殊文件")}</th>
+                    <th>{t("整理去向")}</th>
+                    <th>{t("最终路径")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {testResult.rows.map((row, i) => (
+                    <tr key={`${row.original}-${i}`}>
+                      <td>{row.original}</td>
+                      <td>{row.finalName}</td>
+                      <td title={row.specialReason}>
+                        {t(SPECIAL_ACTION_LABELS[row.specialAction])}
+                      </td>
+                      <td>
+                        {row.organizeDir ??
+                          (row.organizeSkip ? t(ORGANIZE_SKIP_LABELS[row.organizeSkip]) : "—")}
+                      </td>
+                      <td>{row.destPath ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="card">
@@ -1031,7 +1283,7 @@ function OrganizeFeatureStatus() {
       <h3>{t("本页功能状态（如实标注）")}</h3>
       <p>
         <span className="kind kind-keep">{t("已接通")}</span>{" "}
-        {t("九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）")}
+        {t("九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）")}
       </p>
       <p>
         <span className="kind kind-warn">{t("限制")}</span>{" "}

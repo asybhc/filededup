@@ -21,11 +21,15 @@ import type {
   LanzouUploadState,
   LicenseState,
   OrganizeMeta,
+  OrganizePreset,
+  OrganizePresetsResult,
   OrganizeRequest,
   OrganizeRulesExport,
   OrganizeRulesImport,
   OrganizeState,
   OrganizeSettings,
+  OrganizeTestRequest,
+  OrganizeTestResult,
   OrganizeUndoInfo,
   OrganizeUndoResult,
   PlanPreview,
@@ -86,6 +90,10 @@ interface WailsApp {
   GetOrganizeState(id: string): Promise<OrganizeState>;
   ExportOrganizeRules(rules: OrganizeSettings): Promise<OrganizeRulesExport>;
   ImportOrganizeRules(): Promise<OrganizeRulesImport>;
+  ListOrganizePresets(): Promise<OrganizePresetsResult>;
+  SaveOrganizePreset(name: string, rules: OrganizeSettings): Promise<OrganizePreset>;
+  DeleteOrganizePreset(id: string): Promise<void>;
+  TestOrganizeRules(req: OrganizeTestRequest): Promise<OrganizeTestResult>;
   GetOrganizeUndoInfo(): Promise<OrganizeUndoInfo>;
   UndoLastOrganize(): Promise<OrganizeUndoResult>;
   GetDedupUndoInfo(): Promise<DedupUndoInfo>;
@@ -292,6 +300,26 @@ export const api = {
     const b = bridge();
     if (b) return b.ImportOrganizeRules();
     return mock.importOrganizeRules();
+  },
+  async listOrganizePresets(): Promise<OrganizePresetsResult> {
+    const b = bridge();
+    if (b) return b.ListOrganizePresets();
+    return mock.listOrganizePresets();
+  },
+  async saveOrganizePreset(name: string, rules: OrganizeSettings): Promise<OrganizePreset> {
+    const b = bridge();
+    if (b) return b.SaveOrganizePreset(name, rules);
+    return mock.saveOrganizePreset(name, rules);
+  },
+  async deleteOrganizePreset(id: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.DeleteOrganizePreset(id);
+    return mock.deleteOrganizePreset(id);
+  },
+  async testOrganizeRules(req: OrganizeTestRequest): Promise<OrganizeTestResult> {
+    const b = bridge();
+    if (b) return b.TestOrganizeRules(req);
+    return mock.testOrganizeRules(req);
   },
   async getOrganizeUndoInfo(): Promise<OrganizeUndoInfo> {
     const b = bridge();

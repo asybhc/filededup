@@ -222,8 +222,8 @@ const enOrganize: Record<string, string> = {
 
   // 功能状态
   "本页功能状态（如实标注）": "Feature status on this page (as implemented)",
-  "九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）":
-    "Nine-step toggles and both orders, dry run, real run, pre-run confirmation, dedup/rename/special delete/clear read-only/organize/empty-folder cleanup, conflict policies, Recycle Bin and permanent delete, excludes and size filter, result details, per-item suspect confirm/reject feeding into the run, undo of the latest organize, versioned JSON rule import/export with unknown-field and invalid-value validation",
+  "九步开关与两套执行顺序、试运行、真实执行、执行前确认、去重/改名/特殊删除/去只读/整理/清理空目录、冲突策略、回收站与永久删除、排除与大小过滤、结果明细、存疑项逐条确认或驳回并进入执行、整理后撤销（最近一次）、规则导入导出（版本化 JSON，未知字段与非法值校验）、配置方案预设（同名覆盖、不含根目录）、规则测试器（样例纯计算：改名/特殊判定/整理去向）":
+    "Nine-step toggles and both orders, dry run, real run, pre-run confirmation, dedup/rename/special delete/clear read-only/organize/empty-folder cleanup, conflict policies, Recycle Bin and permanent delete, excludes and size filter, result details, per-item suspect confirm/reject feeding into the run, undo of the latest organize, versioned JSON rule import/export with unknown-field and invalid-value validation, named configuration presets (overwrite by name, root folder excluded), and a rule tester (pure calculation on samples: rename/junk verdict/organize destination)",
   "限制": "Limitations",
   "撤销只保留最近一次真实整理；已删除文件与硬链接替换无法还原。":
     "Only the latest real organize run can be undone; deleted files and hardlink replacements cannot be restored.",
@@ -254,6 +254,58 @@ const enOrganize: Record<string, string> = {
   "枚举目录": "Enumerating folders",
   "生成预览计划（先去重后整理）": "Building preview plan (dedup first, then organize)",
   "执行动作": "Applying actions",
+
+  // 配置方案预设
+  "配置方案预设": "Configuration presets",
+  "预设保存当前整理规则（不含根目录），可一键切换；校验口径与导出规则相同。":
+    "A preset stores the current organize rules (without the root folder) for one-click switching; validation matches the exported rules.",
+  "预设名称": "Preset name",
+  "保存为预设": "Save as preset",
+  "刷新预设": "Refresh presets",
+  "同名预设会被覆盖（不区分大小写）。": "A preset with the same name is overwritten (case-insensitive).",
+  "读取预设失败：{error}": "Failed to read presets: {error}",
+  "请输入预设名称": "Enter a preset name",
+  "预设已保存：{name}": "Preset saved: {name}",
+  "保存预设失败：{error}": "Failed to save the preset: {error}",
+  "已应用预设：{name}（当前根目录保持不变）": "Preset applied: {name} (the current root folder is unchanged)",
+  "预设已删除：{name}": "Preset deleted: {name}",
+  "删除预设失败：{error}": "Failed to delete the preset: {error}",
+  "还没有保存的预设。": "No presets saved yet.",
+  "启用 {n} 个步骤": "{n} steps enabled",
+  "预设文件：{path}": "Preset file: {path}",
+  "删除": "Delete",
+
+  // 规则测试器
+  "规则测试器": "Rule tester",
+  "对样例文件名做纯计算：不读磁盘、不改文件，只用当前页面的开关与规则。":
+    "Runs a pure calculation on sample file names: no disk reads, no file changes, only the switches and rules on this page.",
+  "样例文件名（每行一个，可带路径）": "Sample file names (one per line, paths allowed)",
+  "例如：001-2024-03-08-照片.jpg": "For example: 001-2024-03-08-photo.jpg",
+  "运行测试": "Run test",
+  "测试结果只反映当前配置，不代表已执行任何改动。":
+    "The test only reflects the current configuration; no changes were made.",
+  "请输入至少一个样例文件名": "Enter at least one sample file name",
+  "测试失败：{error}": "Test failed: {error}",
+  "样例 {total} 个：改名 {renamed}，垃圾 {garbage}，存疑 {suspects}，保留 {kept}，保护词排除 {excluded}，可整理 {organized}，跳过 {skipped}。":
+    "{total} samples: {renamed} renamed, {garbage} junk, {suspects} suspect, {kept} kept, {excluded} protected, {organized} organizable, {skipped} skipped.",
+  "原名": "Original name",
+  "改名后": "After renaming",
+  "特殊文件": "Junk verdict",
+  "整理去向": "Organize destination",
+  "最终路径": "Final path",
+  "未启用": "Not enabled",
+  "垃圾文件（将被删除）": "Junk (will be deleted)",
+  "存疑（默认保留，需人工确认）": "Suspect (kept by default, needs confirmation)",
+  "保留": "Keep",
+  "命中保护词（排除）": "Matched a protected word (excluded)",
+  "已在特殊删除步骤删除": "Deleted in the junk-file step",
+  "整理步骤未启用": "Organize step is off",
+  "未选择整理目标": "No organize destination selected",
+  "未填写关键字": "No keyword entered",
+  "未命中任一关键字": "Matched no keyword",
+  "未填写正则": "No regular expression entered",
+  "正则无效": "Invalid regular expression",
+  "未命中正则": "Did not match the regular expression",
 
   // 按时间整理
   "按时间整理": "Organize by time",

@@ -22,12 +22,16 @@ import type {
   LicenseState,
   OrganizeRequest,
   OrganizeMeta,
+  OrganizePreset,
+  OrganizePresetsResult,
   OrganizeRulesExport,
   OrganizeRulesImport,
   OrganizeSettings,
   OrganizeState,
   OrganizeStepView,
   OrganizeSuspect,
+  OrganizeTestRequest,
+  OrganizeTestResult,
   OrganizeUndoInfo,
   OrganizeUndoResult,
   PlanPreview,
@@ -716,6 +720,28 @@ function lanzouStateOf(b: MockLanzouBatch): LanzouUploadState {
   };
 }
 
+const PRESETS_KEY = "filededup.mock.organizePresets";
+
+// 浏览器预览的预设只存在 localStorage；桌面版的预设文件由 Go 侧管理。
+function readMockPresets(): OrganizePreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as OrganizePreset[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMockPresets(list: OrganizePreset[]): void {
+  try {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(list));
+  } catch {
+    // 浏览器禁用存储时仍返回本次结果，刷新页面后预设会丢失。
+  }
+}
+
 export const mock = {
   pickDirectory(): string {
     return SAMPLE_ROOT;
@@ -968,6 +994,41 @@ export const mock = {
       throw new Error("规则文件格式或版本不受支持");
     }
     return { canceled: false, path: "浏览器预览：内存中的规则", rules: parsed.rules };
+  },
+  listOrganizePresets(): OrganizePresetsResult {
+    return {
+      path: "浏览器预览：localStorage:" + PRESETS_KEY,
+      presets: readMockPresets(),
+    };
+  },
+  saveOrganizePreset(name: string, rules: OrganizeSettings): OrganizePreset {
+    const clean = name.trim();
+    if (!clean) throw new Error("预设名称不能为空");
+    const presets = readMockPresets();
+    const now = new Date().toISOString();
+    const idx = presets.findIndex((p) => p.name.toLowerCase() === clean.toLowerCase());
+    const entry: OrganizePreset =
+      idx >= 0
+        ? { ...presets[idx], name: clean, updatedAt: now, rules: { ...rules, root: "" } }
+        : {
+            id: `mock-preset-${Date.now()}`,
+            name: clean,
+            createdAt: now,
+            updatedAt: now,
+            rules: { ...rules, root: "" },
+          };
+    if (idx >= 0) presets[idx] = entry;
+    else presets.push(entry);
+    writeMockPresets(presets);
+    return entry;
+  },
+  deleteOrganizePreset(id: string): void {
+    const presets = readMockPresets();
+    if (!presets.some((p) => p.id === id)) throw new Error("预设不存在（可能已删除）");
+    writeMockPresets(presets.filter((p) => p.id !== id));
+  },
+  testOrganizeRules(_req: OrganizeTestRequest): OrganizeTestResult {
+    throw new Error("浏览器预览没有 Go 引擎，规则测试器只在桌面版可用。");
   },
   getOrganizeUndoInfo(): OrganizeUndoInfo {
     if (!mockUndo) return { available: false, records: 0 };

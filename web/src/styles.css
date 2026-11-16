@@ -1861,3 +1861,49 @@ button.link {
   border-radius: 8px;
   background: var(--soft);
 }
+
+/* 整理页：配置方案预设与规则测试器 */
+.orgpage .presetlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.orgpage .presetrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--soft);
+  flex-wrap: wrap;
+}
+
+.orgpage .presetrow .presetname {
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.orgpage .presetrow .hint {
+  flex: 1;
+  min-width: 180px;
+}
+
+.orgpage .testertextarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.orgpage .testertextarea:focus {
+  outline: 2px solid var(--accent-weak);
+  border-color: var(--accent);
+}
