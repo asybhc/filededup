@@ -25,19 +25,26 @@ func (a *App) isQuitting() bool {
 	return a.quitting
 }
 
-// beforeClose 是 Wails 的 OnBeforeClose。配置为“最小化到托盘”时隐藏窗口、阻止退出；
-// 通过托盘菜单退出时放行。
+// beforeClose 是 Wails 的 OnBeforeClose。
+//
+// 逻辑顺序：
+//   - 托盘“退出”已置位时直接放行；
+//   - 关闭行为是“最小化到托盘”时只隐藏窗口，任务继续跑，不做中断确认；
+//   - 真正要退出时，若扫描/执行/整理等任务仍在跑，先弹一次确认框，空闲时不打扰。
 func (a *App) beforeClose(ctx context.Context) bool {
 	if a.isQuitting() {
 		return false
 	}
-	if !a.trayAvailable() {
-		return false
+	if a.trayAvailable() {
+		s, _ := LoadSettings()
+		if s.Window.CloseAction == "tray" {
+			wruntime.WindowHide(ctx)
+			log.Printf("窗口已最小化到托盘（设置：关闭窗口时最小化）")
+			return true
+		}
 	}
-	s, _ := LoadSettings()
-	if s.Window.CloseAction == "tray" {
-		wruntime.WindowHide(ctx)
-		log.Printf("窗口已最小化到托盘（设置：关闭窗口时最小化）")
+	if !a.confirmQuitWhileBusy(ctx) {
+		log.Printf("关闭被取消：仍有任务在执行")
 		return true
 	}
 	return false

@@ -298,10 +298,17 @@ func (t *trayController) runScan() {
 }
 
 func (t *trayController) quit() {
-	if t.app != nil {
-		t.app.markQuitting()
+	if t.app == nil {
+		return
 	}
-	if t.app != nil && t.app.ctx != nil {
+	if t.app.ctx != nil {
+		// 任务执行中从托盘退出同样需要确认；窗口可能处于隐藏状态，对话框仍由应用主窗口承载。
+		if !t.app.confirmQuitWhileBusy(t.app.ctx) {
+			return
+		}
+	}
+	t.app.markQuitting()
+	if t.app.ctx != nil {
 		wruntime.Quit(t.app.ctx)
 	}
 }
