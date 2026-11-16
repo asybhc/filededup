@@ -32,6 +32,7 @@ import type {
   ScanRequest,
   ScanState,
   ScheduleRunState,
+  SearchBackends,
   SearchRequest,
   SearchResultPage,
   SearchState,
@@ -74,6 +75,7 @@ interface WailsApp {
   SaveAIKey(key: string): Promise<void>;
   GetScheduleState(): Promise<ScheduleRunState>;
   StartSearch(req: SearchRequest): Promise<string>;
+  GetSearchBackends(): Promise<SearchBackends>;
   GetSearchState(id: string): Promise<SearchState>;
   CancelSearch(id: string): Promise<void>;
   GetSearchResults(id: string, sortKey: string, desc: boolean, offset: number, limit: number): Promise<SearchResultPage>;
@@ -224,6 +226,16 @@ export const api = {
     const b = bridge();
     if (b) return b.StartSearch(req);
     return mock.startSearch(req);
+  },
+  async getSearchBackends(): Promise<SearchBackends> {
+    const b = bridge();
+    if (b) return b.GetSearchBackends();
+    return {
+      backends: [
+        { key: "local", name: "本地文件系统", available: true, message: "浏览器预览使用本地模拟数据。" },
+        { key: "everything", name: "Everything（es.exe）", available: false, message: "浏览器预览不支持 Everything 后端。" },
+      ],
+    };
   },
   async getSearchState(id: string): Promise<SearchState> {
     const b = bridge();

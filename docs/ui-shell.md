@@ -771,3 +771,25 @@ Go 版走自己的序列，当前 `0.9.9`：
 - 未实测项：真实 Windows 上固定卷枚举与全盘扫描（未真跑全盘，避免长时间占用机器）；
   桌面上两个复选框与卷清单的点击/刷新路径（代码路径已核对、构建通过，未真实点击）；
   U 盘/光驱/网络盘的驱动类型过滤仅按 API 语义实现，未插拔设备验证。
+
+### 0.10.6 顶部搜索接入 Everything（可选后端）
+
+- 搜索页（顶部「搜索」）标题改为「文件搜索」，新增「检索后端」下拉：
+  - 本地文件系统（默认，原实时遍历逻辑完全保留）；
+  - Everything（es.exe）：仅当检测到 es.exe 时可选，未检测到则选项禁用并给出原因与修复方式，
+    另有「重新检测」按钮（真实调用 GetSearchBackends，不是装饰按钮）。
+- 后端定位：PATH 中的 es.exe，其次 Program Files / Program Files (x86) / LOCALAPPDATA 下的
+  Everything\es.exe；非 Windows 返回“仅支持 Windows”。
+- 查询方式：对每个搜索目录执行 es.exe -n <剩余上限> -path <root> <关键词>，
+  输出按行解析为绝对路径（UTF-8 优先，失败按 GBK 解码，兼容中文 Windows 控制台代码页）；
+  多个目录的结果去重后合并，候选达到上限时标记截断。
+- 结果过滤与本地后端同口径：扩展名、最小/最大大小、隐藏/系统属性、排除目录（目录名按层级匹配、
+  带路径项按前缀匹配）均在拿到候选后用本进程判断；目录条目被剔除（本页只列文件）。
+- 进度口径区分：Everything 任务在状态里带 backend，界面显示“Everything 返回 N 条候选”，
+  本地后端仍显示“遍历 N 个文件 / N 个目录”，不会把索引命中数说成遍历数。
+- 取消：仍走 CommandContext，取消会终止 es.exe 子进程并保留已有结果。
+- 新增绑定 GetSearchBackends；SearchRequest 增加 backend，SearchState 增加 backend。
+- 新增单测（desktop 标签）：es.exe 输出解析（去 BOM/CR、丢弃非绝对路径行）、GBK 解码、
+  扩展名/大小/隐藏/排除目录过滤。`go test -tags desktop ./cmd/filededup` 通过。
+- 未实测项：本机未安装 Everything（PATH 中无 es.exe），真实 es.exe 查询与 GBK/UTF-8 输出
+  仅在单测与代码路径层面验证，未连真索引跑过；搜索页下拉与“重新检测”按钮未在桌面点击。

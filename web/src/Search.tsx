@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { VirtualList } from "./components/VirtualList";
-import type { SearchMatch, SearchRequest, SearchState } from "./types";
+import type { SearchBackendInfo, SearchMatch, SearchRequest, SearchState } from "./types";
 
 const MB = 1024 * 1024;
 const PAGE = 200;
@@ -44,6 +44,9 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
   const [maxMB, setMaxMB] = useState(0);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [excludesText, setExcludesText] = useState("");
+  // 检索后端：本地遍历默认；Everything 仅在检测到 es.exe 时可选。
+  const [backend, setBackend] = useState<"local" | "everything">("local");
+  const [backends, setBackends] = useState<SearchBackendInfo[]>([]);
 
   const [jobId, setJobId] = useState("");
   const jobRef = useRef("");
@@ -67,6 +70,20 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
     setTotal(nextTotal);
     setRows(nextTotal > 0 ? new Array<SearchMatch | null>(nextTotal).fill(null) : []);
   }, []);
+
+  const loadBackends = useCallback(async () => {
+    try {
+      const r = await api.getSearchBackends();
+      setBackends(r.backends);
+      setError("");
+    } catch (err) {
+      setError("读取搜索后端失败：" + errorText(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBackends();
+  }, [loadBackends]);
 
   const loadPage = useCallback(async (pageIndex: number) => {
     const job = jobRef.current;
@@ -160,12 +177,13 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
       includeHidden,
       excludes: excludesText.split(/[,，;；\s]+/).filter(Boolean),
       limit: 200000,
+      backend,
     };
     try {
       const id = await api.startSearch(req);
       jobRef.current = id;
       setJobId(id);
-      setState({ id, running: true, done: false, cancelled: false, visited: 0, dirs: 0, matched: 0, truncated: false, elapsedMs: 0 });
+      setState({ id, running: true, done: false, cancelled: false, visited: 0, dirs: 0, matched: 0, truncated: false, elapsedMs: 0, backend });
       setTruncated(false);
       resetResult(0);
       setSortKey("path");
@@ -208,15 +226,25 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
   };
 
   const running = Boolean(state?.running);
+  const everythingInfo = backends.find((b) => b.key === "everything");
+  const everythingAvailable = Boolean(everythingInfo?.available);
+  const backendInfo = backends.find((b) => b.key === backend);
+  const activeBackend = state?.backend ?? backend;
   const sortMark = (key: SortKey) => (sortKey === key ? (sortDesc ? " ↓" : " ↑") : "");
+
+  // 外部工具被卸载后，已选中的 Everything 后端回落到本地，避免留下不可用的状态。
+  useEffect(() => {
+    if (!everythingAvailable && backend === "everything") setBackend("local");
+  }, [everythingAvailable, backend]);
 
   return (
     <div className="searchpage">
       <div className="card">
-        <h2>本地搜索</h2>
+        <h2>文件搜索</h2>
         <p className="hint">
           按文件名或路径搜索一个或多个目录。不带 <code>* ?</code> 时按子串匹配；通配符模式可写 <code>*.jpg</code>、
-          <code>2024/*/report?.pdf</code>。索引不落盘，每次实时遍历，结果与磁盘一致。
+          <code>2024/*/report?.pdf</code>。默认后端实时遍历目录，结果与磁盘一致；
+          检测到 Everything（es.exe）时可改用它的索引作为可选后端。
         </p>
 
         <div className="subhead">搜索目录</div>
@@ -238,6 +266,19 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
         </div>
 
         <div className="grid2">
+          <label className="fieldrow">
+            <span>检索后端</span>
+            <select
+              value={backend}
+              onChange={(e) => setBackend(e.target.value as "local" | "everything")}
+              disabled={running}
+            >
+              <option value="local">本地文件系统</option>
+              <option value="everything" disabled={!everythingAvailable}>
+                Everything（es.exe）{everythingAvailable ? "" : "（未检测到）"}
+              </option>
+            </select>
+          </label>
           <label className="fieldrow">
             <span>关键词</span>
             <input
@@ -295,6 +336,21 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
           </label>
         </div>
 
+        <p className="hint">
+          检索后端：{backendInfo?.name ?? "读取中…"}
+          {backendInfo?.message ? ` · ${backendInfo.message}` : ""}
+          {backend === "everything" && everythingInfo?.path ? ` 路径：${everythingInfo.path}` : ""}
+          <button className="ghost" onClick={() => void loadBackends()} disabled={running}>
+            重新检测
+          </button>
+        </p>
+        {backend === "everything" && (
+          <p className="hint">
+            Everything 后端按 Everything 的搜索语法匹配关键词（目录范围、扩展名、大小、隐藏/系统与排除目录仍按本页条件过滤）；
+            统计里的“候选”是 es.exe 返回的条数，不是遍历过的文件数。
+          </p>
+        )}
+
         <label className="checkrow">
           <input type="checkbox" checked={includeHidden} onChange={(e) => setIncludeHidden(e.target.checked)} disabled={running} />
           包含隐藏 / 系统文件（不勾选 = 跳过）
@@ -311,11 +367,19 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
           )}
           {state?.done && (
             <span className="hint">
-              遍历 {state.visited} 个文件 / {state.dirs} 个目录，命中 {state.matched} 条，用时{" "}
-              {Math.max(1, Math.round(state.elapsedMs / 1000))} 秒
+              {activeBackend === "everything"
+                ? `Everything 返回 ${state.visited} 条候选，命中 ${state.matched} 条`
+                : `遍历 ${state.visited} 个文件 / ${state.dirs} 个目录，命中 ${state.matched} 条`}
+              ，用时 {Math.max(1, Math.round(state.elapsedMs / 1000))} 秒
             </span>
           )}
-          {running && state && <span className="hint">已遍历 {state.visited} 个文件，命中 {state.matched} 条</span>}
+          {running && state && (
+            <span className="hint">
+              {activeBackend === "everything"
+                ? `已收到 ${state.visited} 条索引候选，命中 ${state.matched} 条`
+                : `已遍历 ${state.visited} 个文件，命中 ${state.matched} 条`}
+            </span>
+          )}
         </div>
 
         {state?.cancelled && <p className="hint warn">已取消，下面只显示取消前已完成的结果。</p>}

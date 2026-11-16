@@ -275,6 +275,19 @@ export interface SearchRequest {
   includeHidden: boolean;
   excludes: string[];
   limit: number;
+  backend?: "local" | "everything";
+}
+
+export interface SearchBackendInfo {
+  key: "local" | "everything";
+  name: string;
+  available: boolean;
+  path?: string;
+  message?: string;
+}
+
+export interface SearchBackends {
+  backends: SearchBackendInfo[];
 }
 
 export interface SearchState {
@@ -289,6 +302,7 @@ export interface SearchState {
   truncated: boolean;
   elapsedMs: number;
   current?: string;
+  backend?: "local" | "everything";
 }
 
 export interface SearchMatch {

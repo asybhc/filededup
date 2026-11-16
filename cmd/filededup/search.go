@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,8 @@ type SearchRequest struct {
 	IncludeHidden bool     `json:"includeHidden"`
 	Excludes      []string `json:"excludes"`
 	Limit         int      `json:"limit"`
+	// Backend 选择检索后端：local（实时遍历，默认）或 everything（es.exe 索引）。
+	Backend string `json:"backend"`
 }
 
 // SearchState 是搜索任务的进度快照。
@@ -39,6 +42,8 @@ type SearchState struct {
 	Truncated bool   `json:"truncated"`
 	ElapsedMS int64  `json:"elapsedMs"`
 	Current   string `json:"current,omitempty"`
+	// Backend 是本任务实际使用的检索后端，供界面显示对应的统计口径。
+	Backend string `json:"backend"`
 }
 
 // SearchResultPage 是一页搜索结果。
@@ -92,13 +97,26 @@ func (a *App) StartSearch(req SearchRequest) (string, error) {
 		return "", err
 	}
 
+	backend := strings.ToLower(strings.TrimSpace(req.Backend))
+	switch backend {
+	case "", "local":
+		backend = "local"
+	case "everything":
+		// 后端不可用时立刻报原因，避免建出一个注定失败的任务。
+		if _, err := findEverythingCLI(); err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("不支持的搜索后端：%s", req.Backend)
+	}
+
 	id := fmt.Sprintf("search-%d", time.Now().UnixNano())
 	ctx, cancel := context.WithCancel(context.Background())
 	job := &searchJob{
 		id:      id,
 		cancel:  cancel,
 		start:   time.Now(),
-		state:   SearchState{ID: id, Running: true},
+		state:   SearchState{ID: id, Running: true, Backend: backend},
 		sortKey: "path",
 	}
 
@@ -115,18 +133,25 @@ func (a *App) StartSearch(req SearchRequest) (string, error) {
 	a.searchMu.Unlock()
 
 	go func() {
-		res, err := search.Run(ctx, ereq, search.Options{
-			HiddenFile: searchHiddenFile,
-			Progress: func(p search.Progress) {
-				job.mu.Lock()
-				job.state.Visited = p.Visited
-				job.state.Dirs = p.Dirs
-				job.state.Matched = int(p.Matched)
-				job.state.Truncated = p.Truncated
-				job.state.Current = p.Current
-				job.mu.Unlock()
-			},
-		})
+		onProgress := func(p search.Progress) {
+			job.mu.Lock()
+			job.state.Visited = p.Visited
+			job.state.Dirs = p.Dirs
+			job.state.Matched = int(p.Matched)
+			job.state.Truncated = p.Truncated
+			job.state.Current = p.Current
+			job.mu.Unlock()
+		}
+		var res *search.Result
+		var err error
+		if backend == "everything" {
+			res, err = runEverythingSearch(ctx, ereq, onProgress)
+		} else {
+			res, err = search.Run(ctx, ereq, search.Options{
+				HiddenFile: searchHiddenFile,
+				Progress:   onProgress,
+			})
+		}
 		job.mu.Lock()
 		defer job.mu.Unlock()
 		job.state.Running = false
