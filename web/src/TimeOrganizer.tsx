@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { useT } from "./i18n";
 import type { TimelineMeta, TimelinePlan, TimelineRequest, TimelineState } from "./types";
 
 function errorText(err: unknown): string {
@@ -37,6 +38,7 @@ const FALLBACK_META: TimelineMeta = {
 };
 
 export default function TimeOrganizer(props: { canRun: boolean; licenseHint: string }) {
+  const t = useT();
   const [meta, setMeta] = useState<TimelineMeta>(FALLBACK_META);
   const [root, setRoot] = useState("");
   const [target, setTarget] = useState("");
@@ -128,7 +130,14 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
     try {
       const p = await api.previewTimeline(req());
       setPlan(p);
-      setNote(`共 ${p.total} 个文件，可整理 ${p.ready} 个，冲突 ${p.conflicts} 个，跳过 ${p.skipped} 个。`);
+      setNote(
+        t("共 {total} 个文件，可整理 {ready} 个，冲突 {conflicts} 个，跳过 {skipped} 个。", {
+          total: p.total,
+          ready: p.ready,
+          conflicts: p.conflicts,
+          skipped: p.skipped,
+        }),
+      );
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -163,77 +172,88 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
 
   return (
     <section className="card fill">
-      <h2>按时间整理</h2>
+      <h2>{t("按时间整理")}</h2>
       <p className="hint">
-        按文件的拍摄时间（JPEG/TIFF 的 EXIF 优先，取不到时用修改时间）分到日、周、月、年目录，
-        支持移动或复制；同名冲突按所选策略处理。预演只读元数据，不会改动任何文件。
+        {t("按文件的拍摄时间（JPEG/TIFF 的 EXIF 优先，取不到时用修改时间）分到日、周、月、年目录，支持移动或复制；同名冲突按所选策略处理。预演只读元数据，不会改动任何文件。")}
       </p>
 
       <div className="formgrid">
         <label className="fullrow">
-          <span>源目录</span>
+          <span>{t("源目录")}</span>
           <div className="dirrow dropzone">
-            <input className="path" readOnly value={root} placeholder="尚未选择源目录" aria-label="按时间整理源目录" />
+            <input
+              className="path"
+              readOnly
+              value={root}
+              placeholder={t("尚未选择源目录")}
+              aria-label={t("按时间整理源目录")}
+            />
             <button className="secondary" onClick={pickRoot}>
-              选择目录
+              {t("选择目录")}
             </button>
           </div>
         </label>
         <label className="fullrow">
-          <span>目标目录（容器目录，程序会在其中建日/周/月/年子目录）</span>
+          <span>{t("目标目录（容器目录，程序会在其中建日/周/月/年子目录）")}</span>
           <div className="dirrow">
-            <input className="path" readOnly value={target} placeholder="尚未选择目标目录" aria-label="按时间整理目标目录" />
+            <input
+              className="path"
+              readOnly
+              value={target}
+              placeholder={t("尚未选择目标目录")}
+              aria-label={t("按时间整理目标目录")}
+            />
             <button className="secondary" onClick={pickTarget}>
-              选择目录
+              {t("选择目录")}
             </button>
           </div>
         </label>
         <label>
-          <span>分桶粒度</span>
+          <span>{t("分桶粒度")}</span>
           <select value={bucket} onChange={(e) => setBucket(e.target.value)}>
             {meta.buckets.map((b) => (
               <option key={b.value} value={b.value}>
-                {b.label}
+                {t(b.label)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          <span>处理方式</span>
+          <span>{t("处理方式")}</span>
           <select value={action} onChange={(e) => setAction(e.target.value)}>
             {meta.actions.map((a) => (
               <option key={a.value} value={a.value}>
-                {a.label}
+                {t(a.label)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          <span>同名冲突</span>
+          <span>{t("同名冲突")}</span>
           <select value={conflict} onChange={(e) => setConflict(e.target.value)}>
             {meta.conflicts.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.label}
+                {t(c.label)}
               </option>
             ))}
           </select>
         </label>
         <label className="checkline">
           <input type="checkbox" checked={includeHidden} onChange={(e) => setIncludeHidden(e.target.checked)} />
-          <span>包含隐藏/系统文件（默认跳过）</span>
+          <span>{t("包含隐藏/系统文件（默认跳过）")}</span>
         </label>
       </div>
 
       <div className="actions">
         <button className="secondary" disabled={!root || !target || busy} onClick={preview}>
-          预演计划
+          {t("预演计划")}
         </button>
         <button className="primary" disabled={!plan || plan.ready === 0 || busy || !props.canRun || !confirmed} onClick={start}>
-          开始整理
+          {t("开始整理")}
         </button>
         {jobId && (
           <button className="secondary" onClick={cancel}>
-            取消
+            {t("取消")}
           </button>
         )}
       </div>
@@ -256,15 +276,28 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
             <div className="bar" style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
           <p className="hint">
-            {job.phase === "running"
-              ? `整理中：${job.done} / ${job.total}${job.current ? `（${job.current}）` : ""}`
-              : job.phase === "done"
-                ? `已完成：移动 ${job.result.moved}，复制 ${job.result.copied}，覆盖 ${job.result.overwrote}，失败 ${job.result.failed}`
-                : `${job.phase === "cancelled" ? "已取消" : "执行失败"}${job.error ? "：" + job.error : ""}`}
+            {job.phase === "running" ? (
+              <>
+                {t("整理中：{done} / {total}", { done: job.done, total: job.total })}
+                {job.current ? t("（{current}）", { current: job.current }) : ""}
+              </>
+            ) : job.phase === "done" ? (
+              t("已完成：移动 {moved}，复制 {copied}，覆盖 {overwrote}，失败 {failed}", {
+                moved: job.result.moved,
+                copied: job.result.copied,
+                overwrote: job.result.overwrote,
+                failed: job.result.failed,
+              })
+            ) : (
+              <>
+                {job.phase === "cancelled" ? t("已取消") : t("执行失败")}
+                {job.error ? t("：{error}", { error: job.error }) : ""}
+              </>
+            )}
           </p>
           {job.result.errors.length > 0 && (
             <div className="banner error">
-              失败明细（前 10 条）：
+              {t("失败明细（前 10 条）：")}
               <ul>
                 {job.result.errors.slice(0, 10).map((e, i) => (
                   <li key={i}>{e}</li>
@@ -279,8 +312,16 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
         <label className="checkline">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
           <span>
-            我确认按上面的计划{action === "move" ? "移动" : "复制"} {plan.ready} 个文件（{formatBytes(plan.totalSize)}），
-            冲突策略为「{meta.conflicts.find((c) => c.value === conflict)?.label ?? conflict}」。
+            {t("我确认按上面的计划")}
+            {action === "move" ? t("移动") : t("复制")}{" "}
+            {t("{count} 个文件（{size}），冲突策略为「{policy}」。", {
+              count: plan.ready,
+              size: formatBytes(plan.totalSize),
+              policy: (() => {
+                const label = meta.conflicts.find((c) => c.value === conflict)?.label;
+                return label ? t(label) : conflict;
+              })(),
+            })}
           </span>
         </label>
       )}
@@ -290,11 +331,11 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
           <table className="tl-table">
             <thead>
               <tr>
-                <th>时间</th>
-                <th>来源</th>
-                <th>目标</th>
-                <th>大小</th>
-                <th>状态</th>
+                <th>{t("时间")}</th>
+                <th>{t("来源")}</th>
+                <th>{t("目标")}</th>
+                <th>{t("大小")}</th>
+                <th>{t("状态")}</th>
               </tr>
             </thead>
             <tbody>
@@ -302,17 +343,27 @@ export default function TimeOrganizer(props: { canRun: boolean; licenseHint: str
                 <tr key={`${it.source}-${i}`} className={it.status === "skipped" ? "skipped" : ""}>
                   <td>
                     {it.when}
-                    <span className="tag">{it.whenFrom === "exif" ? "EXIF" : "修改时间"}</span>
+                    <span className="tag">{it.whenFrom === "exif" ? "EXIF" : t("修改时间")}</span>
                   </td>
                   <td title={it.source}>{it.relPath}</td>
                   <td title={it.dest}>{it.bucket}</td>
                   <td className="num">{formatBytes(it.size)}</td>
-                  <td>{it.status === "ready" ? "就绪" : it.status === "conflict" ? it.note || "冲突" : it.status === "skipped" ? "跳过" : "错误"}</td>
+                  <td>
+                    {it.status === "ready"
+                      ? t("就绪")
+                      : it.status === "conflict"
+                        ? it.note || t("冲突")
+                        : it.status === "skipped"
+                          ? t("跳过")
+                          : t("错误")}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {plan?.truncated && <p className="hint">预览条目过多，仅显示前 {sample.length} 条；执行时会处理全部文件。</p>}
+          {plan?.truncated && (
+            <p className="hint">{t("预览条目过多，仅显示前 {n} 条；执行时会处理全部文件。", { n: sample.length })}</p>
+          )}
         </div>
       )}
     </section>

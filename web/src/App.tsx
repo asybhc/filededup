@@ -9,6 +9,7 @@ import { SettingsDialog } from "./Settings";
 import { Search } from "./Search";
 import TimeOrganizer from "./TimeOrganizer";
 import { DiagnosticsDialog } from "./Diagnostics";
+import { getLang, setLang, tr, useT } from "./i18n";
 import type {
   AppInfo,
   DedupUndoInfo,
@@ -123,34 +124,42 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// 列表分隔符随界面语言变化：中文用顿号，英文用逗号加空格。
+function listSep(): string {
+  return getLang() === "zh" ? "、" : ", ";
+}
+
 function licenseSourceLabel(src?: string): string {
   switch (src) {
     case "ed25519":
-      return "Ed25519 许可证";
+      return tr("Ed25519 许可证");
     case "legacy-ecdsa":
-      return "旧版 ECDSA 许可证（只读兼容）";
+      return tr("旧版 ECDSA 许可证（只读兼容）");
     case "trial":
-      return "试用期";
+      return tr("试用期");
     default:
-      return "无";
+      return tr("无");
   }
 }
 
 function licenseLabel(st?: LicenseState): string {
-  if (!st) return "授权状态读取中";
+  if (!st) return tr("授权状态读取中");
   switch (st.status) {
     case "licensed":
-      return st.forever ? `已授权 · ${st.edition ?? ""} · 永久` : `已授权 · ${st.expiry ?? ""} 到期`;
+      return st.forever
+        ? tr("已授权 · {edition} · 永久", { edition: st.edition ?? "" })
+        : tr("已授权 · {expiry} 到期", { expiry: st.expiry ?? "" });
     case "trial":
-      return `试用中 · 剩余 ${st.trialDaysLeft} 天`;
+      return tr("试用中 · 剩余 {days} 天", { days: st.trialDaysLeft });
     case "trial-expired":
-      return "试用已结束 · 未授权";
+      return tr("试用已结束 · 未授权");
     default:
-      return "未授权";
+      return tr("未授权");
   }
 }
 
 export default function App() {
+  const t = useT();
   const [info, setInfo] = useState<AppInfo>({ version: "", platform: "" });
   const [step, setStep] = useState<Step>("pick");
   const [req, setReq] = useState<ScanRequest & { minSizeMB: number }>({
@@ -273,13 +282,18 @@ export default function App() {
       })
       .catch((err) => {
         if (!alive) return;
-        setSettingsNote("设置读取失败，已使用默认值：" + errorText(err));
+        setSettingsNote(t("设置读取失败，已使用默认值：{error}", { error: errorText(err) }));
         setSettingsReady(true);
       });
     return () => {
       alive = false;
     };
   }, []);
+
+  // 界面语言跟随设置；设置对话框或顶栏切换后立即生效。
+  useEffect(() => {
+    if (settings?.lang) setLang(settings.lang);
+  }, [settings?.lang]);
 
   // 主题：system 时监听系统深浅色变化；值来自设置，切换后写一份 localStorage 镜像，
   // 供 index.html 的早期脚本在 React 挂载前就选定配色，刷新不闪白。
@@ -317,7 +331,7 @@ export default function App() {
           setDropNote(r.message);
           if (r.path && (r.isDir || r.fromFile)) setReq((prev) => ({ ...prev, root: r.path }));
         })
-        .catch((err) => setDropNote("拖放处理失败：" + errorText(err)));
+        .catch((err) => setDropNote(t("拖放处理失败：{error}", { error: errorText(err) })));
     });
     return () => {
       if (typeof rt.OnFileDropOff === "function") rt.OnFileDropOff();
@@ -390,7 +404,7 @@ export default function App() {
       };
       settingsRef.current = next;
       setSettings(next);
-      api.saveSettings(next).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+      api.saveSettings(next).catch((err) => setSettingsNote(t("设置保存失败：{error}", { error: errorText(err) })));
     }, 600);
     return () => window.clearTimeout(timer);
   }, [req, deleteMode, excludesText]);
@@ -401,7 +415,7 @@ export default function App() {
     const merged: UISettings = { ...base, organize: next };
     settingsRef.current = merged;
     setSettings(merged);
-    api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+    api.saveSettings(merged).catch((err) => setSettingsNote(t("设置保存失败：{error}", { error: errorText(err) })));
   };
 
   const persistLanzou = (partial: Partial<LanzouSettings>) => {
@@ -410,7 +424,7 @@ export default function App() {
     const merged: UISettings = { ...base, lanzou: { ...base.lanzou, ...partial } };
     settingsRef.current = merged;
     setSettings(merged);
-    api.saveSettings(merged).catch((err) => setSettingsNote("设置保存失败：" + errorText(err)));
+    api.saveSettings(merged).catch((err) => setSettingsNote(t("设置保存失败：{error}", { error: errorText(err) })));
   };
 
   // 启动后按配置自动检查一次；有更新只点亮入口，不主动弹窗。
@@ -439,14 +453,14 @@ export default function App() {
 
   const runCheck = async (manual: boolean) => {
     setUpdateBusy(true);
-    if (manual) setUpdateNote("正在检查更新…");
+    if (manual) setUpdateNote(t("正在检查更新…"));
     try {
       const v = await api.checkForUpdate(manual);
       setUpdateCheck(v);
       if (v.message) setUpdateNote(v.message);
     } catch (err) {
       setUpdateCheck(undefined);
-      setUpdateNote("检查失败：" + errorText(err));
+      setUpdateNote(t("检查失败：{error}", { error: errorText(err) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -462,21 +476,21 @@ export default function App() {
   const saveAndCheck = async () => {
     const url = updateForm.manifestUrl.trim();
     if (url && !/^https?:\/\//i.test(url)) {
-      setUpdateNote("更新源必须是 http:// 或 https:// 地址。");
+      setUpdateNote(t("更新源必须是 http:// 或 https:// 地址。"));
       return;
     }
     const interval = Math.min(720, Math.max(1, Number(updateForm.intervalHours) || 18));
     const next: UpdateSettings = { ...updateForm, manifestUrl: url, intervalHours: interval };
     setUpdateBusy(true);
-    setUpdateNote("正在保存并检查…");
+    setUpdateNote(t("正在保存并检查…"));
     try {
       await persistUpdate(next);
       const v = await api.checkForUpdate(true);
       setUpdateCheck(v);
-      setUpdateNote(v.message || "检查完成。");
+      setUpdateNote(v.message || t("检查完成。"));
     } catch (err) {
       setUpdateCheck(undefined);
-      setUpdateNote("检查失败：" + errorText(err));
+      setUpdateNote(t("检查失败：{error}", { error: errorText(err) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -495,10 +509,12 @@ export default function App() {
         settingsRef.current = merged;
         setSettings(merged);
       }
-      setUpdateCheck((prev) => (prev ? { ...prev, status: "skipped", message: `已跳过版本 ${v}。` } : prev));
-      setUpdateNote(`已跳过版本 ${v}，后续检查不再提示。`);
+      setUpdateCheck((prev) =>
+        prev ? { ...prev, status: "skipped", message: t("已跳过版本 {version}。", { version: v }) } : prev,
+      );
+      setUpdateNote(t("已跳过版本 {version}，后续检查不再提示。", { version: v }));
     } catch (err) {
-      setUpdateNote("跳过版本失败：" + errorText(err));
+      setUpdateNote(t("跳过版本失败：{error}", { error: errorText(err) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -515,10 +531,10 @@ export default function App() {
         settingsRef.current = merged;
         setSettings(merged);
       }
-      setUpdateNote("已取消跳过版本。");
+      setUpdateNote(t("已取消跳过版本。"));
       setUpdateCheck(undefined);
     } catch (err) {
-      setUpdateNote("取消跳过失败：" + errorText(err));
+      setUpdateNote(t("取消跳过失败：{error}", { error: errorText(err) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -530,13 +546,13 @@ export default function App() {
       return;
     }
     setUpdateBusy(true);
-    setUpdateNote("正在下载、验签并替换程序，请勿关闭窗口…");
+    setUpdateNote(t("正在下载、验签并替换程序，请勿关闭窗口…"));
     try {
       const r = await api.installUpdate();
-      setUpdateNote(`已更新到 ${r.version}，程序即将重启。备份：${r.backupPath}`);
+      setUpdateNote(t("已更新到 {version}，程序即将重启。备份：{backup}", { version: r.version, backup: r.backupPath }));
     } catch (err) {
       // 浏览器预览会在这里直接给出“不能安装”的明确原因。
-      setUpdateNote("安装已取消：" + errorText(err));
+      setUpdateNote(t("安装已取消：{error}", { error: errorText(err) }));
       setInstallArmed(false);
     } finally {
       setUpdateBusy(false);
@@ -556,7 +572,7 @@ export default function App() {
         if (alive) setLicense(st);
       })
       .catch((err) => {
-        if (alive) setLicenseNote("授权状态读取失败：" + errorText(err));
+        if (alive) setLicenseNote(t("授权状态读取失败：{error}", { error: errorText(err) }));
       });
     return () => {
       alive = false;
@@ -608,7 +624,7 @@ export default function App() {
           void loadGroups(sessionId);
         } else if (st.phase === "failed") {
           stopped = true;
-          setError(st.error || "扫描失败");
+          setError(st.error || t("扫描失败"));
         } else if (st.phase === "cancelled") {
           // 取消后停在扫描页展示已扫到的数量，不再继续轮询。
           stopped = true;
@@ -725,6 +741,21 @@ export default function App() {
     }
   }
 
+  async function switchLang() {
+    const base = settingsRef.current;
+    if (!base) return;
+    const next: UISettings = { ...base, lang: base.lang === "en" ? "zh" : "en" };
+    try {
+      await api.saveSettings(next);
+      settingsRef.current = next;
+      setSettings(next);
+      setLang(next.lang);
+      setSettingsNote("");
+    } catch (err) {
+      setSettingsNote(t("语言设置保存失败：{error}", { error: errorText(err) }));
+    }
+  }
+
   async function pickDirectory() {
     setError("");
     try {
@@ -745,7 +776,7 @@ export default function App() {
       const plan = await api.getFullDiskPlan();
       setFullDiskPlan(plan);
       if (!plan.supported) {
-        setFullDiskNote(plan.message || "当前环境不支持全盘查重");
+        setFullDiskNote(plan.message || t("当前环境不支持全盘查重"));
         setReq((prev) => ({ ...prev, fullDisk: false }));
         return;
       }
@@ -789,7 +820,7 @@ export default function App() {
       void startScanRef.current();
     });
     const offSched = onAppEvent("schedule:done", (payload: { message?: string; status?: string }) => {
-      setSettingsNote(`定时扫描：${payload?.message ?? payload?.status ?? "已结束"}`);
+      setSettingsNote(t("定时扫描：{message}", { message: payload?.message ?? payload?.status ?? t("已结束") }));
     });
     return () => {
       offScan();
@@ -822,7 +853,7 @@ export default function App() {
     }
     next.add(path);
     if (group.members.every((m) => next.has(m.path))) {
-      setSelNote("每组至少要保留一个文件：已阻止把整组都勾选删除。");
+      setSelNote(t("每组至少要保留一个文件：已阻止把整组都勾选删除。"));
       return;
     }
     setDeleteSel(next);
@@ -846,19 +877,24 @@ export default function App() {
       if (group.members.every((m) => next.has(m.path))) {
         const fallback = group.members.find((m) => m.keep) ?? group.members[0];
         next.delete(fallback.path);
-        setSelNote(`反转后会删除整组，已自动留出「${fallback.name}」保留。`);
+        setSelNote(t("反转后会删除整组，已自动留出「{name}」保留。", { name: fallback.name }));
       }
     } else {
       const kept = group.members.filter((m) => next.has(m.path));
       if (kept.length === 0) {
-        setSelNote("请先勾选要保留的文件，再点「仅保留所选」。");
+        setSelNote(t("请先勾选要保留的文件，再点「仅保留所选」。"));
         return;
       }
       for (const m of group.members) {
         if (next.has(m.path)) next.delete(m.path);
         else next.add(m.path);
       }
-      setSelNote(`已保留勾选的 ${kept.length} 个文件，其余 ${group.members.length - kept.length} 个改为待删除。`);
+      setSelNote(
+        t("已保留勾选的 {kept} 个文件，其余 {rest} 个改为待删除。", {
+          kept: kept.length,
+          rest: group.members.length - kept.length,
+        }),
+      );
     }
     setDeleteSel(next);
   }
@@ -884,7 +920,7 @@ export default function App() {
       }
     }
     if (adjusted > 0) {
-      setSelNote(`反选后有 ${adjusted} 组会变成整组删除，已自动留出每组一个保留项。`);
+      setSelNote(t("反选后有 {count} 组会变成整组删除，已自动留出每组一个保留项。", { count: adjusted }));
     }
     setDeleteSel(next);
   }
@@ -924,10 +960,10 @@ export default function App() {
     try {
       const res = await api.exportResults(sessionId, format);
       setExportResult(res);
-      setExportNote(`已导出 ${format.toUpperCase()}：${res.path}`);
+      setExportNote(t("已导出 {format}：{path}", { format: format.toUpperCase(), path: res.path }));
     } catch (err) {
       setExportResult(undefined);
-      setExportError("导出失败：" + errorText(err));
+      setExportError(t("导出失败：{error}", { error: errorText(err) }));
     } finally {
       setExportBusy(false);
     }
@@ -941,14 +977,14 @@ export default function App() {
       const res = await api.undoLastDedup();
       setUndoResult(res);
       if (res.binEmpty) {
-        setUndoNote("回收站已被清空，删除的文件无法自动恢复。");
+        setUndoNote(t("回收站已被清空，删除的文件无法自动恢复。"));
       } else if (res.failed > 0) {
-        setUndoNote(`有 ${res.failed} 个文件未能恢复，原因见下方逐条说明。`);
+        setUndoNote(t("有 {count} 个文件未能恢复，原因见下方逐条说明。", { count: res.failed }));
       }
       const info = await api.getDedupUndoInfo();
       setUndoInfo(info);
     } catch (err) {
-      setUndoNote("撤销失败：" + errorText(err));
+      setUndoNote(t("撤销失败：{error}", { error: errorText(err) }));
       api
         .getDedupUndoInfo()
         .then(setUndoInfo)
@@ -963,10 +999,10 @@ export default function App() {
     try {
       const st = await api.importLicenseFile();
       setLicense(st);
-      if (st.licensed) setLicenseNote("许可证导入成功。");
-      else setLicenseNote(st.warning || "未识别到有效许可证。");
+      if (st.licensed) setLicenseNote(t("许可证导入成功。"));
+      else setLicenseNote(st.warning || t("未识别到有效许可证。"));
     } catch (err) {
-      setLicenseNote("导入失败：" + errorText(err));
+      setLicenseNote(t("导入失败：{error}", { error: errorText(err) }));
     }
   }
 
@@ -976,9 +1012,9 @@ export default function App() {
       const st = await api.importLicenseText(licenseText);
       setLicense(st);
       setLicenseText("");
-      setLicenseNote(st.licensed ? "许可证导入成功。" : st.warning || "未识别到有效许可证。");
+      setLicenseNote(st.licensed ? t("许可证导入成功。") : st.warning || t("未识别到有效许可证。"));
     } catch (err) {
-      setLicenseNote("导入失败：" + errorText(err));
+      setLicenseNote(t("导入失败：{error}", { error: errorText(err) }));
     }
   }
 
@@ -987,9 +1023,9 @@ export default function App() {
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
-      setLicenseNote("机器码已复制。");
+      setLicenseNote(t("机器码已复制。"));
     } catch {
-      setLicenseNote("复制失败，请手动选中机器码复制。");
+      setLicenseNote(t("复制失败，请手动选中机器码复制。"));
     }
   }
 
@@ -1096,15 +1132,15 @@ export default function App() {
         <div className="brand">
           <div className="logo">FD</div>
           <div>
-            <h1>文件去重</h1>
-            <p>本地扫描 · 回收站可恢复 · 云端上传为可选</p>
+            <h1>{t("文件去重")}</h1>
+            <p>{t("本地扫描 · 回收站可恢复 · 云端上传为可选")}</p>
           </div>
         </div>
         <div className="topmeta">
-          {!isDesktop && <span className="badge warn">浏览器预览（合成数据）</span>}
+          {!isDesktop && <span className="badge warn">{t("浏览器预览（合成数据）")}</span>}
           <button
             className={`badge license-badge ${license?.status ?? ""}`}
-            title="查看授权状态、机器码与许可证导入"
+            title={t("查看授权状态、机器码与许可证导入")}
             onClick={() => {
               setLicenseNote("");
               setLicenseOpen(true);
@@ -1112,22 +1148,36 @@ export default function App() {
           >
             {licenseLabel(license)}
           </button>
-          <button className="badge" title="设置：外观、托盘、定时任务、AI、日志" onClick={() => setSettingsOpen(true)}>
-            设置
+          <button
+            className="badge"
+            title={t("切换界面语言（中文 / English）")}
+            onClick={() => void switchLang()}
+            disabled={!settings}
+          >
+            {getLang() === "en" ? "中文" : "English"}
           </button>
-          <button className="badge" title="帮助（快捷键 F1）" onClick={() => setHelpOpen(true)}>
-            帮助 F1
+          <button
+            className="badge"
+            title={t("设置：外观、托盘、定时任务、AI、日志")}
+            onClick={() => setSettingsOpen(true)}
+          >
+            {t("设置")}
           </button>
-          <button className="badge" title="查看日志与环境自检" onClick={() => setDiagOpen(true)}>
-            诊断
+          <button className="badge" title={t("帮助（快捷键 F1）")} onClick={() => setHelpOpen(true)}>
+            {t("帮助 F1")}
+          </button>
+          <button className="badge" title={t("查看日志与环境自检")} onClick={() => setDiagOpen(true)}>
+            {t("诊断")}
           </button>
           <span className="badge">v{info.version || "—"}</span>
           <button
             className={`badge update-badge ${updateCheck?.status === "available" ? "has-update" : ""}`}
-            title="检查更新（清单与安装包均验签）"
+            title={t("检查更新（清单与安装包均验签）")}
             onClick={openUpdate}
           >
-            {updateCheck?.status === "available" ? `有更新 v${updateCheck.latestVersion}` : "检查更新"}
+            {updateCheck?.status === "available"
+              ? t("有更新 v{version}", { version: updateCheck.latestVersion ?? "" })
+              : t("检查更新")}
           </button>
           <span className="badge">{info.platform || "—"}</span>
         </div>
@@ -1136,44 +1186,46 @@ export default function App() {
       {licenseStop && (
         <div className="license-banner" role="status">
           <span>
-            <b>未授权</b>：{license?.limits}
+            <b>{t("未授权")}</b>
+            {t("：")}
+            {license?.limits}
             {license?.warning ? ` ${license.warning}` : ""}
           </span>
           <button className="secondary" onClick={() => setLicenseOpen(true)}>
-            去授权
+            {t("去授权")}
           </button>
         </div>
       )}
 
-      <nav className="tabs" aria-label="模块">
+      <nav className="tabs" aria-label={t("模块")}>
         <button className={view === "dedup" ? "active" : ""} onClick={() => setView("dedup")}>
-          查重与清理
+          {t("查重与清理")}
         </button>
         <button className={view === "organize" ? "active" : ""} onClick={() => setView("organize")}>
-          九步整理
+          {t("九步整理")}
         </button>
         <button className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
-          按时间整理
+          {t("按时间整理")}
         </button>
         <button className={view === "lanzou" ? "active" : ""} onClick={() => setView("lanzou")}>
-          蓝奏云上传
+          {t("蓝奏云上传")}
         </button>
         <button className={view === "search" ? "active" : ""} onClick={() => setView("search")}>
-          本地搜索
+          {t("本地搜索")}
         </button>
         {view === "dedup" && (
           <span className="tabs-hint">
-            当前流程：{STEPS.map((s) => s.label).join(" → ")}
+            {t("当前流程：{steps}", { steps: STEPS.map((s) => t(s.label)).join(" → ") })}
           </span>
         )}
       </nav>
 
       {view === "dedup" && (
-        <nav className="stepper" aria-label="流程">
+        <nav className="stepper" aria-label={t("流程")}>
           {STEPS.map((s, i) => (
             <div key={s.key} className={`step ${i === stepIndex ? "active" : ""} ${i < stepIndex ? "done" : ""}`}>
               <span className="step-no">{i + 1}</span>
-              <span>{s.label}</span>
+              <span>{t(s.label)}</span>
             </div>
           ))}
         </nav>
@@ -1183,7 +1235,7 @@ export default function App() {
         <div className="banner error" role="alert">
           <span>{error}</span>
           <button className="link" onClick={() => setError("")}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       )}
@@ -1195,28 +1247,28 @@ export default function App() {
               initial={settings?.organize}
               onPersist={persistOrganize}
               canRun={!licenseStop}
-              licenseHint="未授权：整理的真实执行已禁用，请先导入许可证；试运行仍可用。"
+              licenseHint={t("未授权：整理的真实执行已禁用，请先导入许可证；试运行仍可用。")}
             />
           ) : (
             <section className="card">
-              <h2>九步整理</h2>
-              <p className="hint">正在读取设置…</p>
+              <h2>{t("九步整理")}</h2>
+              <p className="hint">{t("正在读取设置…")}</p>
             </section>
           )
         ) : view === "timeline" ? (
-          <TimeOrganizer canRun={!licenseStop} licenseHint="未授权：按时间整理的真实执行已禁用，预演仍可用。" />
+          <TimeOrganizer canRun={!licenseStop} licenseHint={t("未授权：按时间整理的真实执行已禁用，预演仍可用。")} />
         ) : view === "lanzou" ? (
           settingsReady ? (
             <Lanzou
               initial={settings?.lanzou}
               onPersist={persistLanzou}
               canRun={!licenseStop}
-              licenseHint="未授权：开始上传会被拒绝，登录与预检仍可用。"
+              licenseHint={t("未授权：开始上传会被拒绝，登录与预检仍可用。")}
             />
           ) : (
             <section className="card">
-              <h2>蓝奏云上传</h2>
-              <p className="hint">正在读取设置…</p>
+              <h2>{t("蓝奏云上传")}</h2>
+              <p className="hint">{t("正在读取设置…")}</p>
             </section>
           )
         ) : view === "search" ? (
@@ -1224,55 +1276,62 @@ export default function App() {
             canRun={searchFeature?.unlocked ?? false}
             licenseHint={
               searchFeature
-                ? `未解锁：${searchFeature.reason ?? "本地搜索需要标准版许可证"}（本机机器码 ${
-                    license?.machineCode ?? "读取中"
-                  }）。`
-                : "正在读取授权状态，请稍候。"
+                ? t("未解锁：{reason}（本机机器码 {code}）。", {
+                    reason: searchFeature.reason ?? t("本地搜索需要标准版许可证"),
+                    code: license?.machineCode ?? t("读取中"),
+                  })
+                : t("正在读取授权状态，请稍候。")
             }
           />
         ) : (
           <>
         {step === "pick" && (
           <section className="card">
-            <h2>1. 选择目录与扫描设置</h2>
+            <h2>{t("1. 选择目录与扫描设置")}</h2>
             <div className="dirrow dropzone">
               <input
                 className="path"
                 readOnly
-                value={req.fullDisk ? `全盘：${(fullDiskPlan?.volumes ?? []).map((v) => v.path).join("、")}` : req.root}
-                placeholder="尚未选择目录（也可把文件夹拖到这里）"
-                aria-label="扫描目录"
+                value={
+                  req.fullDisk
+                    ? t("全盘：{volumes}", {
+                        volumes: (fullDiskPlan?.volumes ?? []).map((v) => v.path).join(listSep()),
+                      })
+                    : req.root
+                }
+                placeholder={t("尚未选择目录（也可把文件夹拖到这里）")}
+                aria-label={t("扫描目录")}
                 disabled={req.fullDisk}
               />
               <button className="secondary" onClick={pickDirectory} disabled={req.fullDisk}>
-                选择目录
+                {t("选择目录")}
               </button>
             </div>
             {dropNote && <p className="hint">{dropNote}</p>}
 
             <div className="formgrid">
               <label>
-                <span>保留策略</span>
+                <span>{t("保留策略")}</span>
                 <select
                   value={req.keepPolicy}
                   onChange={(e) => setReq({ ...req, keepPolicy: e.target.value as KeepPolicy })}
                 >
                   {Object.entries(KEEP_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                <span>删除方式</span>
+                <span>{t("删除方式")}</span>
                 <select value={deleteMode} onChange={(e) => setDeleteMode(e.target.value as DeleteMode)}>
-                  <option value="trash">移入回收站（可恢复）</option>
-                  <option value="permanent">永久删除（不可恢复）</option>
+                  <option value="trash">{t("移入回收站（可恢复）")}</option>
+                  <option value="permanent">{t("永久删除（不可恢复）")}</option>
                 </select>
               </label>
               <label>
-                <span>最小文件大小（MB，0 = 不限）</span>
+                <span>{t("最小文件大小（MB，0 = 不限）")}</span>
                 <input
                   type="number"
                   min={0}
@@ -1282,8 +1341,12 @@ export default function App() {
                 />
               </label>
               <label>
-                <span>排除目录（目录名或路径前缀；逗号或空格分隔）</span>
-                <input value={excludesText} onChange={(e) => setExcludesText(e.target.value)} placeholder="例如 node_modules .git" />
+                <span>{t("排除目录（目录名或路径前缀；逗号或空格分隔）")}</span>
+                <input
+                  value={excludesText}
+                  onChange={(e) => setExcludesText(e.target.value)}
+                  placeholder={t("例如 node_modules .git")}
+                />
               </label>
               <label className="checkline">
                 <input
@@ -1291,7 +1354,7 @@ export default function App() {
                   checked={req.fullDisk}
                   onChange={(e) => void toggleFullDisk(e.target.checked)}
                 />
-                <span>全盘查重（扫描所有本地固定磁盘，自动跳过系统目录与卷根系统文件）</span>
+                <span>{t("全盘查重（扫描所有本地固定磁盘，自动跳过系统目录与卷根系统文件）")}</span>
               </label>
               <label className="checkline">
                 <input
@@ -1301,8 +1364,8 @@ export default function App() {
                   onChange={(e) => setReq({ ...req, quickHash: e.target.checked })}
                 />
                 <span>
-                  64KB 快筛（先用前 64KB 指纹滤掉不可能重复的文件，候选项仍做完整 SHA-256 复核）
-                  {req.similarImage ? "（相似图片开启时不可用）" : ""}
+                  {t("64KB 快筛（先用前 64KB 指纹滤掉不可能重复的文件，候选项仍做完整 SHA-256 复核）")}
+                  {req.similarImage ? t("（相似图片开启时不可用）") : ""}
                 </span>
               </label>
               <label className="checkline">
@@ -1317,11 +1380,11 @@ export default function App() {
                     })
                   }
                 />
-                <span>相似图片（dHash）</span>
+                <span>{t("相似图片（dHash）")}</span>
               </label>
               <label>
-                <span title="0 = 指纹完全相同；数值越大判定越宽松，越容易把不同的图片当成相似；范围 0-16，默认 8">
-                  相似阈值（0 = 完全相同，越大越宽松；默认 8，上限 16）
+                <span title={t("0 = 指纹完全相同；数值越大判定越宽松，越容易把不同的图片当成相似；范围 0-16，默认 8")}>
+                  {t("相似阈值（0 = 完全相同，越大越宽松；默认 8，上限 16）")}
                 </span>
                 <input
                   type="number"
@@ -1338,10 +1401,10 @@ export default function App() {
                   checked={req.similarAudio}
                   onChange={(e) => setReq({ ...req, similarAudio: e.target.checked })}
                 />
-                <span>相似音频（时长容差）</span>
+                <span>{t("相似音频（时长容差）")}</span>
               </label>
               <label>
-                <span>音频容差（秒）</span>
+                <span>{t("音频容差（秒）")}</span>
                 <input
                   type="number"
                   min={0}
@@ -1357,49 +1420,56 @@ export default function App() {
                   checked={req.includeHidden}
                   onChange={(e) => setReq({ ...req, includeHidden: e.target.checked })}
                 />
-                <span>包含隐藏/系统文件（不勾选 = 跳过隐藏与系统文件）</span>
+                <span>{t("包含隐藏/系统文件（不勾选 = 跳过隐藏与系统文件）")}</span>
               </label>
             </div>
 
             <p className="hint">
-              排除项只匹配目录：填目录名会跳过所有同名目录及其内容，填带路径的项按路径前缀匹配；不会按文件名子串过滤。
+              {t("排除项只匹配目录：填目录名会跳过所有同名目录及其内容，填带路径的项按路径前缀匹配；不会按文件名子串过滤。")}
             </p>
 
             {fullDiskNote && <p className="hint">{fullDiskNote}</p>}
             {req.fullDisk && fullDiskPlan?.supported && (
               <p className="hint">
-                全盘范围：
-                {fullDiskPlan.volumes.map((v) => `${v.path}（可用 ${formatBytes(v.free)}）`).join("、")}
-                。强制排除 {fullDiskPlan.hardExcludes.length} 项：Windows、Program Files、Program Files (x86)、
-                ProgramData、$Recycle.Bin、System Volume Information、Recovery 等系统目录，以及各卷根下的
-                pagefile.sys、hiberfil.sys、swapfile.sys。这些项不受上方排除设置影响。
+                {t(
+                  "全盘范围：{volumes}。强制排除 {count} 项：Windows、Program Files、Program Files (x86)、ProgramData、$Recycle.Bin、System Volume Information、Recovery 等系统目录，以及各卷根下的 pagefile.sys、hiberfil.sys、swapfile.sys。这些项不受上方排除设置影响。",
+                  {
+                    volumes: fullDiskPlan.volumes
+                      .map((v) =>
+                        t("{path}（可用 {free}）", { path: v.path, free: formatBytes(v.free) }),
+                      )
+                      .join(listSep()),
+                    count: fullDiskPlan.hardExcludes.length,
+                  },
+                )}
               </p>
             )}
             {req.quickHash && (
               <p className="hint">
-                快筛只减少需要完整哈希的文件数量；最终分组与保留/删除判断仍以完整 SHA-256 结果为准。
+                {t("快筛只减少需要完整哈希的文件数量；最终分组与保留/删除判断仍以完整 SHA-256 结果为准。")}
               </p>
             )}
 
             <p className="hint">
-              相似图片默认关闭，勾选后才参与查重。阈值 0 表示指纹完全相同；数值越大判定越宽松，
-              更容易把不同的图片当成相似（误判风险更高），数值越小越严格；可调范围 0-16，默认 8。
+              {t(
+                "相似图片默认关闭，勾选后才参与查重。阈值 0 表示指纹完全相同；数值越大判定越宽松，更容易把不同的图片当成相似（误判风险更高），数值越小越严格；可调范围 0-16，默认 8。",
+              )}
             </p>
 
             <p className="hint">
               {settingsPath ? (
                 <>
-                  设置自动保存到 <code>{settingsPath}</code>，重启后自动恢复。
-                  {settingsNote ? `（${settingsNote}）` : ""}
+                  {t("设置自动保存到 {path}，重启后自动恢复。", { path: settingsPath })}
+                  {settingsNote ? t("（{note}）", { note: settingsNote }) : ""}
                 </>
               ) : (
-                "正在读取设置…"
+                t("正在读取设置…")
               )}
             </p>
 
             <div className="actions">
               <button className="primary" disabled={!req.fullDisk && !req.root} onClick={startScan}>
-                开始扫描
+                {t("开始扫描")}
               </button>
             </div>
 
@@ -1409,13 +1479,13 @@ export default function App() {
 
         {step === "scan" && (
           <section className="card">
-            <h2>2. 扫描中</h2>
-            <p className="mono ellipsis" title={req.fullDisk ? "全盘查重" : req.root}>
-              {req.fullDisk ? "全盘查重：所有本地固定磁盘" : req.root}
+            <h2>{t("2. 扫描中")}</h2>
+            <p className="mono ellipsis" title={req.fullDisk ? t("全盘查重") : req.root}>
+              {req.fullDisk ? t("全盘查重：所有本地固定磁盘") : req.root}
             </p>
             <ScanProgress scan={scan} onCancel={cancelScan}>
               <button className="secondary" onClick={reset}>
-                返回
+                {t("返回")}
               </button>
             </ScanProgress>
           </section>
@@ -1424,41 +1494,51 @@ export default function App() {
         {step === "results" && (
           <section className="card fill">
             <div className="sectionhead">
-              <h2>3. 查重结果</h2>
+              <h2>{t("3. 查重结果")}</h2>
               <div className="actions inline">
                 <button className="secondary" onClick={reset}>
-                  重新扫描
+                  {t("重新扫描")}
                 </button>
                 <button
                   className="secondary"
                   onClick={() => doExport("html")}
                   disabled={perfActive || !sessionId || exportBusy}
-                  title="导出包含分组、成员、大小、保留策略与扫描参数的报告"
+                  title={t("导出包含分组、成员、大小、保留策略与扫描参数的报告")}
                 >
-                  导出 HTML
+                  {t("导出 HTML")}
                 </button>
                 <button className="secondary" onClick={() => doExport("csv")} disabled={perfActive || !sessionId || exportBusy}>
-                  导出 CSV
+                  {t("导出 CSV")}
                 </button>
                 <button
                   className="primary"
                   onClick={openPreview}
                   disabled={perfActive || rows.length === 0 || deleteSel.size === 0}
-                  title={!perfActive && deleteSel.size === 0 ? "请先勾选要删除的文件" : undefined}
+                  title={!perfActive && deleteSel.size === 0 ? t("请先勾选要删除的文件") : undefined}
                 >
-                  生成执行预览
+                  {t("生成执行预览")}
                 </button>
               </div>
             </div>
 
             <div className="chips">
-              <span className="chip">重复组 <b>{scan?.groups ?? groupsTotal}</b></span>
-              <span className="chip">重复文件 <b>{scan?.duplicateFiles ?? 0}</b></span>
-              <span className="chip">可回收 <b>{formatBytes(scan?.reclaimable ?? 0)}</b></span>
-              <span className="chip">跳过 <b>{scan?.skipped ?? 0}</b></span>
-              <span className="chip">保留策略 <b>{KEEP_LABELS[req.keepPolicy]}</b></span>
+              <span className="chip">
+                {t("重复组")} <b>{scan?.groups ?? groupsTotal}</b>
+              </span>
+              <span className="chip">
+                {t("重复文件")} <b>{scan?.duplicateFiles ?? 0}</b>
+              </span>
+              <span className="chip">
+                {t("可回收")} <b>{formatBytes(scan?.reclaimable ?? 0)}</b>
+              </span>
+              <span className="chip">
+                {t("跳过")} <b>{scan?.skipped ?? 0}</b>
+              </span>
+              <span className="chip">
+                {t("保留策略")} <b>{t(KEEP_LABELS[req.keepPolicy])}</b>
+              </span>
               <button className="link" onClick={openSkips} disabled={!sessionId}>
-                查看跳过项
+                {t("查看跳过项")}
               </button>
             </div>
 
@@ -1469,7 +1549,7 @@ export default function App() {
                   <>
                     {" "}
                     <button className="link" onClick={() => api.revealPath(exportResult.path)}>
-                      在资源管理器中显示
+                      {t("在资源管理器中显示")}
                     </button>
                   </>
                 ) : null}
@@ -1480,11 +1560,13 @@ export default function App() {
             {perfActive && (
               <div className="banner perf">
                 <span>
-                  性能自检：当前是 <b>{perfRows.length.toLocaleString("zh-CN")} 行</b>合成数据（≥ 10 万），不是真实扫描结果。滚动帧率约{" "}
-                  <b>{fps || "—"} fps</b>（1 秒采样）。
+                  {t("性能自检：当前是 {rows} 行合成数据（≥ 10 万），不是真实扫描结果。滚动帧率约 {fps} fps（1 秒采样）。", {
+                    rows: perfRows.length.toLocaleString("zh-CN"),
+                    fps: fps || "—",
+                  })}
                 </span>
                 <button className="link" onClick={() => setPerfActive(false)}>
-                  退出自检
+                  {t("退出自检")}
                 </button>
               </div>
             )}
@@ -1493,11 +1575,11 @@ export default function App() {
               <div className="toolbar">
                 <span className="hint">
                   {loadingGroups
-                    ? `正在载入结果：${groups.length} / ${groupsTotal} 组`
-                    : `共 ${groupsTotal} 组，已全部载入；点击任意行查看完整路径。`}
+                    ? t("正在载入结果：{loaded} / {total} 组", { loaded: groups.length, total: groupsTotal })
+                    : t("共 {total} 组，已全部载入；点击任意行查看完整路径。", { total: groupsTotal })}
                 </span>
                 <button className="link" onClick={runPerf}>
-                  性能自检：载入 10 万行合成数据
+                  {t("性能自检：载入 10 万行合成数据")}
                 </button>
               </div>
             )}
@@ -1505,18 +1587,20 @@ export default function App() {
             {!perfActive && (
               <div className="toolbar">
                 <span className="hint">
-                  勾选 = <b>删除</b>，未勾选 = <b>保留</b>；已勾选 <b>{deleteSel.size}</b> 项，执行范围以勾选为准，不再按整组删除。
+                  {t("勾选 = 删除，未勾选 = 保留；已勾选 {count} 项，执行范围以勾选为准，不再按整组删除。", {
+                    count: deleteSel.size,
+                  })}
                   {selNote ? <span className="warn"> {selNote}</span> : null}
                 </span>
                 <div className="actions inline">
                   <button className="link" onClick={selectAllDeletable}>
-                    全选可删除项
+                    {t("全选可删除项")}
                   </button>
                   <button className="link" onClick={invertAllSelection}>
-                    反选
+                    {t("反选")}
                   </button>
                   <button className="link" onClick={clearAllSelection}>
-                    全不选
+                    {t("全不选")}
                   </button>
                 </div>
               </div>
@@ -1527,42 +1611,49 @@ export default function App() {
                 <span className="filterfields">
                   <input
                     className="search"
-                    placeholder="筛选：路径或文件名包含…"
+                    placeholder={t("筛选：路径或文件名包含…")}
                     value={resultQuery}
                     onChange={(e) => setResultQuery(e.target.value)}
-                    aria-label="筛选结果"
+                    aria-label={t("筛选结果")}
                   />
-                  <select value={resultKind} onChange={(e) => setResultKind(e.target.value)} aria-label="按类型筛选">
-                    <option value="all">全部类型</option>
+                  <select value={resultKind} onChange={(e) => setResultKind(e.target.value)} aria-label={t("按类型筛选")}>
+                    <option value="all">{t("全部类型")}</option>
                     {Object.entries(KIND_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
-                        {label}
+                        {t(label)}
                       </option>
                     ))}
                   </select>
-                  <select value={resultSort} onChange={(e) => setResultSort(e.target.value as typeof resultSort)} aria-label="排序方式">
-                    <option value="default">默认顺序</option>
-                    <option value="size">按文件大小</option>
-                    <option value="reclaimable">按可回收空间</option>
-                    <option value="name">按保留项文件名</option>
-                    <option value="time">按修改时间</option>
+                  <select
+                    value={resultSort}
+                    onChange={(e) => setResultSort(e.target.value as typeof resultSort)}
+                    aria-label={t("排序方式")}
+                  >
+                    <option value="default">{t("默认顺序")}</option>
+                    <option value="size">{t("按文件大小")}</option>
+                    <option value="reclaimable">{t("按可回收空间")}</option>
+                    <option value="name">{t("按保留项文件名")}</option>
+                    <option value="time">{t("按修改时间")}</option>
                   </select>
-                  <button className="secondary" onClick={() => setResultDesc((v) => !v)} title="切换升序/降序">
-                    {resultDesc ? "降序 ↓" : "升序 ↑"}
+                  <button className="secondary" onClick={() => setResultDesc((v) => !v)} title={t("切换升序/降序")}>
+                    {resultDesc ? t("降序 ↓") : t("升序 ↑")}
                   </button>
                 </span>
                 <span className="hint">
-                  显示 {visibleGroups.length} / {groupsTotal} 组（筛选只影响显示，勾选与执行范围不变）
+                  {t("显示 {shown} / {total} 组（筛选只影响显示，勾选与执行范围不变）", {
+                    shown: visibleGroups.length,
+                    total: groupsTotal,
+                  })}
                 </span>
               </div>
             )}
 
             <div className="tablehead">
-              <span>选择 / 状态</span>
-              <span>文件 / 组</span>
-              <span>完整路径</span>
-              <span className="num">大小</span>
-              <span>修改时间</span>
+              <span>{t("选择 / 状态")}</span>
+              <span>{t("文件 / 组")}</span>
+              <span>{t("完整路径")}</span>
+              <span className="num">{t("大小")}</span>
+              <span>{t("修改时间")}</span>
             </div>
             <VirtualList
               className="tablebody"
@@ -1586,82 +1677,90 @@ export default function App() {
         {step === "preview" && (
           <section className="card fill">
             <div className="sectionhead">
-              <h2>4. 执行预览</h2>
+              <h2>{t("4. 执行预览")}</h2>
               <div className="actions inline">
                 <button className="secondary" onClick={() => setStep("results")}>
-                  返回结果
+                  {t("返回结果")}
                 </button>
                 <button
                   className="danger"
                   disabled={!preview || preview.total === 0 || Boolean(exec?.running) || licenseStop}
-                  title={licenseStop ? "未授权，请先在“授权”中导入许可证" : undefined}
+                  title={licenseStop ? t("未授权，请先在“授权”中导入许可证") : undefined}
                   onClick={() => {
                     setPermanentAck(false);
                     setConfirmOpen(true);
                   }}
                 >
-                  确认执行
+                  {t("确认执行")}
                 </button>
               </div>
             </div>
 
             {licenseStop && (
               <p className="hint">
-                未授权：确认执行已禁用，只能扫描与预览。请先在“授权”中导入许可证。
+                {t("未授权：确认执行已禁用，只能扫描与预览。请先在“授权”中导入许可证。")}
                 {license?.machineCode ? (
                   <>
                     {" "}
-                    机器码：<code>{license.machineCode}</code>
+                    {t("机器码：{code}", { code: license.machineCode })}
                   </>
                 ) : null}
               </p>
             )}
 
             <p className="hint">
-              本次只处理结果页勾选的 <b>{deleteSel.size}</b> 个文件；同一组未勾选的副本会保留。
+              {t("本次只处理结果页勾选的 {count} 个文件；同一组未勾选的副本会保留。", {
+                count: deleteSel.size,
+              })}
             </p>
 
             <div className="formgrid narrow">
               <label>
-                <span>删除方式</span>
+                <span>{t("删除方式")}</span>
                 <select value={deleteMode} onChange={(e) => setDeleteMode(e.target.value as DeleteMode)}>
-                  <option value="trash">移入回收站（可恢复）</option>
-                  <option value="permanent">永久删除（不可恢复）</option>
+                  <option value="trash">{t("移入回收站（可恢复）")}</option>
+                  <option value="permanent">{t("永久删除（不可恢复）")}</option>
                 </select>
               </label>
             </div>
 
             {deleteMode === "permanent" && (
               <div className="banner danger">
-                永久删除不可恢复，也不会进入回收站。请确认已备份重要数据。
+                {t("永久删除不可恢复，也不会进入回收站。请确认已备份重要数据。")}
               </div>
             )}
 
             <div className="chips">
-              <span className="chip">动作总数 <b>{preview?.total ?? 0}</b></span>
-              <span className="chip">涉及组 <b>{preview?.groups ?? 0}</b></span>
-              <span className="chip">可回收 <b>{formatBytes(preview?.reclaimableBytes ?? 0)}</b></span>
+              <span className="chip">
+                {t("动作总数")} <b>{preview?.total ?? 0}</b>
+              </span>
+              <span className="chip">
+                {t("涉及组")} <b>{preview?.groups ?? 0}</b>
+              </span>
+              <span className="chip">
+                {t("可回收")} <b>{formatBytes(preview?.reclaimableBytes ?? 0)}</b>
+              </span>
               {preview &&
                 Object.entries(preview.kindCounts).map(([kind, count]) => (
                   <span className="chip" key={kind}>
-                    {kind === "delete_permanent" ? "永久删除" : "回收站"} <b>{count}</b>
+                    {kind === "delete_permanent" ? t("永久删除") : t("回收站")} <b>{count}</b>
                   </span>
                 ))}
             </div>
 
             {exec?.running && (
               <div className="banner info">
-                <span>正在执行：{exec.total} 个动作，请勿关闭窗口。</span>
+                <span>{t("正在执行：{count} 个动作，请勿关闭窗口。", { count: exec.total })}</span>
               </div>
             )}
 
-            <h3 className="subhead">动作样例（前 200 条，共 {preview?.total ?? 0} 条）</h3>
+            <h3 className="subhead">{t("动作样例（前 200 条，共 {count} 条）", { count: preview?.total ?? 0 })}</h3>
             <div className="samples">
               {(preview?.samples ?? []).map((a) => (
                 <div className="sample" key={a.seq}>
                   <span className="seq">#{a.seq}</span>
                   <span className={`kind kind-${a.kind === "delete_permanent" ? "danger" : "exact"}`}>
-                    {a.kind === "delete_permanent" ? "永久删除" : "回收站"}
+                    {a.kind === "delete_permanent" ? t("永久删除") : t("回收站")}
                   </span>
                   <span className="samplepath" title={a.src}>
                     {a.src}
@@ -1675,43 +1774,47 @@ export default function App() {
 
         {step === "done" && (
           <section className="card">
-            <h2>5. 执行完成</h2>
+            <h2>{t("5. 执行完成")}</h2>
             <div className="stats">
               <div className="stat">
-                <span>成功</span>
+                <span>{t("成功")}</span>
                 <b>{exec?.applied ?? 0}</b>
               </div>
               <div className="stat">
-                <span>失败</span>
+                <span>{t("失败")}</span>
                 <b className={exec?.failed ? "red" : ""}>{exec?.failed ?? 0}</b>
               </div>
               <div className="stat">
-                <span>跳过</span>
+                <span>{t("跳过")}</span>
                 <b>{exec?.skipped ?? 0}</b>
               </div>
               <div className="stat">
-                <span>回滚</span>
+                <span>{t("回滚")}</span>
                 <b>{exec?.rolledBack ?? 0}</b>
               </div>
               <div className="stat wide">
-                <span>释放空间</span>
+                <span>{t("释放空间")}</span>
                 <b>{formatBytes(exec?.reclaimed ?? 0)}</b>
               </div>
             </div>
             {exec?.error && <div className="banner error">{exec.error}</div>}
 
             <div className="sectionhead">
-              <h3>撤销上次删除</h3>
+              <h3>{t("撤销上次删除")}</h3>
               <span className={`badge ${undoInfo?.available ? "warn" : ""}`}>
-                {undoInfo?.available ? `可撤销 ${undoInfo.trash} 个文件` : "暂无可撤销记录"}
+                {undoInfo?.available
+                  ? t("可撤销 {count} 个文件", { count: undoInfo.trash })
+                  : t("暂无可撤销记录")}
               </span>
             </div>
             {undoInfo?.available ? (
               <>
                 <p className="hint">
-                  批次时间 {undoInfo.finishedAt ? formatTime(undoInfo.finishedAt) : "未知"} · 删除方式{" "}
-                  {undoInfo.deleteMode === "permanent" ? "永久删除" : "移入回收站"}（只保留最近一次批次）。
-                  {undoInfo.truncated && " 明细只展示前 200 条。"}
+                  {t("批次时间 {time} · 删除方式 {mode}（只保留最近一次批次）。", {
+                    time: undoInfo.finishedAt ? formatTime(undoInfo.finishedAt) : t("未知"),
+                    mode: undoInfo.deleteMode === "permanent" ? t("永久删除") : t("移入回收站"),
+                  })}
+                  {undoInfo.truncated ? ` ${t("明细只展示前 200 条。")}` : ""}
                 </p>
                 <div className="skiplist">
                   {undoInfo.items.map((it) => (
@@ -1720,8 +1823,8 @@ export default function App() {
                       <div>
                         <p className="skippath">{it.path}</p>
                         <p className="hint">
-                          来源目录 {it.dir}
-                          {it.modTime ? ` · 文件修改时间 ${formatTime(it.modTime)}` : ""}
+                          {t("来源目录 {dir}", { dir: it.dir })}
+                          {it.modTime ? ` · ${t("文件修改时间 {time}", { time: formatTime(it.modTime) })}` : ""}
                         </p>
                       </div>
                     </div>
@@ -1729,37 +1832,44 @@ export default function App() {
                 </div>
                 {undoInfo.permanent > 0 && (
                   <p className="hint">
-                    另有 {undoInfo.permanent} 个文件为永久删除：
-                    {undoInfo.permanentReason || "永久删除未进入回收站，无法撤销"}。
+                    {t("另有 {count} 个文件为永久删除：{reason}。", {
+                      count: undoInfo.permanent,
+                      reason: undoInfo.permanentReason || t("永久删除未进入回收站，无法撤销"),
+                    })}
                   </p>
                 )}
                 <div className="actions">
                   <button className="secondary" disabled={undoBusy} onClick={() => setUndoConfirm(true)}>
-                    {undoBusy ? "正在撤销…" : "撤销上次删除（恢复到原路径）"}
+                    {undoBusy ? t("正在撤销…") : t("撤销上次删除（恢复到原路径）")}
                   </button>
                 </div>
                 <p className="hint">
-                  撤销会逐条检查：目标位置已有同名文件时不覆盖；原目录不存在时先重建目录。
-                  永久删除与已清空的回收站都无法恢复，界面会如实标注失败原因。
+                  {t(
+                    "撤销会逐条检查：目标位置已有同名文件时不覆盖；原目录不存在时先重建目录。永久删除与已清空的回收站都无法恢复，界面会如实标注失败原因。",
+                  )}
                 </p>
               </>
             ) : (
               <p className="hint">
-                真实执行过一次“移入回收站”的删除后，这里会出现最近一次的撤销入口；记录跨重启仍可读取。
+                {t("真实执行过一次“移入回收站”的删除后，这里会出现最近一次的撤销入口；记录跨重启仍可读取。")}
               </p>
             )}
             {undoNote && <div className="banner info">{undoNote}</div>}
             {undoResult && (
               <p className="hint">
-                上次撤销：恢复 {undoResult.restored} · 失败 {undoResult.failed} · 不可撤销{" "}
-                {undoResult.unrestorable}（共 {undoResult.total} 条）
+                {t("上次撤销：恢复 {restored} · 失败 {failed} · 不可撤销 {unrestorable}（共 {total} 条）", {
+                  restored: undoResult.restored,
+                  failed: undoResult.failed,
+                  unrestorable: undoResult.unrestorable,
+                  total: undoResult.total,
+                })}
               </p>
             )}
             {undoResult && undoResult.errors.length > 0 && (
               <div className="skiplist">
                 {undoResult.errors.map((line, i) => (
                   <div className="skiprow" key={i}>
-                    <span className="kind kind-warn">原因</span>
+                    <span className="kind kind-warn">{t("原因")}</span>
                     <p className="skippath">{line}</p>
                   </div>
                 ))}
@@ -1767,11 +1877,13 @@ export default function App() {
             )}
 
             <p className="hint">
-              执行日志已写入用户配置目录下的 <code>FileDedup/ops</code>。删除后的文件不在结果列表中刷新，建议重新扫描确认。
+              {t("执行日志已写入用户配置目录下的 {path}。删除后的文件不在结果列表中刷新，建议重新扫描确认。", {
+                path: "FileDedup/ops",
+              })}
             </p>
             <div className="actions">
               <button className="secondary" onClick={reset}>
-                重新扫描
+                {t("重新扫描")}
               </button>
             </div>
           </section>
@@ -1781,11 +1893,11 @@ export default function App() {
       </main>
 
       {detail && (
-        <aside className="drawer" aria-label="路径详情">
+        <aside className="drawer" aria-label={t("路径详情")}>
           <div className="drawerhead">
-            <h3>完整路径</h3>
+            <h3>{t("完整路径")}</h3>
             <button className="link" onClick={() => setDetail("")}>
-              关闭
+              {t("关闭")}
             </button>
           </div>
           <p className="fullpath">{detail}</p>
@@ -1793,15 +1905,23 @@ export default function App() {
             <div className="previewbox">
               <div className="actions">
                 <button className="secondary" disabled={imagePreviewBusy} onClick={() => void loadImagePreview()}>
-                  {imagePreviewBusy ? "正在解码…" : imagePreview ? "重新加载预览" : "加载大图预览（≤1600px）"}
+                  {imagePreviewBusy
+                    ? t("正在解码…")
+                    : imagePreview
+                      ? t("重新加载预览")
+                      : t("加载大图预览（≤1600px）")}
                 </button>
               </div>
               {imagePreviewError && <p className="hint warn">{imagePreviewError}</p>}
               {imagePreview && (
                 <>
-                  <img className="bigpreview" src={imagePreview.dataUrl} alt={`预览：${detail}`} />
+                  <img className="bigpreview" src={imagePreview.dataUrl} alt={t("预览：{path}", { path: detail })} />
                   <p className="hint">
-                    原图 {imagePreview.width} × {imagePreview.height} · 解码格式 {imagePreview.format}（预览已按 EXIF 方向校正）
+                    {t("原图 {width} × {height} · 解码格式 {format}（预览已按 EXIF 方向校正）", {
+                      width: imagePreview.width,
+                      height: imagePreview.height,
+                      format: imagePreview.format,
+                    })}
                   </p>
                 </>
               )}
@@ -1813,9 +1933,9 @@ export default function App() {
       {skipOpen && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>扫描期间跳过（前 200 项）</h3>
+            <h3>{t("扫描期间跳过（前 200 项）")}</h3>
             {skips.length === 0 ? (
-              <p className="hint">没有跳过项。</p>
+              <p className="hint">{t("没有跳过项。")}</p>
             ) : (
               <div className="skiplist">
                 {skips.map((s, i) => (
@@ -1831,7 +1951,7 @@ export default function App() {
             )}
             <div className="actions">
               <button className="secondary" onClick={() => setSkipOpen(false)}>
-                关闭
+                {t("关闭")}
               </button>
             </div>
           </div>
@@ -1841,38 +1961,40 @@ export default function App() {
       {confirmOpen && preview && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>确认执行</h3>
+            <h3>{t("确认执行")}</h3>
             <p>
-              即将对 <b>{preview.total}</b> 个文件执行
-              <b>{deleteMode === "trash" ? "移入回收站" : "永久删除"}</b>，预计释放{" "}
-              <b>{formatBytes(preview.reclaimableBytes)}</b>。
+              {t("即将对 {count} 个文件执行{mode}，预计释放 {size}。", {
+                count: preview.total,
+                mode: deleteMode === "trash" ? t("移入回收站") : t("永久删除"),
+                size: formatBytes(preview.reclaimableBytes),
+              })}
             </p>
             <p className="hint">
               {deleteMode === "trash"
-                ? "移入系统回收站；执行完成后可在本页“撤销上次删除”中恢复到原路径。"
-                : "永久删除不可恢复，也不会进入回收站。"}
+                ? t("移入系统回收站；执行完成后可在本页“撤销上次删除”中恢复到原路径。")
+                : t("永久删除不可恢复，也不会进入回收站。")}
             </p>
             {deleteMode === "permanent" && (
               <label className="checkline">
                 <input type="checkbox" checked={permanentAck} onChange={(e) => setPermanentAck(e.target.checked)} />
-                <span>我明白永久删除不可恢复，并已备份重要数据</span>
+                <span>{t("我明白永久删除不可恢复，并已备份重要数据")}</span>
               </label>
             )}
             {licenseStop && (
               <p className="hint">
-                未授权：确认执行已禁用。请先关闭此窗口，在“授权”中导入许可证后重试。
+                {t("未授权：确认执行已禁用。请先关闭此窗口，在“授权”中导入许可证后重试。")}
               </p>
             )}
             <div className="actions">
               <button className="secondary" onClick={() => setConfirmOpen(false)}>
-                取消
+                {t("取消")}
               </button>
               <button
                 className="danger"
                 disabled={(deleteMode === "permanent" && !permanentAck) || licenseStop}
                 onClick={startExecute}
               >
-                确认执行
+                {t("确认执行")}
               </button>
             </div>
           </div>
@@ -1882,20 +2004,19 @@ export default function App() {
       {undoConfirm && undoInfo?.available && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>确认撤销上次删除</h3>
+            <h3>{t("确认撤销上次删除")}</h3>
             <p>
-              将把 <b>{undoInfo.trash}</b> 个文件从回收站恢复到原路径。
+              {t("将把 {count} 个文件从回收站恢复到原路径。", { count: undoInfo.trash })}
             </p>
             <p className="hint">
-              目标位置已有同名文件时会跳过并给出原因，不会覆盖你后来新建的文件；
-              原目录不存在时会先重建目录。此操作无法撤销。
+              {t("目标位置已有同名文件时会跳过并给出原因，不会覆盖你后来新建的文件；原目录不存在时会先重建目录。此操作无法撤销。")}
             </p>
             <div className="actions">
               <button className="secondary" onClick={() => setUndoConfirm(false)}>
-                取消
+                {t("取消")}
               </button>
               <button className="primary" disabled={undoBusy} onClick={doDedupUndo}>
-                确认撤销
+                {t("确认撤销")}
               </button>
             </div>
           </div>
@@ -1905,25 +2026,28 @@ export default function App() {
       {helpOpen && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>帮助与快捷键</h3>
+            <h3>{t("帮助与快捷键")}</h3>
             <dl className="licenseinfo">
               <dt>F1</dt>
-              <dd>打开本帮助（任何界面都可用）</dd>
+              <dd>{t("打开本帮助（任何界面都可用）")}</dd>
               <dt>Esc</dt>
-              <dd>收起最上层浮层：帮助 → 更新 → 授权 → 设置 → 跳过列表 → 撤销确认 → 删除确认</dd>
-              <dt>拖放</dt>
-              <dd>在「选择目录」步骤把文件夹拖到路径框区域，等同于点击「选择目录」；拖入单个文件会改用其所在目录。</dd>
+              <dd>{t("收起最上层浮层：帮助 → 更新 → 授权 → 设置 → 跳过列表 → 撤销确认 → 删除确认")}</dd>
+              <dt>{t("拖放")}</dt>
+              <dd>
+                {t("在「选择目录」步骤把文件夹拖到路径框区域，等同于点击「选择目录」；拖入单个文件会改用其所在目录。")}
+              </dd>
             </dl>
             <p className="hint">
-              查重流程：选择目录与设置 → 扫描 → 预览分组 → 勾选要删除的文件 → 确认执行（移入回收站可撤销，
-              永久删除不可恢复）。所有删除范围以勾选为准，未勾选的文件一律保留。
+              {t(
+                "查重流程：选择目录与设置 → 扫描 → 预览分组 → 勾选要删除的文件 → 确认执行（移入回收站可撤销，永久删除不可恢复）。所有删除范围以勾选为准，未勾选的文件一律保留。",
+              )}
             </p>
             <p className="hint">
-              九步整理、网盘上传、本地搜索各有独立页签；具体参数与限制见对应页面的说明文字。
+              {t("九步整理、网盘上传、本地搜索各有独立页签；具体参数与限制见对应页面的说明文字。")}
             </p>
             <div className="actions">
               <button className="primary" onClick={() => setHelpOpen(false)}>
-                关闭
+                {t("关闭")}
               </button>
             </div>
           </div>
@@ -1945,44 +2069,50 @@ export default function App() {
       {licenseOpen && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>授权</h3>
+            <h3>{t("授权")}</h3>
             <dl className="licenseinfo">
-              <dt>状态</dt>
+              <dt>{t("状态")}</dt>
               <dd>{licenseLabel(license)}</dd>
-              <dt>来源</dt>
+              <dt>{t("来源")}</dt>
               <dd>{licenseSourceLabel(license?.source)}</dd>
-              <dt>版本</dt>
-              <dd>{license?.edition || (license?.status === "unlicensed" ? "未授权" : "—")}</dd>
-              <dt>到期</dt>
+              <dt>{t("版本")}</dt>
+              <dd>{license?.edition || (license?.status === "unlicensed" ? t("未授权") : "—")}</dd>
+              <dt>{t("到期")}</dt>
               <dd>
                 {license?.licensed
                   ? license.forever
-                    ? "永久"
+                    ? t("永久")
                     : license.expiry || "—"
                   : license?.trialActive
-                    ? `${license.trialStart} 至 ${license.trialEnd}`
+                    ? t("{start} 至 {end}", { start: license.trialStart ?? "", end: license.trialEnd ?? "" })
                     : "—"}
               </dd>
-              <dt>机器码</dt>
+              <dt>{t("机器码")}</dt>
               <dd>
                 <code>{license?.machineCode || "—"}</code>
               </dd>
-              <dt>许可证文件</dt>
+              <dt>{t("许可证文件")}</dt>
               <dd className="break">{license?.licensePath || "—"}</dd>
             </dl>
 
             <p className="hint">{license?.limits}</p>
             {license?.featureList?.length ? (
-              <div className="featurelist" aria-label="功能解锁状态">
+              <div className="featurelist" aria-label={t("功能解锁状态")}>
                 {license.featureList.map((f) => (
                   <div
                     key={f.key}
                     className={`featureitem ${f.unlocked ? "on" : "off"}`}
-                    title={f.unlocked ? "已解锁" : `${f.edition}解锁 · ${f.reason ?? ""}`}
+                    title={
+                      f.unlocked
+                        ? t("已解锁")
+                        : t("{edition}解锁 · {reason}", { edition: f.edition, reason: f.reason ?? "" })
+                    }
                   >
-                    <span className="mark">{f.unlocked ? "已解锁" : "未解锁"}</span>
+                    <span className="mark">{f.unlocked ? t("已解锁") : t("未解锁")}</span>
                     <span className="name">{f.name}</span>
-                    <span className="meta">{f.unlocked ? f.edition : `${f.edition} · ${f.reason ?? ""}`}</span>
+                    <span className="meta">
+                      {f.unlocked ? f.edition : t("{edition} · {reason}", { edition: f.edition, reason: f.reason ?? "" })}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1990,37 +2120,39 @@ export default function App() {
             {license?.warning && <p className="hint warn">{license.warning}</p>}
             {license?.trialActive && (
               <p className="hint">
-                试用期从首次启动算起共 3 天，剩余 {license.trialDaysLeft} 天；到期后删除执行与整理执行会被禁用。
+                {t("试用期从首次启动算起共 3 天，剩余 {days} 天；到期后删除执行与整理执行会被禁用。", {
+                  days: license.trialDaysLeft,
+                })}
               </p>
             )}
 
             <div className="actions">
               <button className="secondary" onClick={() => void copyMachineCode()}>
-                复制机器码
+                {t("复制机器码")}
               </button>
-              <button onClick={() => void importLicenseFile()}>导入许可证文件…</button>
+              <button onClick={() => void importLicenseFile()}>{t("导入许可证文件…")}</button>
               <button className="secondary" onClick={() => setLicenseOpen(false)}>
-                关闭
+                {t("关闭")}
               </button>
             </div>
 
             <label className="field">
-              <span>或粘贴许可证文本</span>
+              <span>{t("或粘贴许可证文本")}</span>
               <textarea
                 rows={3}
                 value={licenseText}
-                placeholder="FDLIC1:… 或旧版 Base32 许可证"
+                placeholder={t("FDLIC1:… 或旧版 Base32 许可证")}
                 onChange={(e) => setLicenseText(e.target.value)}
               />
             </label>
             <div className="actions">
               <button className="secondary" disabled={!licenseText.trim()} onClick={() => void importLicensePasted()}>
-                导入粘贴内容
+                {t("导入粘贴内容")}
               </button>
             </div>
             {licenseNote && <p className="hint">{licenseNote}</p>}
             <p className="hint">
-              未授权时仍可扫描与预览，但删除执行和整理执行会被禁用，并在界面上明确提示，不会静默降级。
+              {t("未授权时仍可扫描与预览，但删除执行和整理执行会被禁用，并在界面上明确提示，不会静默降级。")}
             </p>
           </div>
         </div>
@@ -2029,26 +2161,30 @@ export default function App() {
       {updateOpen && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modalbodysmall">
-            <h3>软件更新</h3>
+            <h3>{t("软件更新")}</h3>
             <dl className="licenseinfo">
-              <dt>当前版本</dt>
+              <dt>{t("当前版本")}</dt>
               <dd>v{info.version || "—"}</dd>
-              <dt>更新源</dt>
-              <dd className="break">{updateForm.manifestUrl || "未配置（不检查）"}</dd>
-              <dt>检查模式</dt>
-              <dd>{updateForm.checkMode === "auto" ? `自动，每 ${updateForm.intervalHours} 小时` : "手动"}</dd>
-              <dt>跳过版本</dt>
+              <dt>{t("更新源")}</dt>
+              <dd className="break">{updateForm.manifestUrl || t("未配置（不检查）")}</dd>
+              <dt>{t("检查模式")}</dt>
+              <dd>
+                {updateForm.checkMode === "auto"
+                  ? t("自动，每 {hours} 小时", { hours: updateForm.intervalHours })
+                  : t("手动")}
+              </dd>
+              <dt>{t("跳过版本")}</dt>
               <dd>{updateForm.skippedVersion || "—"}</dd>
               {updateCheck && (
                 <>
-                  <dt>检查结果</dt>
-                  <dd>{UPDATE_STATUS_LABELS[updateCheck.status] ?? updateCheck.status}</dd>
+                  <dt>{t("检查结果")}</dt>
+                  <dd>{t(UPDATE_STATUS_LABELS[updateCheck.status] ?? updateCheck.status)}</dd>
                 </>
               )}
             </dl>
 
             <label className="field">
-              <span>更新清单地址（留空则不检查）</span>
+              <span>{t("更新清单地址（留空则不检查）")}</span>
               <input
                 value={updateForm.manifestUrl}
                 placeholder="https://example.com/filededup/update.json"
@@ -2056,17 +2192,17 @@ export default function App() {
               />
             </label>
             <label className="field">
-              <span>检查模式</span>
+              <span>{t("检查模式")}</span>
               <select
                 value={updateForm.checkMode}
                 onChange={(e) => setUpdateForm((prev) => ({ ...prev, checkMode: e.target.value as "auto" | "manual" }))}
               >
-                <option value="auto">自动检查</option>
-                <option value="manual">仅手动检查</option>
+                <option value="auto">{t("自动检查")}</option>
+                <option value="manual">{t("仅手动检查")}</option>
               </select>
             </label>
             <label className="field">
-              <span>检查间隔（小时，1–720）</span>
+              <span>{t("检查间隔（小时，1–720）")}</span>
               <input
                 type="number"
                 min={1}
@@ -2078,15 +2214,15 @@ export default function App() {
 
             <div className="actions">
               <button disabled={updateBusy} onClick={() => void saveAndCheck()}>
-                保存并立即检查
+                {t("保存并立即检查")}
               </button>
               {updateForm.skippedVersion && (
                 <button className="secondary" disabled={updateBusy} onClick={() => void clearSkipped()}>
-                  取消跳过 {updateForm.skippedVersion}
+                  {t("取消跳过 {version}", { version: updateForm.skippedVersion })}
                 </button>
               )}
               <button className="secondary" onClick={() => setUpdateOpen(false)}>
-                关闭
+                {t("关闭")}
               </button>
             </div>
 
@@ -2094,23 +2230,23 @@ export default function App() {
               <>
                 <div className="banner warn" role="status">
                   <span>
-                    发现新版本 v{updateCheck.latestVersion}
-                    {updateCheck.assetSize ? `（${formatBytes(updateCheck.assetSize)}）` : ""}
+                    {t("发现新版本 v{version}", { version: updateCheck.latestVersion ?? "" })}
+                    {updateCheck.assetSize ? t("（{size}）", { size: formatBytes(updateCheck.assetSize) }) : ""}
                     {updateCheck.releasedAt ? ` · ${updateCheck.releasedAt}` : ""}
                   </span>
                 </div>
                 {updateCheck.notes && <p className="hint">{updateCheck.notes}</p>}
                 <div className="actions">
                   <button className="secondary" disabled={updateBusy} onClick={() => void skipLatest()}>
-                    跳过此版本
+                    {t("跳过此版本")}
                   </button>
                   <button className="danger" disabled={updateBusy} onClick={() => void installLatest()}>
-                    {installArmed ? "确认覆盖当前程序并重启" : "下载并安装"}
+                    {installArmed ? t("确认覆盖当前程序并重启") : t("下载并安装")}
                   </button>
                 </div>
                 {installArmed && (
                   <p className="hint warn">
-                    将下载安装包并覆盖当前程序；替换前会备份为 .old，长度、SHA-256、清单签名或包签名任一不符都会拒绝安装并回滚。
+                    {t("将下载安装包并覆盖当前程序；替换前会备份为 .old，长度、SHA-256、清单签名或包签名任一不符都会拒绝安装并回滚。")}
                   </p>
                 )}
               </>
@@ -2118,7 +2254,7 @@ export default function App() {
 
             {updateNote && <p className="hint">{updateNote}</p>}
             <p className="hint">
-              清单与安装包都必须通过内置的更新专用 Ed25519 公钥验签，并校验长度与 SHA-256；失败一律拒绝安装，没有“忽略签名继续”的选项。
+              {t("清单与安装包都必须通过内置的更新专用 Ed25519 公钥验签，并校验长度与 SHA-256；失败一律拒绝安装，没有“忽略签名继续”的选项。")}
             </p>
           </div>
         </div>
@@ -2136,10 +2272,11 @@ function ScanProgress({
   onCancel: () => void;
   children?: ReactNode;
 }) {
+  const t = useT();
   if (!scan) {
     return (
       <>
-        <p className="hint">正在启动扫描…</p>
+        <p className="hint">{t("正在启动扫描…")}</p>
         <div className="actions">{children}</div>
       </>
     );
@@ -2147,31 +2284,44 @@ function ScanProgress({
   const hashRatio = ratio(scan.hashDone, scan.hashTargets);
   const phaseLabel =
     scan.phase === "cancelling"
-      ? "正在取消…"
+      ? t("正在取消…")
       : scan.phase === "cancelled"
-        ? "已取消（结果不完整）"
+        ? t("已取消（结果不完整）")
         : scan.enumerationDone
-          ? "正在计算哈希"
-          : "正在枚举文件";
+          ? t("正在计算哈希")
+          : t("正在枚举文件");
   return (
     <>
       <div className="chips">
-        <span className="chip">阶段 <b>{phaseLabel}</b></span>
-        <span className="chip">已发现文件 <b>{scan.files.toLocaleString("zh-CN")}</b></span>
-        <span className="chip">已读取 <b>{formatBytes(scan.bytes)}</b></span>
-        <span className="chip">用时 <b>{(scan.elapsedMs / 1000).toFixed(1)} s</b></span>
+        <span className="chip">
+          {t("阶段")} <b>{phaseLabel}</b>
+        </span>
+        <span className="chip">
+          {t("已发现文件")} <b>{scan.files.toLocaleString("zh-CN")}</b>
+        </span>
+        <span className="chip">
+          {t("已读取")} <b>{formatBytes(scan.bytes)}</b>
+        </span>
+        <span className="chip">
+          {t("用时")} <b>{(scan.elapsedMs / 1000).toFixed(1)} s</b>
+        </span>
       </div>
       <div className={`progress ${scan.enumerationDone ? "" : "indeterminate"}`}>
         <div className="bar" style={{ width: `${Math.round(hashRatio * 100)}%` }} />
       </div>
       <p className="hint">
         {scan.enumerationDone
-          ? `哈希进度 ${scan.hashDone.toLocaleString("zh-CN")} / ${scan.hashTargets.toLocaleString("zh-CN")}（${formatBytes(scan.hashBytes)} / ${formatBytes(scan.hashTotalBytes)}）`
-          : "枚举阶段的总量未知，进度条为不确定状态；取消会保留已扫描的部分结果。"}
+          ? t("哈希进度 {a} / {b}（{x} / {y}）", {
+              a: scan.hashDone.toLocaleString("zh-CN"),
+              b: scan.hashTargets.toLocaleString("zh-CN"),
+              x: formatBytes(scan.hashBytes),
+              y: formatBytes(scan.hashTotalBytes),
+            })
+          : t("枚举阶段的总量未知，进度条为不确定状态；取消会保留已扫描的部分结果。")}
       </p>
       <div className="actions">
         <button className="secondary" disabled={scan.phase !== "running"} onClick={onCancel}>
-          取消扫描
+          {t("取消扫描")}
         </button>
         {children}
       </div>
@@ -2194,6 +2344,7 @@ const ResultRow = memo(function ResultRow({
   onToggle?: (group: GroupView, path: string) => void;
   onGroupAction?: (group: GroupView, action: "all" | "none" | "invert" | "keep") => void;
 }) {
+  const t = useT();
   if (row.type === "group") {
     const g = row.group;
     let checked = 0;
@@ -2203,22 +2354,30 @@ const ResultRow = memo(function ResultRow({
     return (
       <div className="row grouprow" onClick={() => onSelect(g.keep)}>
         <span className="gsel">
-          <span className={`kind kind-${g.kind}`}>{KIND_LABELS[g.kind] ?? g.kind}</span>
-          {selectable && <span className="selcount">删 {checked}/{g.members.length}</span>}
+          <span className={`kind kind-${g.kind}`}>
+            {KIND_LABELS[g.kind] ? t(KIND_LABELS[g.kind]) : g.kind}
+          </span>
+          {selectable && (
+            <span className="selcount">{t("删 {checked}/{total}", { checked, total: g.members.length })}</span>
+          )}
         </span>
-        <span className="gtitle">重复组 · {g.members.length} 个文件</span>
-        <span className="gkeep">策略保留：{g.keep.slice(g.keep.lastIndexOf("\\") + 1)}</span>
+        <span className="gtitle">{t("重复组 · {count} 个文件", { count: g.members.length })}</span>
+        <span className="gkeep">{t("策略保留：{name}", { name: g.keep.slice(g.keep.lastIndexOf("\\") + 1) })}</span>
         {selectable ? (
           <span className="gbuttons" onClick={(e) => e.stopPropagation()}>
-            <button className="link" onClick={() => onGroupAction?.(g, "all")}>全选</button>
-            <button className="link" onClick={() => onGroupAction?.(g, "none")}>全不选</button>
-            <button className="link" onClick={() => onGroupAction?.(g, "invert")}>反选</button>
-            <button className="link" onClick={() => onGroupAction?.(g, "keep")} title="把当前勾选项视为要保留的文件，其余成员改为待删除">
-              仅保留所选
+            <button className="link" onClick={() => onGroupAction?.(g, "all")}>{t("全选")}</button>
+            <button className="link" onClick={() => onGroupAction?.(g, "none")}>{t("全不选")}</button>
+            <button className="link" onClick={() => onGroupAction?.(g, "invert")}>{t("反选")}</button>
+            <button
+              className="link"
+              onClick={() => onGroupAction?.(g, "keep")}
+              title={t("把当前勾选项视为要保留的文件，其余成员改为待删除")}
+            >
+              {t("仅保留所选")}
             </button>
           </span>
         ) : (
-          <span className="num">可回收 {formatBytes(g.reclaimable)}</span>
+          <span className="num">{t("可回收 {size}", { size: formatBytes(g.reclaimable) })}</span>
         )}
         <span className="num">{selectable ? `${formatBytes(g.reclaimable)}` : ""}</span>
       </div>
@@ -2237,10 +2396,16 @@ const ResultRow = memo(function ResultRow({
             type="checkbox"
             checked={checked}
             onChange={() => onToggle?.(row.group, m.path)}
-            aria-label={checked ? `取消删除 ${m.name}` : `标记删除 ${m.name}`}
+            aria-label={
+              checked
+                ? t("取消删除 {name}", { name: m.name })
+                : t("标记删除 {name}", { name: m.name })
+            }
           />
         )}
-        <span className={`kind ${checked ? "kind-del" : "kind-keep"}`}>{checked ? "将删除" : "保留"}</span>
+        <span className={`kind ${checked ? "kind-del" : "kind-keep"}`}>
+          {checked ? t("将删除") : t("保留")}
+        </span>
       </span>
       <span className="mname" title={m.name}>
         {m.name}
@@ -2255,24 +2420,23 @@ const ResultRow = memo(function ResultRow({
 });
 
 function FeatureStatus() {
+  const t = useT();
   return (
     <div className="features">
-      <h3>功能状态（如实标注）</h3>
+      <h3>{t("功能状态（如实标注）")}</h3>
       <p>
-        <span className="kind kind-keep">已接通</span>{" "}
-        目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、
-        查重结果导出（HTML/CSV）、
-        九步整理（试运行/真实执行/存疑项确认/最近一次撤销/规则导入导出）、
-        自动更新（Ed25519 清单与安装包验签、备份与回滚）、
-        Ed25519 许可证导入与状态显示、旧版 ECDSA 许可证只读兼容、试用期（PBKDF2 + 双存储 + 回拨检测）
+        <span className="kind kind-keep">{t("已接通")}</span>{" "}
+        {t(
+          "目录扫描、内容/图片/音频查重、结果分页与虚拟滚动、回收站与永久删除、执行前确认、执行统计、执行日志、设置持久化、查重结果导出（HTML/CSV）、九步整理（试运行/真实执行/存疑项确认/最近一次撤销/规则导入导出）、自动更新（Ed25519 清单与安装包验签、备份与回滚）、Ed25519 许可证导入与状态显示、旧版 ECDSA 许可证只读兼容、试用期（PBKDF2 + 双存储 + 回拨检测）",
+        )}
       </p>
       <p>
-        <span className="kind kind-warn">未联调</span>{" "}
-        蓝奏云上传页（登录/目录浏览/预检/上传门面已接通，真实列表与上传需要蓝奏账号验证）
+        <span className="kind kind-warn">{t("未联调")}</span>{" "}
+        {t("蓝奏云上传页（登录/目录浏览/预检/上传门面已接通，真实列表与上传需要蓝奏账号验证）")}
       </p>
       <p>
-        <span className="kind kind-warn">未实现</span>{" "}
-        系统托盘、自定义保留项、查重侧执行撤销、撤销历史
+        <span className="kind kind-warn">{t("未实现")}</span>{" "}
+        {t("系统托盘、自定义保留项、查重侧执行撤销、撤销历史")}
       </p>
     </div>
   );

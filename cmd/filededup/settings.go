@@ -118,14 +118,16 @@ type LogSettings struct {
 // UISettings 是整份配置。
 type UISettings struct {
 	SchemaVersion int              `json:"schemaVersion"`
-	Scan          ScanSettings     `json:"scan"`
-	Organize      OrganizeSettings `json:"organize"`
-	Update        UpdateSettings   `json:"update"`
-	Lanzou        LanzouSettings   `json:"lanzou"`
-	AI            AISettings       `json:"ai"`
-	Window        WindowSettings   `json:"window"`
-	Schedule      ScheduleSettings `json:"schedule"`
-	Logs          LogSettings      `json:"logs"`
+	// Lang 是界面语言：zh（默认）或 en。未知值在 normalizeSettings 里回退中文。
+	Lang     string           `json:"lang"`
+	Scan     ScanSettings     `json:"scan"`
+	Organize OrganizeSettings `json:"organize"`
+	Update   UpdateSettings   `json:"update"`
+	Lanzou   LanzouSettings   `json:"lanzou"`
+	AI       AISettings       `json:"ai"`
+	Window   WindowSettings   `json:"window"`
+	Schedule ScheduleSettings `json:"schedule"`
+	Logs     LogSettings      `json:"logs"`
 }
 
 // SettingsResult 把“加载结果 + 提示”一起返回，界面可如实展示警告。
@@ -141,6 +143,7 @@ type SettingsResult struct {
 func DefaultSettings() UISettings {
 	return UISettings{
 		SchemaVersion: settingsSchemaVersion,
+		Lang:          "zh",
 		Scan: ScanSettings{
 			KeepPolicy:     "pathShortest",
 			DeleteMode:     "trash",
@@ -286,6 +289,14 @@ func LoadSettings() (UISettings, string) {
 // 返回值是需要提示用户的收敛说明；旧配置里合法的值原样保留。
 func normalizeSettings(s *UISettings, def UISettings) []string {
 	var warns []string
+	switch s.Lang {
+	case "zh", "en":
+	case "":
+		s.Lang = def.Lang
+	default:
+		warns = append(warns, fmt.Sprintf("未知界面语言 %q，已回退中文", s.Lang))
+		s.Lang = def.Lang
+	}
 	if s.Scan.Excludes == nil {
 		s.Scan.Excludes = []string{}
 	}
@@ -468,6 +479,7 @@ func SaveSettings(s UISettings) error {
 	}
 	for _, err := range []error{
 		put("schemaVersion", s.SchemaVersion),
+		put("lang", s.Lang),
 		put("scan", s.Scan),
 		put("organize", s.Organize),
 		put("update", s.Update),

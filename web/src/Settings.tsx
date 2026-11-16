@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { useT } from "./i18n";
 import type { ScheduleRunState, SettingsResult, UISettings } from "./types";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function SettingsDialog({ onClose, onSaved }: Props) {
+  const t = useT();
   const [res, setRes] = useState<SettingsResult | null>(null);
   const [draft, setDraft] = useState<UISettings | null>(null);
   const [sched, setSched] = useState<ScheduleRunState | null>(null);
@@ -60,7 +62,7 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
       setKeyInput("");
       setClearKey(false);
       setSched(await api.getScheduleState());
-      setMsg("已保存");
+      setMsg(t("已保存"));
       onSaved(fresh.settings);
     } catch (e) {
       setErr(String(e));
@@ -70,39 +72,50 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label="设置">
+    <div className="modal" role="dialog" aria-modal="true" aria-label={t("设置")}>
       <div className="modalbodysmall settingsdialog">
         <div className="dialoghead">
-          <h3>设置</h3>
+          <h3>{t("设置")}</h3>
           <button className="ghost" onClick={onClose}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
         {!draft ? (
-          <p className="hint">{err || "正在读取设置…"}</p>
+          <p className="hint">{err || t("正在读取设置…")}</p>
         ) : (
           <>
             <section>
-              <h4>外观</h4>
+              <h4>{t("外观")}</h4>
               <label className="fieldrow">
-                <span>主题</span>
+                <span>{t("主题")}</span>
                 <select
                   value={draft.window.theme}
                   onChange={(e) =>
                     patch("window", { ...draft.window, theme: e.target.value as typeof draft.window.theme })
                   }
                 >
-                  <option value="system">跟随系统</option>
-                  <option value="light">日间</option>
-                  <option value="dark">夜间</option>
+                  <option value="system">{t("跟随系统")}</option>
+                  <option value="light">{t("日间")}</option>
+                  <option value="dark">{t("夜间")}</option>
                 </select>
               </label>
+              <label className="fieldrow">
+                <span>{t("语言")}</span>
+                <select
+                  value={draft.lang}
+                  onChange={(e) => patch("lang", e.target.value as UISettings["lang"])}
+                >
+                  <option value="zh">{t("中文")}</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <p className="hint">{t("语言切换会立即生效并保存到设置文件；重新打开后保持一致。")}</p>
             </section>
 
             <section>
-              <h4>窗口与托盘</h4>
+              <h4>{t("窗口与托盘")}</h4>
               <label className="fieldrow">
-                <span>关闭窗口时</span>
+                <span>{t("关闭窗口时")}</span>
                 <select
                   value={draft.window.closeAction}
                   onChange={(e) =>
@@ -112,8 +125,8 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                     })
                   }
                 >
-                  <option value="exit">退出应用</option>
-                  <option value="tray">最小化到托盘</option>
+                  <option value="exit">{t("退出应用")}</option>
+                  <option value="tray">{t("最小化到托盘")}</option>
                 </select>
               </label>
               <label className="checkrow">
@@ -122,36 +135,36 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                   checked={draft.window.trayEnabled}
                   onChange={(e) => patch("window", { ...draft.window, trayEnabled: e.target.checked })}
                 />
-                <span>显示托盘图标（右键菜单：打开、扫描、退出）</span>
+                <span>{t("显示托盘图标（右键菜单：打开、扫描、退出）")}</span>
               </label>
-              <p className="hint">托盘只在 Windows 上可用；关闭托盘后“最小化到托盘”会退化为退出。</p>
+              <p className="hint">{t("托盘只在 Windows 上可用；关闭托盘后“最小化到托盘”会退化为退出。")}</p>
             </section>
 
             <section>
-              <h4>定时任务</h4>
+              <h4>{t("定时任务")}</h4>
               <label className="checkrow">
                 <input
                   type="checkbox"
                   checked={draft.schedule.enabled}
                   onChange={(e) => patch("schedule", { ...draft.schedule, enabled: e.target.checked })}
                 />
-                <span>启用定时任务（只做只读扫描，不删除、不整理）</span>
+                <span>{t("启用定时任务（只做只读扫描，不删除、不整理）")}</span>
               </label>
               <label className="fieldrow">
-                <span>执行方式</span>
+                <span>{t("执行方式")}</span>
                 <select
                   value={draft.schedule.mode}
                   onChange={(e) =>
                     patch("schedule", { ...draft.schedule, mode: e.target.value as "interval" | "daily" })
                   }
                 >
-                  <option value="interval">按间隔</option>
-                  <option value="daily">每日定时</option>
+                  <option value="interval">{t("按间隔")}</option>
+                  <option value="daily">{t("每日定时")}</option>
                 </select>
               </label>
               {draft.schedule.mode === "interval" ? (
                 <label className="fieldrow">
-                  <span>间隔（分钟，10–10080）</span>
+                  <span>{t("间隔（分钟，10–10080）")}</span>
                   <input
                     type="number"
                     min={10}
@@ -164,7 +177,7 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                 </label>
               ) : (
                 <label className="fieldrow">
-                  <span>每天（HH:MM）</span>
+                  <span>{t("每天（HH:MM）")}</span>
                   <input
                     type="time"
                     value={draft.schedule.dailyTime}
@@ -173,7 +186,7 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                 </label>
               )}
               <label className="fieldrow">
-                <span>扫描目录（留空用查重页的根目录）</span>
+                <span>{t("扫描目录（留空用查重页的根目录）")}</span>
                 <input
                   value={draft.schedule.root}
                   placeholder="D:\\资料"
@@ -182,23 +195,27 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
               </label>
               <p className="hint">
                 {sched?.finishedAt
-                  ? `上次：${sched.finishedAt} · ${sched.status} · ${sched.message ?? ""}`
-                  : "还没有执行记录。"}
+                  ? t("上次：{time} · {status} · {msg}", {
+                      time: sched.finishedAt,
+                      status: sched.status,
+                      msg: sched.message ?? "",
+                    })
+                  : t("还没有执行记录。")}
               </p>
             </section>
 
             <section>
-              <h4>AI 配置</h4>
+              <h4>{t("AI 配置")}</h4>
               <label className="checkrow">
                 <input
                   type="checkbox"
                   checked={draft.ai.enabled}
                   onChange={(e) => patch("ai", { ...draft.ai, enabled: e.target.checked })}
                 />
-                <span>启用 AI 分析（关闭时不发起任何网络请求）</span>
+                <span>{t("启用 AI 分析（关闭时不发起任何网络请求）")}</span>
               </label>
               <label className="fieldrow">
-                <span>服务端点</span>
+                <span>{t("服务端点")}</span>
                 <input
                   value={draft.ai.endpoint}
                   placeholder="https://example.com/v1/chat/completions"
@@ -206,7 +223,7 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                 />
               </label>
               <label className="fieldrow">
-                <span>模型名</span>
+                <span>{t("模型名")}</span>
                 <input
                   value={draft.ai.model}
                   placeholder="gpt-4o-mini"
@@ -214,7 +231,7 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                 />
               </label>
               <label className="fieldrow">
-                <span>超时（秒，5–300）</span>
+                <span>{t("超时（秒，5–300）")}</span>
                 <input
                   type="number"
                   min={5}
@@ -224,11 +241,11 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                 />
               </label>
               <label className="fieldrow">
-                <span>密钥</span>
+                <span>{t("密钥")}</span>
                 <input
                   type="password"
                   value={keyInput}
-                  placeholder={draft.ai.keyHint ? `已保存 ${draft.ai.keyHint}` : "未保存"}
+                  placeholder={draft.ai.keyHint ? t("已保存 {hint}", { hint: draft.ai.keyHint }) : t("未保存")}
                   onChange={(e) => {
                     setKeyInput(e.target.value);
                     setClearKey(false);
@@ -244,19 +261,21 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                     if (e.target.checked) setKeyInput("");
                   }}
                 />
-                <span>清除已保存的密钥</span>
+                <span>{t("清除已保存的密钥")}</span>
               </label>
               <p className="hint">
                 {res?.keyProtectionOk
-                  ? `密钥用 DPAPI 加密保存在 ${res?.keyStoragePath ?? ""}，界面只显示后四位。`
-                  : "当前平台不支持 DPAPI，密钥无法加密保存。"}
+                  ? t("密钥用 DPAPI 加密保存在 {path}，界面只显示后四位。", {
+                      path: res?.keyStoragePath ?? "",
+                    })
+                  : t("当前平台不支持 DPAPI，密钥无法加密保存。")}
               </p>
             </section>
 
             <section>
-              <h4>运行日志</h4>
+              <h4>{t("运行日志")}</h4>
               <label className="fieldrow">
-                <span>保留天数（1–365）</span>
+                <span>{t("保留天数（1–365）")}</span>
                 <input
                   type="number"
                   min={1}
@@ -265,16 +284,18 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
                   onChange={(e) => patch("logs", { ...draft.logs, retentionDays: Number(e.target.value) })}
                 />
               </label>
-              <p className="hint">日志目录：{res?.path ? res.path.replace(/[^\\/]+$/, "logs") : "—"}</p>
+              <p className="hint">
+                {t("日志目录：{dir}", { dir: res?.path ? res.path.replace(/[^\\/]+$/, "logs") : "—" })}
+              </p>
             </section>
 
             {res?.warning && <p className="hint warn">{res.warning}</p>}
             {err && <p className="hint warn">{err}</p>}
             {msg && <p className="hint ok">{msg}</p>}
             <div className="dialogfoot">
-              <button onClick={onClose}>取消</button>
+              <button onClick={onClose}>{t("取消")}</button>
               <button className="primary" disabled={busy} onClick={save}>
-                {busy ? "保存中…" : "保存"}
+                {busy ? t("保存中…") : t("保存")}
               </button>
             </div>
           </>

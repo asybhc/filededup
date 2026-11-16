@@ -221,6 +221,7 @@ function zeroCounter(): Counter {
 function mockDefaultSettings(): UISettings {
   return {
     schemaVersion: 1,
+    lang: "zh",
     scan: {
       root: SAMPLE_ROOT,
       keepPolicy: "pathShortest",
@@ -308,6 +309,7 @@ function readSettings(): UISettings {
       window: { ...def.window, ...(parsed.window ?? {}) },
       schedule: { ...def.schedule, ...(parsed.schedule ?? {}) },
       logs: { ...def.logs, ...(parsed.logs ?? {}) },
+      lang: parsed.lang === "en" ? "en" : def.lang,
     };
   } catch {
     return def;

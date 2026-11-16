@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { useT } from "./i18n";
 import type { ClearLogsResult, EnvCheckItem, LogOverview } from "./types";
 
 function errorText(err: unknown): string {
@@ -13,6 +14,7 @@ function formatBytes(n: number): string {
 }
 
 export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [tab, setTab] = useState<"logs" | "env">("logs");
   const [overview, setOverview] = useState<LogOverview>();
   const [selected, setSelected] = useState("");
@@ -80,8 +82,8 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
     try {
       const res: ClearLogsResult = await api.clearLogs();
       setNote(
-        `已删除 ${res.deleted} 个文件，释放 ${formatBytes(res.freed)}。` +
-          (res.errors.length > 0 ? ` ${res.errors.length} 个文件被占用未删除。` : ""),
+        t("已删除 {n} 个文件，释放 {size}。", { n: res.deleted, size: formatBytes(res.freed) }) +
+          (res.errors.length > 0 ? " " + t("{n} 个文件被占用未删除。", { n: res.errors.length }) : ""),
       );
       setConfirmClear(false);
       await loadLogs();
@@ -102,16 +104,16 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label="诊断">
+    <div className="modal" role="dialog" aria-modal="true" aria-label={t("诊断")}>
       <div className="modalbodysmall diagdialog">
         <div className="dialoghead">
-          <h3>诊断</h3>
+          <h3>{t("诊断")}</h3>
           <div className="dialogactions">
             <button className={tab === "logs" ? "primary" : "secondary"} onClick={() => setTab("logs")}>
-              日志
+              {t("日志")}
             </button>
             <button className={tab === "env" ? "primary" : "secondary"} onClick={() => setTab("env")}>
-              环境检测
+              {t("环境检测")}
             </button>
           </div>
         </div>
@@ -122,8 +124,8 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
         {tab === "logs" ? (
           <div className="diagbody">
             <aside className="diaglist">
-              <p className="hint">日志目录：{overview?.dir ?? "—"}</p>
-              {(overview?.files.length ?? 0) === 0 && <p className="hint">暂无日志文件。</p>}
+              <p className="hint">{t("日志目录：{dir}", { dir: overview?.dir ?? "—" })}</p>
+              {(overview?.files.length ?? 0) === 0 && <p className="hint">{t("暂无日志文件。")}</p>}
               {overview?.files.map((f) => (
                 <button
                   key={f.name}
@@ -139,7 +141,7 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
               ))}
             </aside>
             <main className="diagpreview">
-              <pre>{text || "选择左侧日志文件查看内容（只显示尾部 512 KB）。"}</pre>
+              <pre>{text || t("选择左侧日志文件查看内容（只显示尾部 512 KB）。")}</pre>
             </main>
           </div>
         ) : (
@@ -155,7 +157,7 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
                   </span>
                 </div>
               ))}
-              {checks.length === 0 && <p className="hint">尚未运行检测。</p>}
+              {checks.length === 0 && <p className="hint">{t("尚未运行检测。")}</p>}
             </div>
           </div>
         )}
@@ -164,34 +166,34 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
           {tab === "logs" ? (
             <>
               <button className="secondary" disabled={busy} onClick={() => void loadLogs()}>
-                刷新列表
+                {t("刷新列表")}
               </button>
               <button className="secondary" onClick={() => void openDir()} disabled={!overview?.dir}>
-                打开日志目录
+                {t("打开日志目录")}
               </button>
               {confirmClear ? (
                 <>
-                  <span className="hint">清除会删除日志目录下全部 *.log / *.jsonl / *.txt，不可恢复。</span>
+                  <span className="hint">{t("清除会删除日志目录下全部 *.log / *.jsonl / *.txt，不可恢复。")}</span>
                   <button className="primary danger" disabled={busy} onClick={() => void clearLogs()}>
-                    确认清除
+                    {t("确认清除")}
                   </button>
                   <button className="secondary" onClick={() => setConfirmClear(false)}>
-                    取消
+                    {t("取消")}
                   </button>
                 </>
               ) : (
                 <button className="secondary" disabled={busy || !overview?.files.length} onClick={() => setConfirmClear(true)}>
-                  清除日志
+                  {t("清除日志")}
                 </button>
               )}
             </>
           ) : (
             <button className="secondary" disabled={busy} onClick={() => void runChecks()}>
-              重新检测
+              {t("重新检测")}
             </button>
           )}
           <button className="primary" onClick={onClose}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       </div>

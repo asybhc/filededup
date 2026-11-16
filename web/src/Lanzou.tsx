@@ -4,6 +4,7 @@
 // 本页只保证编译、单测（httptest）与本地可验证的部分。分享创建不做，请到网页端手动操作。
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { useT, type TParams } from "./i18n";
 import type {
   LanzouFolder,
   LanzouItem,
@@ -16,6 +17,9 @@ import type {
   LanzouStatus,
   LanzouUploadState,
 } from "./types";
+
+// 文案翻译函数的类型，供模块级辅助函数接收 t。
+type TFn = (text: string, params?: TParams) => string;
 
 const KIND_LABELS: Record<LanzouItemKind, string> = {
   pending: "待上传",
@@ -72,13 +76,15 @@ const PHASE_LABELS: Record<string, string> = {
   failed: "失败",
 };
 
-function disclaimerPoints(platform: LanzouPlatform): string[] {
+function disclaimerPoints(t: TFn, platform: LanzouPlatform): string[] {
   return [
-    `遵守${PLATFORM_LABELS[platform]}使用条款，不上传违法、侵权或违反服务条款的内容。`,
-    `仅在本机用 DPAPI（CurrentUser）加密保存登录态，不保存密码、不写明文日志。`,
-    "网盘重复只做同名同大小判定，不读取网盘文件内容。",
-    "云端重复的本地文件会移动到上传目录旁的「网盘重复文件」文件夹。",
-    "分享创建不在本功能内，请到网盘网页端手动操作。",
+    t("遵守{platform}使用条款，不上传违法、侵权或违反服务条款的内容。", {
+      platform: t(PLATFORM_LABELS[platform]),
+    }),
+    t("仅在本机用 DPAPI（CurrentUser）加密保存登录态，不保存密码、不写明文日志。"),
+    t("网盘重复只做同名同大小判定，不读取网盘文件内容。"),
+    t("云端重复的本地文件会移动到上传目录旁的「网盘重复文件」文件夹。"),
+    t("分享创建不在本功能内，请到网盘网页端手动操作。"),
   ];
 }
 
@@ -110,8 +116,8 @@ function formatBytes(n: number): string {
   return `${v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2)} ${units[i]}`;
 }
 
-function sizeText(size: number): string {
-  return size < 0 ? "大小未知" : formatBytes(size);
+function sizeText(t: TFn, size: number): string {
+  return size < 0 ? t("大小未知") : formatBytes(size);
 }
 
 function progressRatio(st: LanzouUploadState): number {
@@ -151,6 +157,7 @@ export function Lanzou({
   canRun?: boolean;
   licenseHint?: string;
 }) {
+  const t = useT();
   const [cfg, setCfg] = useState<LanzouSettings>(() => initial ?? defaultLanzouSettings());
   const [platform, setPlatform] = useState<LanzouPlatform>(() => loadPlatform());
   const [status, setStatus] = useState<LanzouStatus>();
@@ -253,7 +260,7 @@ export function Lanzou({
         if (stopped) return;
         stopped = true;
         setPolling(false);
-        setError("读取上传进度失败：" + errorText(err));
+        setError(t("读取上传进度失败：{error}", { error: errorText(err) }));
       }
     };
     void tick();
@@ -367,7 +374,7 @@ export function Lanzou({
       setListing(undefined);
       setBrowseError("");
       setPath([{ id: "0", name: "根目录" }]);
-      setNotice(st.message || "已退出登录，本机保存的凭据已删除。");
+      setNotice(st.message || t("已退出登录，本机保存的凭据已删除。"));
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -475,20 +482,22 @@ export function Lanzou({
     setError("");
     setNotice("");
     if (!prepare || !batchId) {
-      setError("请先预检");
+      setError(t("请先预检"));
       return;
     }
     if (!cfg.disclaimerAccepted) {
-      setError("请先勾选并同意免责声明");
+      setError(t("请先勾选并同意免责声明"));
       return;
     }
     if (!canRun) {
-      setError(licenseHint || "未授权：开始上传会被拒绝，登录与预检仍可用。");
+      setError(licenseHint || t("未授权：开始上传会被拒绝，登录与预检仍可用。"));
       return;
     }
     const ok = window.confirm(
-      `即将把 ${prepare.uploadable} 个文件上传到「${prepare.folderName || "根目录"}」。` +
-        "云端重复的本地文件会被移动到「网盘重复文件」，上传期间可取消。继续？",
+      t("即将把 {n} 个文件上传到「{folder}」。云端重复的本地文件会被移动到「网盘重复文件」，上传期间可取消。继续？", {
+        n: prepare.uploadable,
+        folder: prepare.folderName || t("根目录"),
+      }),
     );
     if (!ok) return;
     setBusy("upload");
@@ -553,6 +562,7 @@ export function Lanzou({
   }
 
   const target = path[path.length - 1];
+  const folderLabel = (f: LanzouFolder) => (f.id === "0" ? t("根目录") : f.name);
   const running = upload?.phase === "running" || upload?.phase === "cancelling";
   const batchFinished = Boolean(upload && !running);
   // Go 侧空切片会序列化成 null，这里统一兜底，避免 .length/.join 崩溃。
@@ -564,69 +574,70 @@ export function Lanzou({
     <div className="orgpage lanzoupage">
       <section className="card">
         <div className="sectionhead">
-          <h2>{platform === "youxiang" ? "蓝奏优享上传" : "蓝奏云上传（老版协议）"}</h2>
+          <h2>{platform === "youxiang" ? t("蓝奏优享上传") : t("蓝奏云上传（老版协议）")}</h2>
           <span className={`badge ${status?.loggedIn ? "ok" : "warn"}`}>
-            {status?.loggedIn ? `已登录 · ${status.account || "掩码未返回"}` : "未登录"}
+            {status?.loggedIn
+              ? t("已登录 · {account}", { account: status.account || t("掩码未返回") })
+              : t("未登录")}
           </span>
         </div>
 
         <div className="formgrid">
           <label>
-            <span>网盘类型</span>
+            <span>{t("网盘类型")}</span>
             <select
               value={platform}
               disabled={running || busy !== ""}
               onChange={(e) => switchPlatform(e.target.value as LanzouPlatform)}
             >
-              <option value="lanzou">蓝奏云（老版协议，单文件 ≤ 100 MiB）</option>
-              <option value="youxiang">蓝奏优享（ilanzou，分片上传）</option>
+              <option value="lanzou">{t("蓝奏云（老版协议，单文件 ≤ 100 MiB）")}</option>
+              <option value="youxiang">{t("蓝奏优享（ilanzou，分片上传）")}</option>
             </select>
           </label>
         </div>
         <p className="hint">
-          两种网盘各自独立登录、各自保存凭据与上传缓存；切换网盘不会退出另一种的登录态。
-          {platform === "youxiang"
-            ? " 优享不支持 Cookie 登录、从 C# 版导入与创建云端目录。"
-            : ""}
+          {t("两种网盘各自独立登录、各自保存凭据与上传缓存；切换网盘不会退出另一种的登录态。")}
+          {platform === "youxiang" ? ` ${t("优享不支持 Cookie 登录、从 C# 版导入与创建云端目录。")}` : ""}
         </p>
 
         <div className="chips">
           <span className="chip">
-            账号 <b>{status?.loggedIn ? status.account || "掩码未返回" : "—"}</b>
+            {t("账号")} <b>{status?.loggedIn ? status.account || t("掩码未返回") : "—"}</b>
           </span>
           <span className="chip">
-            登录来源 <b>{SOURCE_LABELS[status?.source ?? "none"] ?? status?.source}</b>
+            {t("登录来源")} <b>{t(SOURCE_LABELS[status?.source ?? "none"])}</b>
           </span>
           <span className="chip">
-            凭据加密 <b>{status?.supportsDpapi ? "DPAPI 加密存储" : "当前平台不可用"}</b>
+            {t("凭据加密")} <b>{status?.supportsDpapi ? t("DPAPI 加密存储") : t("当前平台不可用")}</b>
           </span>
           {status?.savedAt && (
             <span className="chip">
-              保存时间 <b>{status.savedAt}</b>
+              {t("保存时间")} <b>{status.savedAt}</b>
             </span>
           )}
         </div>
 
         <p className="hint mono ellipsis" title={status?.credentialPath}>
-          凭据文件：{status?.credentialPath || "（读取中）"}
+          {t("凭据文件：{path}", { path: status?.credentialPath || t("（读取中）") })}
         </p>
         <p className="hint">
           {status?.supportsDpapi
-            ? "登录态仅在本机用 DPAPI（CurrentUser）加密保存，不保存密码，也不写明文日志。"
-            : "是否为 DPAPI 加密以本机后端返回为准；界面不假设凭据已加密。"}
+            ? t("登录态仅在本机用 DPAPI（CurrentUser）加密保存，不保存密码，也不写明文日志。")
+            : t("是否为 DPAPI 加密以本机后端返回为准；界面不假设凭据已加密。")}
         </p>
 
         <div className="banner perf" role="status">
           {platform === "youxiang" ? (
             <span>
-              <b>未联调声明</b>：优享协议字段来自对官方客户端的静态分析，登录、列目录、上传与判重都需要真实优享账号验证；
-              分片上传的 URL 形态等存疑项已列在 <code>docs/ui-shell.md</code> 的「未验证项」，不作结论。
-              分享创建不在本功能内，请到网页端手动操作。
+              <b>{t("未联调声明")}</b>{t("：")}
+              {t("优享协议字段来自对官方客户端的静态分析，登录、列目录、上传与判重都需要真实优享账号验证；分片上传的 URL 形态等存疑项已列在")}{" "}
+              <code>docs/ui-shell.md</code>{" "}
+              {t("的「未验证项」，不作结论。分享创建不在本功能内，请到网页端手动操作。")}
             </span>
           ) : (
             <span>
-              <b>未联调声明</b>：登录成功后的真实目录列表、上传与云端判重都需要蓝奏账号验证。
-              本页只保证编译、单测与本地可验证部分。分享创建不在本功能内，请到网页端手动操作。
+              <b>{t("未联调声明")}</b>{t("：")}
+              {t("登录成功后的真实目录列表、上传与云端判重都需要蓝奏账号验证。本页只保证编译、单测与本地可验证部分。分享创建不在本功能内，请到网页端手动操作。")}
             </span>
           )}
         </div>
@@ -638,34 +649,34 @@ export function Lanzou({
         <div className="banner error" role="alert">
           <span>{error}</span>
           <button className="link" onClick={() => setError("")}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       )}
 
       <section className="card">
         <div className="sectionhead">
-          <h2>登录</h2>
-          <span className="hint">账号密码只用于本次登录请求，不落盘</span>
+          <h2>{t("登录")}</h2>
+          <span className="hint">{t("账号密码只用于本次登录请求，不落盘")}</span>
         </div>
 
         <div className="formgrid">
           <label>
-            <span>{platform === "youxiang" ? "蓝奏优享账号" : "蓝奏云账号"}</span>
+            <span>{platform === "youxiang" ? t("蓝奏优享账号") : t("蓝奏云账号")}</span>
             <input
               value={username}
               autoComplete="username"
-              placeholder="手机号或邮箱"
+              placeholder={t("手机号或邮箱")}
               onChange={(e) => setUsername(e.target.value)}
             />
           </label>
           <label>
-            <span>密码</span>
+            <span>{t("密码")}</span>
             <input
               type="password"
               value={password}
               autoComplete="current-password"
-              placeholder="只用于本次登录，不保存"
+              placeholder={t("只用于本次登录，不保存")}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
@@ -677,19 +688,19 @@ export function Lanzou({
             disabled={!username.trim() || !password || busy === "login"}
             onClick={() => void doLogin()}
           >
-            {busy === "login" ? "正在登录…" : "登录"}
+            {busy === "login" ? t("正在登录…") : t("登录")}
           </button>
           {platform === "lanzou" && (
             <button className="secondary" disabled={busy === "import"} onClick={() => void doImportCSharp()}>
-              {busy === "import" ? "正在导入…" : "从 C# 版导入"}
+              {busy === "import" ? t("正在导入…") : t("从 C# 版导入")}
             </button>
           )}
           <button className="secondary" disabled={busy === "logout" || !status?.loggedIn} onClick={() => void doLogout()}>
-            {busy === "logout" ? "正在退出…" : "退出登录"}
+            {busy === "logout" ? t("正在退出…") : t("退出登录")}
           </button>
           {platform === "lanzou" && (
             <button className="link" onClick={() => setCookieOpen((v) => !v)}>
-              {cookieOpen ? "收起 Cookie 登录" : "粘贴 Cookie 登录"}
+              {cookieOpen ? t("收起 Cookie 登录") : t("粘贴 Cookie 登录")}
             </button>
           )}
         </div>
@@ -697,30 +708,30 @@ export function Lanzou({
         {cookieOpen && platform === "lanzou" && (
           <>
             <label className="field">
-              <span>请求头 Cookie（整段粘贴；只用于登录，不写日志）</span>
+              <span>{t("请求头 Cookie（整段粘贴；只用于登录，不写日志）")}</span>
               <textarea
                 rows={3}
                 value={cookie}
-                placeholder="例如 phpDiskInfo=...; ylogin=..."
+                placeholder={t("例如 phpDiskInfo=...; ylogin=...")}
                 onChange={(e) => setCookie(e.target.value)}
               />
             </label>
             <div className="actions">
               <button className="secondary" disabled={!cookie.trim() || busy === "cookie"} onClick={() => void doCookie()}>
-                {busy === "cookie" ? "正在校验…" : "使用粘贴的 Cookie"}
+                {busy === "cookie" ? t("正在校验…") : t("使用粘贴的 Cookie")}
               </button>
             </div>
           </>
         )}
 
         {notice && <p className="hint">{notice}</p>}
-        <p className="hint">错误原文直接来自后端（HTTP 状态与 zt/info 一并展示），界面不改写成“网络错误”。</p>
+        <p className="hint">{t("错误原文直接来自后端（HTTP 状态与 zt/info 一并展示），界面不改写成“网络错误”。")}</p>
       </section>
 
       <section className="card">
         <div className="sectionhead">
-          <h2>本地与云端目录</h2>
-          <span className="hint">上传目标 = 当前浏览的云端目录</span>
+          <h2>{t("本地与云端目录")}</h2>
+          <span className="hint">{t("上传目标 = 当前浏览的云端目录")}</span>
         </div>
 
         <div className="dirrow">
@@ -728,23 +739,23 @@ export function Lanzou({
             className="path"
             readOnly
             value={cfg.lastLocalDir}
-            placeholder="尚未选择要上传的本地目录"
-            aria-label="本地目录"
+            placeholder={t("尚未选择要上传的本地目录")}
+            aria-label={t("本地目录")}
           />
           <button className="secondary" disabled={busy === "pick"} onClick={() => void pickLocalDir()}>
-            {busy === "pick" ? "选择中…" : "选择本地目录"}
+            {busy === "pick" ? t("选择中…") : t("选择本地目录")}
           </button>
         </div>
         <p className="hint">
-          只上传该目录下的文件（不含子目录）；
+          {t("只上传该目录下的文件（不含子目录）；")}
           {platform === "lanzou"
-            ? "超过 100 MiB 的文件在预检阶段跳过。"
-            : "优享按分片上传，不设 100 MiB 上限。"}
-          预检会读取云端当前目录做同名同大小判定。
+            ? t("超过 100 MiB 的文件在预检阶段跳过。")
+            : t("优享按分片上传，不设 100 MiB 上限。")}
+          {t("预检会读取云端当前目录做同名同大小判定。")}
         </p>
 
         {!status?.loggedIn ? (
-          <p className="hint">登录后才能浏览云端目录。</p>
+          <p className="hint">{t("登录后才能浏览云端目录。")}</p>
         ) : (
           <>
             <div className="lanzoubar">
@@ -753,20 +764,20 @@ export function Lanzou({
                 disabled={path.length <= 1 || busy === "browse"}
                 onClick={() => void goToCrumb(path.length - 2)}
               >
-                上一级
+                {t("上一级")}
               </button>
-              <div className="crumbs" title={path.map((f) => f.name).join(" / ")}>
+              <div className="crumbs" title={path.map(folderLabel).join(" / ")}>
                 {path.map((f, i) => (
                   <span className="crumb" key={`${f.id}-${i}`}>
                     {i > 0 && <span className="crumbsep">/</span>}
                     <button className="link" disabled={i === path.length - 1} onClick={() => void goToCrumb(i)}>
-                      {f.name}
+                      {folderLabel(f)}
                     </button>
                   </span>
                 ))}
               </div>
               <span className="chip">
-                上传目标 <b>{target.name}</b>
+                {t("上传目标")} <b>{folderLabel(target)}</b>
               </span>
             </div>
 
@@ -775,32 +786,32 @@ export function Lanzou({
             <div className="lanfolders">
               {(listing?.folders ?? []).map((f) => (
                 <button className="lanfolder" key={f.id} disabled={busy === "browse"} onClick={() => void browseInto(f)}>
-                  <span className="kind kind-exact">目录</span>
+                  <span className="kind kind-exact">{t("目录")}</span>
                   <span className="lanname" title={f.name}>
                     {f.name}
                   </span>
                   <span className="mono">{f.id}</span>
                 </button>
               ))}
-              {(listing?.folders ?? []).length === 0 && <span className="hint">当前目录没有子文件夹。</span>}
+              {(listing?.folders ?? []).length === 0 && <span className="hint">{t("当前目录没有子文件夹。")}</span>}
             </div>
 
             <div className="lantablewrap">
               <div className="tablehead lanzoufilehead">
-                <span>类型</span>
-                <span>名称</span>
-                <span className="num">大小</span>
-                <span>修改时间</span>
+                <span>{t("类型")}</span>
+                <span>{t("名称")}</span>
+                <span className="num">{t("大小")}</span>
+                <span>{t("修改时间")}</span>
               </div>
               <div className="lanfilelist">
-                {(listing?.files ?? []).length === 0 && <p className="hint lanempty">当前目录没有文件。</p>}
+                {(listing?.files ?? []).length === 0 && <p className="hint lanempty">{t("当前目录没有文件。")}</p>}
                 {(listing?.files ?? []).map((f) => (
                   <div className="row lanfilerow" key={f.id}>
-                    <span className="kind kind-del">文件</span>
+                    <span className="kind kind-del">{t("文件")}</span>
                     <span className="mname" title={f.name}>
                       {f.name}
                     </span>
-                    <span className="num">{f.size < 0 ? "大小未知" : f.sizeText || formatBytes(f.size)}</span>
+                    <span className="num">{f.size < 0 ? t("大小未知") : f.sizeText || formatBytes(f.size)}</span>
                     <span className="mtime">{f.time || "—"}</span>
                   </div>
                 ))}
@@ -812,13 +823,13 @@ export function Lanzou({
 
       <section className="card">
         <div className="sectionhead">
-          <h2>上传设置</h2>
-          <span className="hint">并发 1–5，请求间隔 1000–2000ms</span>
+          <h2>{t("上传设置")}</h2>
+          <span className="hint">{t("并发 1–5，请求间隔 1000–2000ms")}</span>
         </div>
 
         <div className="formgrid">
           <label>
-            <span>并发数（1–5）</span>
+            <span>{t("并发数（1–5）")}</span>
             <input
               type="number"
               min={1}
@@ -828,7 +839,7 @@ export function Lanzou({
             />
           </label>
           <label>
-            <span>请求间隔（毫秒，1000–2000）</span>
+            <span>{t("请求间隔（毫秒，1000–2000）")}</span>
             <input
               type="number"
               min={1000}
@@ -844,11 +855,11 @@ export function Lanzou({
               checked={cfg.forceReupload}
               onChange={(e) => patch({ forceReupload: e.target.checked })}
             />
-            <span>强制重传（忽略本机缓存与云端判重）</span>
+            <span>{t("强制重传（忽略本机缓存与云端判重）")}</span>
           </label>
         </div>
         <p className="hint">
-          强制重传会跳过本机缓存与同名同大小判定，可能产生云端重复文件；此时不会移动本地文件。
+          {t("强制重传会跳过本机缓存与同名同大小判定，可能产生云端重复文件；此时不会移动本地文件。")}
         </p>
 
         <div className="actions">
@@ -857,26 +868,26 @@ export function Lanzou({
             disabled={!status?.loggedIn || !cfg.lastLocalDir || busy === "prepare" || running}
             onClick={() => void runPrepare()}
           >
-            {busy === "prepare" ? "正在预检…" : "预检（不移动、不上传）"}
+            {busy === "prepare" ? t("正在预检…") : t("预检（不移动、不上传）")}
           </button>
-          {!status?.loggedIn && <span className="hint">请先登录。</span>}
-          {status?.loggedIn && !cfg.lastLocalDir && <span className="hint">请先选择本地目录。</span>}
-          {running && <span className="hint">上传进行中，预检暂时禁用。</span>}
+          {!status?.loggedIn && <span className="hint">{t("请先登录。")}</span>}
+          {status?.loggedIn && !cfg.lastLocalDir && <span className="hint">{t("请先选择本地目录。")}</span>}
+          {running && <span className="hint">{t("上传进行中，预检暂时禁用。")}</span>}
         </div>
       </section>
 
       <section className="card">
         <div className="sectionhead">
-          <h2>上传前确认</h2>
+          <h2>{t("上传前确认")}</h2>
           <span className={`badge ${cfg.disclaimerAccepted ? "ok" : "warn"}`}>
-            {cfg.disclaimerAccepted ? "免责声明已同意" : "需同意免责声明"}
+            {cfg.disclaimerAccepted ? t("免责声明已同意") : t("需同意免责声明")}
           </span>
         </div>
 
         <div className="disclaimer">
-          <p className="disclaimer-title">勾选即表示你已阅读并同意：</p>
+          <p className="disclaimer-title">{t("勾选即表示你已阅读并同意：")}</p>
           <ul>
-            {disclaimerPoints(platform).map((line) => (
+            {disclaimerPoints(t, platform).map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
@@ -886,13 +897,13 @@ export function Lanzou({
               checked={cfg.disclaimerAccepted}
               onChange={(e) => void toggleDisclaimer(e.target.checked)}
             />
-            <span>我已阅读并同意以上说明</span>
+            <span>{t("我已阅读并同意以上说明")}</span>
           </label>
-          <p className="hint">勾选后会调用后端持久化（写入本机设置）；每次开始上传仍会再弹一次确认。</p>
+          <p className="hint">{t("勾选后会调用后端持久化（写入本机设置）；每次开始上传仍会再弹一次确认。")}</p>
         </div>
 
         {!canRun && (
-          <p className="hint">{licenseHint || "未授权：开始上传会被拒绝，登录与预检仍可用。"}</p>
+          <p className="hint">{licenseHint || t("未授权：开始上传会被拒绝，登录与预检仍可用。")}</p>
         )}
 
         <div className="actions">
@@ -902,39 +913,42 @@ export function Lanzou({
             title={!canRun ? licenseHint : undefined}
             onClick={() => void startUpload()}
           >
-            {busy === "upload" ? "正在启动…" : "开始上传"}
+            {busy === "upload" ? t("正在启动…") : t("开始上传")}
           </button>
           <button className="secondary" onClick={() => void openWeb()}>
-            打开网页端
+            {t("打开网页端")}
           </button>
-          {prepare && !batchFinished && <span className="hint">本次待上传 {prepare.uploadable} 个文件。</span>}
-          {batchFinished && <span className="hint">本批次已结束；如需再次上传，请重新预检。</span>}
+          {prepare && !batchFinished && (
+            <span className="hint">{t("本次待上传 {n} 个文件。", { n: prepare.uploadable })}</span>
+          )}
+          {batchFinished && <span className="hint">{t("本批次已结束；如需再次上传，请重新预检。")}</span>}
         </div>
       </section>
 
       {prepare && !upload && (
         <section className="card">
           <div className="sectionhead">
-            <h2>预检结果</h2>
-            <span className="badge">批次 {prepare.batchId}</span>
+            <h2>{t("预检结果")}</h2>
+            <span className="badge">{t("批次 {id}", { id: prepare.batchId })}</span>
           </div>
 
           <div className="chips">
-            <span className="chip">文件总数 <b>{prepare.total}</b></span>
-            <span className="chip">待上传 <b>{prepare.uploadable}</b></span>
-            <span className="chip">云端重复 <b>{prepare.duplicates}</b></span>
+            <span className="chip">{t("文件总数")} <b>{prepare.total}</b></span>
+            <span className="chip">{t("待上传")} <b>{prepare.uploadable}</b></span>
+            <span className="chip">{t("云端重复")} <b>{prepare.duplicates}</b></span>
             {platform === "lanzou" && (
-              <span className="chip">超 100 MiB <b>{prepare.skippedLarge}</b></span>
+              <span className="chip">{t("超 100 MiB")} <b>{prepare.skippedLarge}</b></span>
             )}
-            <span className="chip">缓存跳过 <b>{prepare.cached}</b></span>
+            <span className="chip">{t("缓存跳过")} <b>{prepare.cached}</b></span>
           </div>
 
           <p className="hint">
-            上传目标：<b>{prepare.folderName || "根目录"}</b>（ID {prepare.folderId}）；本地目录：
+            {t("上传目标：")}<b>{prepare.folderName || t("根目录")}</b>
+            {t("（ID {id}）；本地目录：", { id: prepare.folderId })}
             <code>{prepare.localDir}</code>
           </p>
           <div className="banner info" role="status">
-            预检不会移动或上传任何文件。
+            {t("预检不会移动或上传任何文件。")}
           </div>
           {prepare.message && <p className="hint">{prepare.message}</p>}
 
@@ -945,50 +959,52 @@ export function Lanzou({
       {upload && (
         <section className="card">
           <div className="sectionhead">
-            <h2>上传进度</h2>
+            <h2>{t("上传进度")}</h2>
             <span className={`badge ${upload.phase === "done" ? "ok" : upload.phase === "failed" ? "danger" : "warn"}`}>
-              {PHASE_LABELS[upload.phase] ?? upload.phase}
+              {t(PHASE_LABELS[upload.phase] ?? upload.phase)}
             </span>
           </div>
 
           <div className="chips">
             <span className="chip">
-              完成 <b>{upload.done} / {upload.total}</b>
+              {t("完成")} <b>{upload.done} / {upload.total}</b>
             </span>
             <span className="chip">
-              字节 <b>{formatBytes(upload.bytesSent)} / {formatBytes(upload.bytesTotal)}</b>
+              {t("字节")} <b>{formatBytes(upload.bytesSent)} / {formatBytes(upload.bytesTotal)}</b>
             </span>
-            <span className="chip">并发 <b>{upload.workers}</b></span>
-            <span className="chip">间隔 <b>{upload.intervalMs} ms</b></span>
-            <span className="chip">目标 <b>{upload.folderName || "根目录"}</b></span>
+            <span className="chip">{t("并发")} <b>{upload.workers}</b></span>
+            <span className="chip">{t("间隔")} <b>{upload.intervalMs} ms</b></span>
+            <span className="chip">{t("目标")} <b>{upload.folderName || t("根目录")}</b></span>
           </div>
 
           <div className={`progress ${upload.phase === "running" && upload.bytesTotal <= 0 ? "indeterminate" : ""}`}>
             <div className="bar" style={{ width: `${Math.round(progressRatio(upload) * 100)}%` }} />
           </div>
-          <p className="hint mono ellipsis" title={active.join("、")}>
-            {active.length > 0 ? `正在上传：${active.join("、")}` : "当前没有进行中的文件。"}
+          <p className="hint mono ellipsis" title={active.join(t("、"))}>
+            {active.length > 0
+              ? t("正在上传：{files}", { files: active.join(t("、")) })
+              : t("当前没有进行中的文件。")}
           </p>
 
           {upload.error && <div className="banner error">{upload.error}</div>}
 
           {summary && (
             <div className="lansummary">
-              <span>汇总：共 <b>{summary.total}</b> 项</span>
-              <span>成功 <b>{summary.success}</b></span>
-              <span>秒传 <b>{summary.instant}</b></span>
-              <span>缓存跳过 <b>{summary.cached}</b></span>
-              {summary.skippedLarge > 0 && <span>超限跳过 <b>{summary.skippedLarge}</b></span>}
-              <span>云端重复 <b>{summary.duplicate}</b></span>
-              <span>已取消 <b>{summary.canceled}</b></span>
-              <span className={summary.failed ? "red" : ""}>失败 <b>{summary.failed}</b></span>
+              <span>{t("汇总：共 {total} 项", { total: summary.total })}</span>
+              <span>{t("成功")} <b>{summary.success}</b></span>
+              <span>{t("秒传")} <b>{summary.instant}</b></span>
+              <span>{t("缓存跳过")} <b>{summary.cached}</b></span>
+              {summary.skippedLarge > 0 && <span>{t("超限跳过")} <b>{summary.skippedLarge}</b></span>}
+              <span>{t("云端重复")} <b>{summary.duplicate}</b></span>
+              <span>{t("已取消")} <b>{summary.canceled}</b></span>
+              <span className={summary.failed ? "red" : ""}>{t("失败")} <b>{summary.failed}</b></span>
             </div>
           )}
 
           {!running && (
             <p className="hint">
-              报告：
-              {upload.reportJson ? <code>{upload.reportJson}</code> : "尚未生成"}
+              {t("报告：")}
+              {upload.reportJson ? <code>{upload.reportJson}</code> : t("尚未生成")}
               {upload.reportCsv ? <> · <code>{upload.reportCsv}</code></> : null}
             </p>
           )}
@@ -996,20 +1012,24 @@ export function Lanzou({
           <div className="actions">
             {running && (
               <button className="secondary" disabled={busy === "cancel"} onClick={() => void cancelUpload()}>
-                {busy === "cancel" ? "正在取消…" : "取消上传"}
+                {busy === "cancel" ? t("正在取消…") : t("取消上传")}
               </button>
             )}
             <button className="secondary" disabled={!upload.reportJson || running} onClick={() => void openReport()}>
-              打开报告
+              {t("打开报告")}
             </button>
             <button className="secondary" onClick={() => void openWeb()}>
-              打开网页端
+              {t("打开网页端")}
             </button>
-            {upload.startedAt && <span className="hint">开始时间 {upload.startedAt}</span>}
-            {upload.finishedAt && <span className="hint">结束时间 {upload.finishedAt}</span>}
+            {upload.startedAt && (
+              <span className="hint">{t("开始时间 {time}", { time: upload.startedAt })}</span>
+            )}
+            {upload.finishedAt && (
+              <span className="hint">{t("结束时间 {time}", { time: upload.finishedAt })}</span>
+            )}
           </div>
 
-          <h3 className="subhead">逐条结果（{items.length} 项）</h3>
+          <h3 className="subhead">{t("逐条结果（{n} 项）", { n: items.length })}</h3>
           <ItemTable items={items} />
         </section>
       )}
@@ -1018,25 +1038,25 @@ export function Lanzou({
         <div className="banner error" role="alert">
           <span>{error}</span>
           <button className="link" onClick={() => setError("")}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       )}
 
       <div className="features">
-        <h3>本页功能状态（如实标注）</h3>
+        <h3>{t("本页功能状态（如实标注）")}</h3>
         <p>
-          <span className="kind kind-keep">已接通</span>{" "}
+          <span className="kind kind-keep">{t("已接通")}</span>{" "}
           {platform === "youxiang"
-            ? "账号密码登录、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、分片上传、进度轮询与取消、结果报告与逐条错误原文"
-            : "账号密码登录、粘贴 Cookie 登录、从 C# 版导入、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（超 100 MiB / 本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、上传进度轮询与取消、结果报告与逐条错误原文"}
+            ? t("账号密码登录、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、分片上传、进度轮询与取消、结果报告与逐条错误原文")
+            : t("账号密码登录、粘贴 Cookie 登录、从 C# 版导入、退出登录、DPAPI 本地存凭据、云端目录浏览与面包屑、上传前预检（超 100 MiB / 本机缓存 / 云端同名同大小判定）、并发与请求间隔设置、上传进度轮询与取消、结果报告与逐条错误原文")}
         </p>
         <p>
-          <span className="kind kind-warn">未联调</span>{" "}
+          <span className="kind kind-warn">{t("未联调")}</span>{" "}
           {platform === "youxiang"
-            ? "真实优享账号的登录、列目录、上传与判重尚未联调；分片上传 URL 等存疑项见 docs/ui-shell.md 的「未验证项」。"
-            : "登录成功后的真实目录列表、真实上传与云端判重命中都需要蓝奏账号验证。"}
-          分享创建不在本功能内，请到网页端手动操作。
+            ? t("真实优享账号的登录、列目录、上传与判重尚未联调；分片上传 URL 等存疑项见 docs/ui-shell.md 的「未验证项」。")
+            : t("登录成功后的真实目录列表、真实上传与云端判重命中都需要蓝奏账号验证。")}
+          {t("分享创建不在本功能内，请到网页端手动操作。")}
         </p>
       </div>
     </div>
@@ -1044,35 +1064,38 @@ export function Lanzou({
 }
 
 function ItemTable({ items }: { items: LanzouItem[] }) {
+  const t = useT();
   return (
     <div className="lantablewrap">
       <div className="tablehead lanzouitemhead">
-        <span>状态</span>
-        <span>文件</span>
-        <span className="num">大小</span>
-        <span>说明</span>
+        <span>{t("状态")}</span>
+        <span>{t("文件")}</span>
+        <span className="num">{t("大小")}</span>
+        <span>{t("说明")}</span>
       </div>
       <div className="lanfilelist">
-        {items.length === 0 && <p className="hint lanempty">没有文件。</p>}
+        {items.length === 0 && <p className="hint lanempty">{t("没有文件。")}</p>}
         {items.map((it, i) => (
           <div className="row lanitemrow" key={`${it.localPath}-${i}`}>
             <span className={`kind ${KIND_CLASS[it.kind] ?? "kind-del"}`}>
-              {KIND_LABELS[it.kind] ?? it.kind}
+              {t(KIND_LABELS[it.kind] ?? it.kind)}
             </span>
             <span className="mname" title={it.localPath}>
               {it.name}
             </span>
-            <span className="num">{sizeText(it.size)}</span>
+            <span className="num">{sizeText(t, it.size)}</span>
             <span className="lanitemnote">
               {it.error ? <span className="lanerror">{it.error}</span> : null}
               {it.duplicateOf ? (
                 <span className="inlinehint">
-                  云端同名：{it.duplicateOf}
-                  {it.remoteId ? `（ID ${it.remoteId}）` : ""}
+                  {t("云端同名：{name}", { name: it.duplicateOf })}
+                  {it.remoteId ? t("（ID {id}）", { id: it.remoteId }) : ""}
                 </span>
               ) : null}
-              {it.remoteId && !it.duplicateOf ? <span className="inlinehint">远端 ID：{it.remoteId}</span> : null}
-              {it.movedTo ? <span className="inlinehint">已移动到：{it.movedTo}</span> : null}
+              {it.remoteId && !it.duplicateOf ? (
+                <span className="inlinehint">{t("远端 ID：{id}", { id: it.remoteId })}</span>
+              ) : null}
+              {it.movedTo ? <span className="inlinehint">{t("已移动到：{path}", { path: it.movedTo })}</span> : null}
             </span>
           </div>
         ))}

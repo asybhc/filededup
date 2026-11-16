@@ -231,6 +231,7 @@ export interface LogSettings {
 
 export interface UISettings {
   schemaVersion: number;
+  lang: "zh" | "en";
   scan: ScanSettings;
   organize: OrganizeSettings;
   update: UpdateSettings;

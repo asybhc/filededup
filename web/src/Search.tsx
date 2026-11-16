@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { VirtualList } from "./components/VirtualList";
+import { useT } from "./i18n";
 import type { SearchBackendInfo, SearchMatch, SearchRequest, SearchState } from "./types";
 
 const MB = 1024 * 1024;
@@ -36,6 +37,7 @@ function errorText(err: unknown): string {
  * 但只有滚动窗口附近的页会被拉取与渲染，10 万条结果也不会一次性进 DOM。
  */
 export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: string }) {
+  const t = useT();
   const [roots, setRoots] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"substring" | "wildcard">("substring");
@@ -77,7 +79,7 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
       setBackends(r.backends);
       setError("");
     } catch (err) {
-      setError("读取搜索后端失败：" + errorText(err));
+      setError(t("读取搜索后端失败：{msg}", { msg: errorText(err) }));
     }
   }, []);
 
@@ -103,7 +105,7 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
         return next;
       });
     } catch (err) {
-      if (gen === genRef.current) setError("读取搜索结果失败：" + errorText(err));
+      if (gen === genRef.current) setError(t("读取搜索结果失败：{msg}", { msg: errorText(err) }));
     } finally {
       pendingRef.current.delete(pageIndex);
     }
@@ -161,7 +163,7 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
       return;
     }
     if (roots.length === 0) {
-      setError("请先添加至少一个搜索目录。");
+      setError(t("请先添加至少一个搜索目录。"));
       return;
     }
     const req: SearchRequest = {
@@ -221,7 +223,7 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
       if (!dir) return;
       setRoots((prev) => (prev.some((p) => p.toLowerCase() === dir.toLowerCase()) ? prev : [...prev, dir]));
     } catch (err) {
-      setError("选择目录失败：" + errorText(err));
+      setError(t("选择目录失败：{msg}", { msg: errorText(err) }));
     }
   };
 
@@ -240,72 +242,73 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
   return (
     <div className="searchpage">
       <div className="card">
-        <h2>文件搜索</h2>
+        <h2>{t("文件搜索")}</h2>
         <p className="hint">
-          按文件名或路径搜索一个或多个目录。不带 <code>* ?</code> 时按子串匹配；通配符模式可写 <code>*.jpg</code>、
-          <code>2024/*/report?.pdf</code>。默认后端实时遍历目录，结果与磁盘一致；
-          检测到 Everything（es.exe）时可改用它的索引作为可选后端。
+          {t(
+            "按文件名或路径搜索一个或多个目录。不带 * ? 时按子串匹配；通配符模式可写 *.jpg、2024/*/report?.pdf。默认后端实时遍历目录，结果与磁盘一致；检测到 Everything（es.exe）时可改用它的索引作为可选后端。",
+          )}
         </p>
 
-        <div className="subhead">搜索目录</div>
+        <div className="subhead">{t("搜索目录")}</div>
         <div className="rootlist">
-          {roots.length === 0 && <p className="hint">还没有添加目录。</p>}
+          {roots.length === 0 && <p className="hint">{t("还没有添加目录。")}</p>}
           {roots.map((root) => (
             <div className="rootitem" key={root}>
               <span className="path" title={root}>
                 {root}
               </span>
               <button className="ghost" onClick={() => setRoots((prev) => prev.filter((r) => r !== root))}>
-                移除
+                {t("移除")}
               </button>
             </div>
           ))}
           <button className="ghost" onClick={addRoot} disabled={running}>
-            添加目录
+            {t("添加目录")}
           </button>
         </div>
 
         <div className="grid2">
           <label className="fieldrow">
-            <span>检索后端</span>
+            <span>{t("检索后端")}</span>
             <select
               value={backend}
               onChange={(e) => setBackend(e.target.value as "local" | "everything")}
               disabled={running}
             >
-              <option value="local">本地文件系统</option>
+              <option value="local">{t("本地文件系统")}</option>
               <option value="everything" disabled={!everythingAvailable}>
-                Everything（es.exe）{everythingAvailable ? "" : "（未检测到）"}
+                {t("Everything（es.exe）")}
+                {everythingAvailable ? "" : t("（未检测到）")}
               </option>
             </select>
           </label>
           <label className="fieldrow">
-            <span>关键词</span>
+            <span>{t("关键词")}</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="例如 报告、*.png、2024/旅行"
+              placeholder={t("例如 报告、*.png、2024/旅行")}
               disabled={running}
             />
           </label>
           <label className="fieldrow">
-            <span>匹配方式</span>
+            <span>{t("匹配方式")}</span>
             <select value={mode} onChange={(e) => setMode(e.target.value as "substring" | "wildcard")} disabled={running}>
-              <option value="substring">子串</option>
-              <option value="wildcard">通配符</option>
+              <option value="substring">{t("子串")}</option>
+              <option value="wildcard">{t("通配符")}</option>
             </select>
           </label>
           <label className="fieldrow">
-            <span>扩展名</span>
+            <span>{t("扩展名")}</span>
             <input
               value={extsText}
               onChange={(e) => setExtsText(e.target.value)}
-              placeholder="jpg,png,pdf（留空不限）"
+              placeholder={t("jpg,png,pdf（留空不限）")}
               disabled={running}
             />
           </label>
           <label className="fieldrow">
-            <span>最小 MB</span>
+            <span>{t("最小 MB")}</span>
             <input
               type="number"
               min={0}
@@ -315,74 +318,90 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
             />
           </label>
           <label className="fieldrow">
-            <span>最大 MB</span>
+            <span>{t("最大 MB")}</span>
             <input
               type="number"
               min={0}
               value={maxMB}
               onChange={(e) => setMaxMB(Number(e.target.value))}
-              placeholder="0 表示不限"
+              placeholder={t("0 表示不限")}
               disabled={running}
             />
           </label>
           <label className="fieldrow">
-            <span>排除目录</span>
+            <span>{t("排除目录")}</span>
             <input
               value={excludesText}
               onChange={(e) => setExcludesText(e.target.value)}
-              placeholder="node_modules .git（空格分隔）"
+              placeholder={t("node_modules .git（空格分隔）")}
               disabled={running}
             />
           </label>
         </div>
 
         <p className="hint">
-          检索后端：{backendInfo?.name ?? "读取中…"}
+          {t("检索后端：{name}", { name: backendInfo?.name ?? t("读取中…") })}
           {backendInfo?.message ? ` · ${backendInfo.message}` : ""}
-          {backend === "everything" && everythingInfo?.path ? ` 路径：${everythingInfo.path}` : ""}
+          {backend === "everything" && everythingInfo?.path
+            ? ` ${t("路径：{path}", { path: everythingInfo.path })}`
+            : ""}
           <button className="ghost" onClick={() => void loadBackends()} disabled={running}>
-            重新检测
+            {t("重新检测")}
           </button>
         </p>
         {backend === "everything" && (
           <p className="hint">
-            Everything 后端按 Everything 的搜索语法匹配关键词（目录范围、扩展名、大小、隐藏/系统与排除目录仍按本页条件过滤）；
-            统计里的“候选”是 es.exe 返回的条数，不是遍历过的文件数。
+            {t(
+              "Everything 后端按 Everything 的搜索语法匹配关键词（目录范围、扩展名、大小、隐藏/系统与排除目录仍按本页条件过滤）；统计里的“候选”是 es.exe 返回的条数，不是遍历过的文件数。",
+            )}
           </p>
         )}
 
         <label className="checkrow">
           <input type="checkbox" checked={includeHidden} onChange={(e) => setIncludeHidden(e.target.checked)} disabled={running} />
-          包含隐藏 / 系统文件（不勾选 = 跳过）
+          {t("包含隐藏 / 系统文件（不勾选 = 跳过）")}
         </label>
 
         <div className="actionsrow">
           <button className="primary" onClick={start} disabled={running}>
-            {running ? "搜索中…" : "开始搜索"}
+            {running ? t("搜索中…") : t("开始搜索")}
           </button>
           {running && (
             <button className="ghost" onClick={cancel}>
-              取消
+              {t("取消")}
             </button>
           )}
           {state?.done && (
             <span className="hint">
               {activeBackend === "everything"
-                ? `Everything 返回 ${state.visited} 条候选，命中 ${state.matched} 条`
-                : `遍历 ${state.visited} 个文件 / ${state.dirs} 个目录，命中 ${state.matched} 条`}
-              ，用时 {Math.max(1, Math.round(state.elapsedMs / 1000))} 秒
+                ? t("Everything 返回 {visited} 条候选，命中 {matched} 条", {
+                    visited: state.visited,
+                    matched: state.matched,
+                  })
+                : t("遍历 {visited} 个文件 / {dirs} 个目录，命中 {matched} 条", {
+                    visited: state.visited,
+                    dirs: state.dirs,
+                    matched: state.matched,
+                  })}
+              {t("，用时 {sec} 秒", { sec: Math.max(1, Math.round(state.elapsedMs / 1000)) })}
             </span>
           )}
           {running && state && (
             <span className="hint">
               {activeBackend === "everything"
-                ? `已收到 ${state.visited} 条索引候选，命中 ${state.matched} 条`
-                : `已遍历 ${state.visited} 个文件，命中 ${state.matched} 条`}
+                ? t("已收到 {visited} 条索引候选，命中 {matched} 条", {
+                    visited: state.visited,
+                    matched: state.matched,
+                  })
+                : t("已遍历 {visited} 个文件，命中 {matched} 条", {
+                    visited: state.visited,
+                    matched: state.matched,
+                  })}
             </span>
           )}
         </div>
 
-        {state?.cancelled && <p className="hint warn">已取消，下面只显示取消前已完成的结果。</p>}
+        {state?.cancelled && <p className="hint warn">{t("已取消，下面只显示取消前已完成的结果。")}</p>}
         {state?.error && <p className="error">{state.error}</p>}
         {error && <p className="error">{error}</p>}
       </div>
@@ -390,29 +409,33 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
       {total > 0 && (
         <div className="card fill searchresult">
           <div className="sectionhead">
-            <h2>结果 {total.toLocaleString("zh-CN")} 条</h2>
+            <h2>{t("结果 {n} 条", { n: total.toLocaleString("zh-CN") })}</h2>
             <div className="toolbar">
-              {truncated && <span className="badge warn">已达上限 200000 条，结果被截断</span>}
+              {truncated && <span className="badge warn">{t("已达上限 200000 条，结果被截断")}</span>}
               <button className="ghost" onClick={() => changeSort("name")}>
-                名称{sortMark("name")}
+                {t("名称")}
+                {sortMark("name")}
               </button>
               <button className="ghost" onClick={() => changeSort("size")}>
-                大小{sortMark("size")}
+                {t("大小")}
+                {sortMark("size")}
               </button>
               <button className="ghost" onClick={() => changeSort("modTime")}>
-                修改时间{sortMark("modTime")}
+                {t("修改时间")}
+                {sortMark("modTime")}
               </button>
               <button className="ghost" onClick={() => changeSort("path")}>
-                路径{sortMark("path")}
+                {t("路径")}
+                {sortMark("path")}
               </button>
             </div>
           </div>
           <div className="tablehead searchhead">
-            <span>名称</span>
-            <span className="num">大小</span>
-            <span>修改时间</span>
-            <span>所在目录</span>
-            <span>操作</span>
+            <span>{t("名称")}</span>
+            <span className="num">{t("大小")}</span>
+            <span>{t("修改时间")}</span>
+            <span>{t("所在目录")}</span>
+            <span>{t("操作")}</span>
           </div>
           <VirtualList
             className="tablebody searchbody"
@@ -429,16 +452,16 @@ export function Search({ canRun, licenseHint }: { canRun: boolean; licenseHint: 
                   <span className="pathcell">{row.dir}</span>
                   <span className="rowactions">
                     <button className="ghost" onClick={() => api.revealPath(row.path).catch((e) => setError(errorText(e)))}>
-                      定位
+                      {t("定位")}
                     </button>
                     <button className="ghost" onClick={() => api.openPath(row.path).catch((e) => setError(errorText(e)))}>
-                      打开
+                      {t("打开")}
                     </button>
                   </span>
                 </div>
               ) : (
                 <div className="row memberrow searchrow pending" key={`p-${i}`}>
-                  <span className="hint">加载中…</span>
+                  <span className="hint">{t("加载中…")}</span>
                 </div>
               )
             }

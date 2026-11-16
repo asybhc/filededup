@@ -1,0 +1,91 @@
+// 搜索、设置、诊断等页面的英文词条。
+const enMisc: Record<string, string> = {
+  "语言切换会立即生效并保存到设置文件；重新打开后保持一致。":
+    "Language changes apply immediately and are saved to the settings file.",
+  "语言设置保存失败：{error}": "Failed to save language setting: {error}",
+  "切换界面语言（中文 / English）": "Switch UI language (中文 / English)",
+  // 搜索页
+  文件搜索: "File search",
+  "按文件名或路径搜索一个或多个目录。不带 * ? 时按子串匹配；通配符模式可写 *.jpg、2024/*/report?.pdf。默认后端实时遍历目录，结果与磁盘一致；检测到 Everything（es.exe）时可改用它的索引作为可选后端。":
+    "Search one or more folders by file name or path. Without * ? the text matches substrings; wildcard mode accepts *.jpg, 2024/*/report?.pdf. The default backend walks folders live so results match the disk; if Everything (es.exe) is detected, its index can be used as an optional backend.",
+  搜索目录: "Search folders",
+  "还没有添加目录。": "No folders added yet.",
+  "移除": "Remove",
+  添加目录: "Add folder",
+  检索后端: "Search backend",
+  本地文件系统: "Local file system",
+  "Everything（es.exe）": "Everything (es.exe)",
+  "（未检测到）": " (not detected)",
+  关键词: "Keyword",
+  "例如 报告、*.png、2024/旅行": "e.g. report, *.png, 2024/travel",
+  匹配方式: "Match mode",
+  子串: "Substring",
+  通配符: "Wildcard",
+  扩展名: "Extensions",
+  "jpg,png,pdf（留空不限）": "jpg,png,pdf (empty = any)",
+  "最小 MB": "Min MB",
+  "最大 MB": "Max MB",
+  "0 表示不限": "0 = no limit",
+  排除目录: "Exclude folders",
+  "node_modules .git（空格分隔）": "node_modules .git (space-separated)",
+  "读取中…": "Loading…",
+  "检索后端：{name}": "Backend: {name}",
+  "路径：{path}": "Path: {path}",
+  "Everything 后端按 Everything 的搜索语法匹配关键词（目录范围、扩展名、大小、隐藏/系统与排除目录仍按本页条件过滤）；统计里的“候选”是 es.exe 返回的条数，不是遍历过的文件数。":
+    "The Everything backend matches keywords with Everything's search syntax (folder scope, extensions, size, hidden/system files and exclusions are still filtered by this page); \"candidates\" in the stats are rows returned by es.exe, not the number of files walked.",
+  "包含隐藏 / 系统文件（不勾选 = 跳过）": "Include hidden / system files (unchecked = skip)",
+  "搜索中…": "Searching…",
+  开始搜索: "Start search",
+  "Everything 返回 {visited} 条候选，命中 {matched} 条": "Everything returned {visited} candidates, {matched} matched",
+  "遍历 {visited} 个文件 / {dirs} 个目录，命中 {matched} 条":
+    "Walked {visited} files / {dirs} folders, {matched} matched",
+  "，用时 {sec} 秒": ", in {sec} s",
+  "已收到 {visited} 条索引候选，命中 {matched} 条": "Received {visited} index candidates, {matched} matched",
+  "已遍历 {visited} 个文件，命中 {matched} 条": "Walked {visited} files, {matched} matched",
+  "已取消，下面只显示取消前已完成的结果。": "Cancelled; only results completed before canceling are shown.",
+  "结果 {n} 条": "{n} results",
+  "已达上限 200000 条，结果被截断": "Limit of 200000 reached; results truncated",
+  所在目录: "Folder",
+  定位: "Show in folder",
+  "读取搜索后端失败：{msg}": "Failed to load search backends: {msg}",
+  "读取搜索结果失败：{msg}": "Failed to load search results: {msg}",
+  "请先添加至少一个搜索目录。": "Add at least one search folder first.",
+  "选择目录失败：{msg}": "Failed to choose a folder: {msg}",
+
+  // 设置对话框
+  "托盘只在 Windows 上可用；关闭托盘后“最小化到托盘”会退化为退出。":
+    "The tray is available on Windows only; with the tray disabled, \"Minimize to tray\" falls back to exiting.",
+  "启用定时任务（只做只读扫描，不删除、不整理）": "Enable scheduled tasks (read-only scan, no delete or organize)",
+  执行方式: "Schedule mode",
+  按间隔: "Interval",
+  每日定时: "Daily",
+  "间隔（分钟，10–10080）": "Interval (minutes, 10–10080)",
+  "每天（HH:MM）": "Daily at (HH:MM)",
+  "扫描目录（留空用查重页的根目录）": "Scan folder (empty = roots from the dedup page)",
+  "上次：{time} · {status} · {msg}": "Last run: {time} · {status} · {msg}",
+  "还没有执行记录。": "No runs yet.",
+  "启用 AI 分析（关闭时不发起任何网络请求）": "Enable AI analysis (no network requests when off)",
+  "超时（秒，5–300）": "Timeout (seconds, 5–300)",
+  "已保存 {hint}": "Saved {hint}",
+  "未保存": "Not saved",
+  "密钥用 DPAPI 加密保存在 {path}，界面只显示后四位。":
+    "API key is stored encrypted with DPAPI at {path}; only the last four characters are shown.",
+  "当前平台不支持 DPAPI，密钥无法加密保存。": "This platform does not support DPAPI; the API key cannot be stored encrypted.",
+  "日志目录：{dir}": "Log folder: {dir}",
+
+  // 诊断对话框
+  环境检测: "Environment",
+  "已删除 {n} 个文件，释放 {size}。": "Deleted {n} files, freed {size}.",
+  "{n} 个文件被占用未删除。": "{n} files were locked and not deleted.",
+  "暂无日志文件。": "No log files.",
+  "选择左侧日志文件查看内容（只显示尾部 512 KB）。": "Select a log file on the left to view it (shows the last 512 KB only).",
+  "尚未运行检测。": "No checks run yet.",
+  刷新列表: "Refresh list",
+  打开日志目录: "Open log folder",
+  "清除会删除日志目录下全部 *.log / *.jsonl / *.txt，不可恢复。":
+    "Clearing deletes all *.log / *.jsonl / *.txt files in the log folder. This cannot be undone.",
+  确认清除: "Confirm clear",
+  清除日志: "Clear logs",
+};
+
+export default enMisc;
