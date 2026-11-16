@@ -1692,3 +1692,135 @@ button.link {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* 诊断对话框：左日志列表 + 右预览；环境检测为单列状态表。 */
+.diagdialog {
+  width: min(980px, 94vw);
+}
+
+.dialogactions {
+  display: flex;
+  gap: 8px;
+}
+
+.diagbody {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  min-height: 360px;
+}
+
+.diagbody.single {
+  grid-template-columns: 1fr;
+}
+
+.diaglist {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  overflow: auto;
+  max-height: 420px;
+}
+
+.diagfile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.diagfile:hover {
+  background: var(--soft);
+}
+
+.diagfile.active {
+  border-color: var(--border);
+  background: var(--soft);
+}
+
+.diagfilename {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.diaghint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.diagpreview pre {
+  margin: 0;
+  padding: 10px;
+  height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.envtable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.envrow {
+  display: grid;
+  grid-template-columns: 10px 160px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.envdot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background: var(--muted);
+}
+
+.envdot.ok {
+  background: #22c55e;
+}
+
+.envdot.warn {
+  background: #f59e0b;
+}
+
+.envdot.fail {
+  background: #ef4444;
+}
+
+.envname {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.envdetail {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.envfix {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+}

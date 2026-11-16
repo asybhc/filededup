@@ -742,3 +742,31 @@ export interface TimelineState {
   finishedAt: string;
   elapsedMs: number;
 }
+
+// ---------- 诊断：日志与环境自检（对应 cmd/filededup/diagnostics.go） ----------
+
+export interface LogFileView {
+  name: string;
+  path: string;
+  size: number;
+  modTime: string;
+}
+
+export interface LogOverview {
+  dir: string;
+  files: LogFileView[];
+  totalSize: number;
+}
+
+export interface ClearLogsResult {
+  deleted: number;
+  freed: number;
+  errors: string[];
+}
+
+export interface EnvCheckItem {
+  name: string;
+  status: "ok" | "warn" | "fail" | string;
+  detail: string;
+  fix: string;
+}

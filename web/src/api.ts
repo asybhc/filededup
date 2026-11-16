@@ -7,7 +7,10 @@ import type {
   ExportFormat,
   ExportResult,
   DropPathResult,
+  ClearLogsResult,
+  EnvCheckItem,
   GroupsPage,
+  LogOverview,
   LanzouListing,
   LanzouOptions,
   LanzouPlatform,
@@ -109,6 +112,10 @@ interface WailsApp {
   StartTimeline(req: TimelineRequest): Promise<string>;
   GetTimelineState(id: string): Promise<TimelineState>;
   CancelTimeline(id: string): Promise<void>;
+  GetLogOverview(): Promise<LogOverview>;
+  ReadLogFile(name: string): Promise<string>;
+  ClearLogs(): Promise<ClearLogsResult>;
+  RunEnvironmentCheck(): Promise<EnvCheckItem[]>;
 }
 
 declare global {
@@ -468,5 +475,27 @@ export const api = {
   async cancelTimeline(id: string): Promise<void> {
     const b = bridge();
     if (b) return b.CancelTimeline(id);
+  },
+  async getLogOverview(): Promise<LogOverview> {
+    const b = bridge();
+    if (b) return b.GetLogOverview();
+    return { dir: "浏览器预览无日志目录", files: [], totalSize: 0 };
+  },
+  async readLogFile(name: string): Promise<string> {
+    const b = bridge();
+    if (b) return b.ReadLogFile(name);
+    return `浏览器预览不读取本地日志：${name}`;
+  },
+  async clearLogs(): Promise<ClearLogsResult> {
+    const b = bridge();
+    if (b) return b.ClearLogs();
+    return { deleted: 0, freed: 0, errors: ["浏览器预览不支持清除日志"] };
+  },
+  async runEnvironmentCheck(): Promise<EnvCheckItem[]> {
+    const b = bridge();
+    if (b) return b.RunEnvironmentCheck();
+    return [
+      { name: "运行环境", status: "warn", detail: "浏览器预览：仅展示界面，未连接桌面后端。", fix: "" },
+    ];
   },
 };

@@ -8,6 +8,7 @@ import { Lanzou } from "./Lanzou";
 import { SettingsDialog } from "./Settings";
 import { Search } from "./Search";
 import TimeOrganizer from "./TimeOrganizer";
+import { DiagnosticsDialog } from "./Diagnostics";
 import type {
   AppInfo,
   DedupUndoInfo,
@@ -198,6 +199,7 @@ export default function App() {
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   // 拖放目录的结果提示：成功/不是文件夹/读取失败都在这里说明。
   const [dropNote, setDropNote] = useState("");
   const [licenseText, setLicenseText] = useState("");
@@ -313,6 +315,10 @@ export default function App() {
         setHelpOpen(false);
         return;
       }
+      if (diagOpen) {
+        setDiagOpen(false);
+        return;
+      }
       if (updateOpen) {
         setUpdateOpen(false);
         return;
@@ -337,7 +343,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [helpOpen, updateOpen, licenseOpen, settingsOpen, skipOpen, undoConfirm, confirmOpen]);
+  }, [helpOpen, diagOpen, updateOpen, licenseOpen, settingsOpen, skipOpen, undoConfirm, confirmOpen]);
 
   // 扫描选项变更后自动落盘（600ms 防抖），不阻塞输入。
   useEffect(() => {
@@ -1014,6 +1020,9 @@ export default function App() {
           </button>
           <button className="badge" title="帮助（快捷键 F1）" onClick={() => setHelpOpen(true)}>
             帮助 F1
+          </button>
+          <button className="badge" title="查看日志与环境自检" onClick={() => setDiagOpen(true)}>
+            诊断
           </button>
           <span className="badge">v{info.version || "—"}</span>
           <button
@@ -1721,6 +1730,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {diagOpen && <DiagnosticsDialog onClose={() => setDiagOpen(false)} />}
 
       {settingsOpen && (
         <SettingsDialog
