@@ -32,6 +32,10 @@ import type {
   SearchState,
   SettingsResult,
   SkippedPage,
+  TimelineMeta,
+  TimelinePlan,
+  TimelineRequest,
+  TimelineState,
   UISettings,
   UpdateCheckView,
   UpdateInstallView,
@@ -100,6 +104,11 @@ interface WailsApp {
   LanzouOpenReport(batchId: string): Promise<void>;
   LanzouPickDirectory(): Promise<string>;
   LanzouAcceptDisclaimer(): Promise<void>;
+  GetTimelineMeta(): Promise<TimelineMeta>;
+  PreviewTimeline(req: TimelineRequest): Promise<TimelinePlan>;
+  StartTimeline(req: TimelineRequest): Promise<string>;
+  GetTimelineState(id: string): Promise<TimelineState>;
+  CancelTimeline(id: string): Promise<void>;
 }
 
 declare global {
@@ -387,5 +396,77 @@ export const api = {
     const b = bridge();
     if (b) return b.LanzouAcceptDisclaimer();
     mock.lanzouAcceptDisclaimer();
+  },
+  async getTimelineMeta(): Promise<TimelineMeta> {
+    const b = bridge();
+    if (b) return b.GetTimelineMeta();
+    return {
+      buckets: [
+        { value: "day", label: "按日（2024-03-08）" },
+        { value: "week", label: "按周（2024-W10）" },
+        { value: "month", label: "按月（2024-03）" },
+        { value: "year", label: "按年（2024）" },
+      ],
+      actions: [
+        { value: "move", label: "移动（源目录不再保留）" },
+        { value: "copy", label: "复制（源目录保留）" },
+      ],
+      conflicts: [
+        { value: "rename", label: "改名保留（默认）" },
+        { value: "skip", label: "跳过同名文件" },
+        { value: "overwrite", label: "覆盖同名文件" },
+      ],
+    };
+  },
+  async previewTimeline(req: TimelineRequest): Promise<TimelinePlan> {
+    const b = bridge();
+    if (b) return b.PreviewTimeline(req);
+    // 浏览器预览：给出一份结构完整的合成计划，不做任何落盘。
+    const now = new Date();
+    const bucket =
+      req.bucket === "year"
+        ? String(now.getFullYear())
+        : req.bucket === "month"
+          ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+          : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const items = ["样例照片.jpg", "样例文档.txt"].map((name, i) => ({
+      source: `${req.root || "C:/预览"}${"\\"}${name}`,
+      dest: `${req.target || "C:/预览输出"}${"\\"}${bucket}${"\\"}${name}`,
+      relPath: name,
+      bucket,
+      when: now.toISOString().slice(0, 19).replace("T", " "),
+      whenFrom: i === 0 ? "exif" : "mtime",
+      size: 1024 * (i + 1),
+      status: "ready",
+      note: "",
+    }));
+    return {
+      root: req.root,
+      target: req.target,
+      items,
+      total: items.length,
+      ready: items.length,
+      conflicts: 0,
+      skipped: 0,
+      errored: 0,
+      totalSize: 3072,
+      truncated: false,
+      notes: ["浏览器预览：合成数据，不会落盘。"],
+      plannedFor: now.toISOString(),
+    };
+  },
+  async startTimeline(req: TimelineRequest): Promise<string> {
+    const b = bridge();
+    if (b) return b.StartTimeline(req);
+    throw new Error("浏览器预览不支持真实执行");
+  },
+  async getTimelineState(id: string): Promise<TimelineState> {
+    const b = bridge();
+    if (b) return b.GetTimelineState(id);
+    throw new Error("浏览器预览不支持真实执行");
+  },
+  async cancelTimeline(id: string): Promise<void> {
+    const b = bridge();
+    if (b) return b.CancelTimeline(id);
   },
 };

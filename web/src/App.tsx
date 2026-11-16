@@ -7,6 +7,7 @@ import { Organizer } from "./Organizer";
 import { Lanzou } from "./Lanzou";
 import { SettingsDialog } from "./Settings";
 import { Search } from "./Search";
+import TimeOrganizer from "./TimeOrganizer";
 import type {
   AppInfo,
   DedupUndoInfo,
@@ -187,7 +188,7 @@ export default function App() {
   const [perfRows, setPerfRows] = useState<Row[]>([]);
   const [perfActive, setPerfActive] = useState(false);
   const [fps, setFps] = useState(0);
-  const [view, setView] = useState<"dedup" | "organize" | "lanzou" | "search">("dedup");
+  const [view, setView] = useState<"dedup" | "organize" | "timeline" | "lanzou" | "search">("dedup");
   const [settings, setSettings] = useState<UISettings>();
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsPath, setSettingsPath] = useState("");
@@ -1045,6 +1046,9 @@ export default function App() {
         <button className={view === "organize" ? "active" : ""} onClick={() => setView("organize")}>
           九步整理
         </button>
+        <button className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
+          按时间整理
+        </button>
         <button className={view === "lanzou" ? "active" : ""} onClick={() => setView("lanzou")}>
           蓝奏云上传
         </button>
@@ -1093,6 +1097,8 @@ export default function App() {
               <p className="hint">正在读取设置…</p>
             </section>
           )
+        ) : view === "timeline" ? (
+          <TimeOrganizer canRun={!licenseStop} licenseHint="未授权：按时间整理的真实执行已禁用，预演仍可用。" />
         ) : view === "lanzou" ? (
           settingsReady ? (
             <Lanzou

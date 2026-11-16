@@ -1633,3 +1633,62 @@ button.link {
   padding: 2px 8px;
   font-size: 12px;
 }
+
+/* 按时间整理：整行说明 + 预览表格。 */
+.formgrid .fullrow {
+  grid-column: 1 / -1;
+}
+
+.tlwrap {
+  margin-top: 12px;
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.tl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tl-table th,
+.tl-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tl-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--soft);
+  z-index: 1;
+}
+
+.tl-table tbody td:nth-child(2),
+.tl-table tbody td:nth-child(3) {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-table tr.skipped {
+  opacity: 0.55;
+}
+
+.tl-table .num {
+  text-align: right;
+}
+
+.tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+}

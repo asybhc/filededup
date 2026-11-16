@@ -42,6 +42,13 @@ func (a *App) runningTasks() []string {
 		}
 		j.mu.Unlock()
 	}
+	for _, j := range a.timelineJobs {
+		j.mu.Lock()
+		if j.state.Phase == "running" {
+			out = append(out, "按时间整理")
+		}
+		j.mu.Unlock()
+	}
 	a.mu.Unlock()
 
 	a.searchMu.Lock()

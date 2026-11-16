@@ -28,7 +28,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "0.10.1"
+const appVersion = "0.10.2"
 
 // ScanRequest 是 UI 的扫描参数。只暴露当前流程用得到的字段。
 type ScanRequest struct {
@@ -191,14 +191,19 @@ type App struct {
 	// searches 是本地搜索任务；searchMu 保护这张表，任务内部状态另有锁。
 	searchMu sync.Mutex
 	searches map[string]*searchJob
+
+	// timelineJobs 是按时间整理任务；与 sessions/orgJobs 共用 a.mu 保护挂表操作，
+	// 任务内部状态另有锁。
+	timelineJobs map[string]*timelineJob
 }
 
 func NewApp() *App {
 	return &App{
-		sessions:    make(map[string]*scanSession),
-		orgJobs:     make(map[string]*organizeJob),
-		lanzouPreps: make(map[string]*lanzouPrepare),
-		searches:    make(map[string]*searchJob),
+		sessions:     make(map[string]*scanSession),
+		orgJobs:      make(map[string]*organizeJob),
+		lanzouPreps:  make(map[string]*lanzouPrepare),
+		searches:     make(map[string]*searchJob),
+		timelineJobs: make(map[string]*timelineJob),
 	}
 }
 

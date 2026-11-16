@@ -669,3 +669,76 @@ export interface LanzouUploadState {
   startedAt?: string;
   finishedAt?: string;
 }
+
+// ---------- 按时间整理（对应 cmd/filededup/timeline.go） ----------
+
+export interface TimelineOption {
+  value: string;
+  label: string;
+}
+
+export interface TimelineMeta {
+  buckets: TimelineOption[];
+  actions: TimelineOption[];
+  conflicts: TimelineOption[];
+}
+
+export interface TimelineItem {
+  source: string;
+  dest: string;
+  relPath: string;
+  bucket: string;
+  when: string;
+  whenFrom: string;
+  size: number;
+  status: string;
+  note: string;
+}
+
+export interface TimelinePlan {
+  root: string;
+  target: string;
+  items: TimelineItem[];
+  total: number;
+  ready: number;
+  conflicts: number;
+  skipped: number;
+  errored: number;
+  totalSize: number;
+  truncated: boolean;
+  notes: string[];
+  plannedFor: string;
+}
+
+export interface TimelineRequest {
+  root: string;
+  target: string;
+  bucket: string;
+  action: string;
+  conflict: string;
+  includeHidden: boolean;
+  confirmed: boolean;
+}
+
+export interface TimelineResult {
+  moved: number;
+  copied: number;
+  skipped: number;
+  overwrote: number;
+  failed: number;
+  bytes: number;
+  errors: string[];
+}
+
+export interface TimelineState {
+  id: string;
+  phase: string;
+  total: number;
+  done: number;
+  current: string;
+  error: string;
+  result: TimelineResult;
+  startedAt: string;
+  finishedAt: string;
+  elapsedMs: number;
+}
