@@ -302,6 +302,7 @@ code {
 
 .formgrid input[type="number"],
 .formgrid input[type="text"],
+.formgrid input[type="password"],
 .formgrid input:not([type]),
 .formgrid select {
   padding: 8px 10px;
@@ -310,6 +311,11 @@ code {
   background: var(--card);
   width: 100%;
   min-width: 0;
+}
+
+/* 密码框不再受 Edge/WebView2 原生明文切换按钮影响，输入区宽度与普通输入框一致 */
+.formgrid input[type="password"]::-ms-reveal {
+  display: none;
 }
 
 .formgrid .checkline {

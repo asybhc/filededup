@@ -944,3 +944,28 @@ Go 版走自己的序列，当前 `0.10.10`：
 - 未联调：没有真实优享账号，只验证到「账号不存在」这一层；正确账号/密码下的 appToken、容量、
   上传链路仍未实测，需账号后复测。
 
+### 0.10.14 优享登录账号框与密码框同高同宽
+
+- 根因：`.formgrid` 的输入框样式只匹配 `number / text / 无 type / select`，**漏了 `password`**。
+  密码框退回浏览器默认样式（内边距更小、边框更粗、无圆角与白底），所以肉眼更矮、内文区更窄。
+- 修复（`web/src/styles.css`）：
+  - 在 `.formgrid` 输入框选择器组补上 `input[type="password"]`，两框共用同一份 padding / border /
+    border-radius / background / width / min-width；
+  - 追加 `.formgrid input[type="password"]::-ms-reveal { display: none; }`，避免 WebView2（Edge）
+    的原生「显示密码」按钮挤占输入区。
+- 改前 / 改后（14px 字号、行高 1.65，盒模型为全局 `border-box`）：
+
+  | 项目 | 改前 账号框 / 密码框 | 改后 两框一致 |
+  | --- | --- | --- |
+  | 计算高度 | 41.1px / 29.1px（23.1 行 + 内边距 + 边框） | 41.1px |
+  | `padding` | `8px 10px` / 浏览器默认 `1px 2px` | `8px 10px` |
+  | `border` | `1px solid #e2e6ec` / 默认 `2px inset` | `1px solid #e2e6ec` |
+  | `border-radius` | `8px` / 无 | `8px` |
+  | 背景 | `var(--card)` 白底 / 默认 | `var(--card)` 白底 |
+  | `width` | `100%` / 靠 flex 拉伸 | `100%` |
+  | 内文区宽度 | 略宽 / 因内边距与边框更大而更窄 | 相同 |
+
+- 实测：`web npm run build` 通过（tsc + vite 均无报错）；中英文案都会走同一套输入框样式，
+  未发现溢出。**未实测**：未在桌面窗口里截图逐像素核对；密码框的 `::-ms-reveal` 在 WebView2
+  下是否真的隐藏，需要在桌面端打开登录页确认。
+
