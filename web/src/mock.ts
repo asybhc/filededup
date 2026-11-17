@@ -926,7 +926,7 @@ export const mock = {
       currentVersion,
       latestVersion,
       notes: "浏览器预览不会真的下载或替换程序。",
-      assetName: "fdedup-ui.exe",
+      assetName: "文件整理.一杯好茶.exe",
       assetSize: 12932608,
       sourceUrl: s.update.manifestUrl,
       checkedAt: new Date().toISOString(),

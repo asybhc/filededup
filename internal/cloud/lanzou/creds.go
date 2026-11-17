@@ -8,19 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"filededup/internal/brand"
 )
 
-// CredentialFileName 是凭据文件名。目录与 C# 版一致，都在 %AppData%\FileDedup\lanzou\。
+// CredentialFileName 是凭据文件名，保存在新数据目录的 lanzou 子目录下。
 const CredentialFileName = "lanzou.bin"
 
-// CredentialPath 返回本程序的凭据文件路径：
-// os.UserConfigDir()/FileDedup/lanzou/lanzou.bin（Windows 即 %AppData%\FileDedup\lanzou\lanzou.bin）。
+// CredentialPath 返回本程序的凭据文件路径：<数据目录>/lanzou/lanzou.bin。
 func CredentialPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "lanzou", CredentialFileName), nil
+	return brand.DataSub("lanzou", CredentialFileName)
 }
 
 // SaveCredentials 用 DPAPI（CurrentUser）加密后落盘。

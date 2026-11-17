@@ -1,16 +1,16 @@
-﻿; FileDedup Go 安装包脚本（NSIS 3.x）。
+﻿; 文件整理.一杯好茶 安装包脚本（NSIS 3.x）。
 ;
 ; 约定：
 ;   - 只读写 HKCU，不需要管理员权限（RequestExecutionLevel user）。
-;   - 安装到 %LOCALAPPDATA%\Programs\FileDedupGo，与 C# 版 FileDedupTool
+;   - 安装到 %LOCALAPPDATA%\Programs\文件整理.一杯好茶，与 C# 版 FileDedupTool
 ;     的安装目录、注册表项、快捷方式、可执行文件名全部错开，可共存。
-;   - 卸载只删自己写下的东西；%AppData%\FileDedup（设置、许可证）与
-;     %AppData%\FileDedupTool（与 C# 版共用的试用记录）一律保留。
+;   - 卸载只删自己写下的东西；%AppData%\文件整理.一杯好茶（设置、许可证、凭据）
+;     与 %AppData%\FileDedupTool（与 C# 版共用的试用记录）一律保留。
 ;   - 版本号由打包脚本通过 /DAPP_VERSION=... 注入，避免与代码里的版本漂移。
 ;
 ; 用法（不要直接双击）：
 ;   makensis /DAPP_VERSION=<版本> /DAPP_VERSION4=<四段版本> ^
-;            /DSRC_EXE=<绝对路径>\fdedup-ui.exe /DOUT_FILE=<绝对路径>\Setup.exe scripts\installer.nsi
+;            /DSRC_EXE=<绝对路径>\文件整理.一杯好茶.exe /DOUT_FILE=<绝对路径>\Setup.exe scripts\installer.nsi
 
 Unicode true
 
@@ -26,16 +26,23 @@ Unicode true
   !error "必须通过 /DAPP_VERSION4=... 注入四段版本号"
 !endif
 !ifndef SRC_EXE
-  !define SRC_EXE "..\bin\fdedup-ui.exe"
+  !define SRC_EXE "..\bin\文件整理.一杯好茶.exe"
 !endif
 !ifndef OUT_FILE
-  !define OUT_FILE "..\bin\FileDedupGo-Setup-${APP_VERSION}.exe"
+  !define OUT_FILE "..\bin\文件整理.一杯好茶-Setup-${APP_VERSION}.exe"
+!endif
+!ifndef ICON_ICO
+  !define ICON_ICO "..\assets\brand\app.ico"
 !endif
 
+; 安装包与卸载程序共用同一份多尺寸图标。
+!define MUI_ICON "${ICON_ICO}"
+!define MUI_UNICON "${ICON_ICO}"
+
 ; 与 C# 版（FileDedupTool / 文件去重）明确区分：名称、安装目录、注册表键、exe 名都不同。
-!define APP_NAME "文件去重 Go"
-!define APP_ID "FileDedupGo"
-!define APP_EXE "fdedup-ui.exe"
+!define APP_NAME "文件整理.一杯好茶"
+!define APP_ID "文件整理.一杯好茶"
+!define APP_EXE "文件整理.一杯好茶.exe"
 !define APP_PUBLISHER "一杯好茶"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
 !define APP_REG_KEY "Software\${APP_ID}"
@@ -113,6 +120,6 @@ Section "Uninstall"
   DeleteRegKey HKCU "${APP_REG_KEY}"
 
   ; 有意保留的用户数据（不属于安装目录）：
-  ;   %AppData%\FileDedup\ui-settings.json、license.fdlic
+  ;   %AppData%\文件整理.一杯好茶\ui-settings.json、license.fdlic
   ;   %AppData%\FileDedupTool\trial.dat（与 C# 版共用，删掉等于帮用户重置试用）
 SectionEnd

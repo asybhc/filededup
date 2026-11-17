@@ -24,6 +24,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"filededup/internal/brand"
 	"filededup/internal/update"
 )
 
@@ -58,20 +59,21 @@ type updateCheckState struct {
 }
 
 func updateStatePath() (string, error) {
-	dir, err := os.UserConfigDir()
+	path, err := brand.DataSub("update-state.json")
 	if err != nil {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
-	return filepath.Join(dir, "FileDedup", "update-state.json"), nil
+	return path, nil
 }
 
 // updateCacheDir 返回安装包缓存目录（与下载时使用的目录一致）。
+// 按需求统一落在 %AppData% 的新数据目录下，不再使用 %LocalAppData%。
 func updateCacheDir() (string, error) {
-	cache, err := os.UserCacheDir()
+	path, err := brand.DataSub("updates")
 	if err != nil {
-		return "", fmt.Errorf("无法定位缓存目录：%w", err)
+		return "", fmt.Errorf("无法定位数据目录：%w", err)
 	}
-	return filepath.Join(cache, "FileDedup", "updates"), nil
+	return path, nil
 }
 
 // pruneUpdateCache 清理旧安装包与残留临时文件：只保留最近 2 个，失败只记日志。

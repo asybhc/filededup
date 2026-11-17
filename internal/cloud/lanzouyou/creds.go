@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"filededup/internal/brand"
 	"filededup/internal/cloud/lanzou"
 )
 
@@ -46,13 +47,9 @@ func (c Credentials) MaskedAccount() string {
 	return "****" + a[len(a)-4:]
 }
 
-// CredentialPath 返回 %AppData%\FileDedup\lanzou\youxiang.bin。
+// CredentialPath 返回 <数据目录>\lanzou\youxiang.bin。
 func CredentialPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "lanzou", CredentialFileName), nil
+	return brand.DataSub("lanzou", CredentialFileName)
 }
 
 // SaveCredentials 用 DPAPI 加密后落盘。

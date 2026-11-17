@@ -71,7 +71,7 @@ const enApp: Record<string, string> = {
   "复制失败，请手动选中机器码复制。": "Copy failed; select the machine ID and copy it manually.",
 
   // 顶部标题与工具条
-  文件去重: "File Dedup",
+  "文件整理.一杯好茶": "File Organizer. A Cup of Tea",
   "本地扫描 · 回收站可恢复 · 云端上传为可选":
     "Local scan · recoverable via Recycle Bin · cloud upload optional",
   "浏览器预览（合成数据）": "Browser preview (synthetic data)",

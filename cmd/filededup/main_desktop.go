@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"filededup"
+	"filededup/internal/brand"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -23,7 +24,7 @@ import (
 func main() {
 	app := NewApp()
 	err := wails.Run(&options.App{
-		Title:     "文件去重 FileDedup",
+		Title:     brand.DisplayName,
 		Width:     1360,
 		Height:    900,
 		MinWidth:  1024,

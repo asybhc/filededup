@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"filededup/internal/brand"
 	"filededup/internal/engine/model"
 	"filededup/internal/engine/scan"
 
@@ -39,11 +40,7 @@ type ScheduleRunState struct {
 }
 
 func scheduleStatePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "schedule-state.json"), nil
+	return brand.DataSub("schedule-state.json")
 }
 
 func loadScheduleState() ScheduleRunState {

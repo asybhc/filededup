@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"filededup/internal/brand"
 )
 
 const (
@@ -51,12 +53,13 @@ type trialSource struct {
 	exists bool
 }
 
+// trialDir 返回试用记录的落盘目录；迁移会把旧 FileDedupTool 里的 trial.dat 复制过来。
 func trialDir() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := brand.DataDir()
 	if err != nil {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
-	return filepath.Join(dir, "FileDedupTool"), nil
+	return dir, nil
 }
 
 // trialPassword 复刻旧版的密钥来源：固定前缀 + 机器码原始字节的

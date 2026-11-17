@@ -14,6 +14,8 @@ import (
 	"unsafe"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"filededup/internal/brand"
 )
 
 const (
@@ -255,7 +257,7 @@ func (t *trayController) loop() {
 	nid.Flags = nifMessage | nifIcon | nifTip
 	nid.CallbackMessage = trayCallback
 	nid.Icon = syscall.Handle(icon)
-	copy(nid.Tip[:len(nid.Tip)-1], syscall.StringToUTF16("文件去重 FileDedup"))
+	copy(nid.Tip[:len(nid.Tip)-1], syscall.StringToUTF16(brand.DisplayName))
 	if r, _, _ := pShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&nid))); r == 0 {
 		pDestroyWindow.Call(hwnd)
 		return

@@ -11,18 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"filededup/internal/brand"
 )
 
 // FileName 是密钥文件名。
 const FileName = "key.bin"
 
-// Path 返回 AI 密钥文件路径：<用户配置目录>/FileDedup/ai/key.bin。
+// Path 返回 AI 密钥文件路径：<数据目录>/ai/key.bin。
 func Path() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "ai", FileName), nil
+	return brand.DataSub("ai", FileName)
 }
 
 // Save 加密并原子写入密钥。空字符串等同于 Clear。

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"filededup/internal/brand"
 	"filededup/internal/engine/organize"
 )
 
@@ -64,11 +65,7 @@ func (j *organizeUndoJournal) snapshot() []organize.UndoRecord {
 }
 
 func organizeUndoPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "organize-undo.json"), nil
+	return brand.DataSub("organize-undo.json")
 }
 
 func saveOrganizeUndo(id, root string, started time.Time, records []organize.UndoRecord) error {

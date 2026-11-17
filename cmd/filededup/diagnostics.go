@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	"filededup/internal/logx"
+	"filededup/internal/brand"
 )
 
 // diagPathWithin 判断 child 是否位于 parent 之内（含相等）。
@@ -58,13 +58,9 @@ type EnvCheckItem struct {
 	Fix    string `json:"fix"`
 }
 
-// logsRoot 返回日志根目录（<配置目录>/FileDedup/logs）。
+// logsRoot 返回日志根目录（<数据目录>/logs，操作清单在其 ops 子目录）。
 func logsRoot() (string, error) {
-	ops, err := logx.DefaultDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Dir(ops), nil
+	return brand.DataSub("logs")
 }
 
 // logExt 判断是否是日志文件。
@@ -175,7 +171,7 @@ func (a *App) RunEnvironmentCheck() []EnvCheckItem {
 		{
 			Name:   "应用版本",
 			Status: "ok",
-			Detail: fmt.Sprintf("%s（%s/%s）", appVersion, runtime.GOOS, runtime.GOARCH),
+			Detail: fmt.Sprintf("%s %s（%s/%s）", brand.DisplayName, appVersion, runtime.GOOS, runtime.GOARCH),
 		},
 	}
 
@@ -187,7 +183,7 @@ func (a *App) RunEnvironmentCheck() []EnvCheckItem {
 			Fix:    "检查系统环境变量 APPDATA / HOME 是否正常。",
 		})
 	} else {
-		base := filepath.Join(cfg, "FileDedup")
+		base := filepath.Join(cfg, brand.DataDirName)
 		if err := os.MkdirAll(base, 0o755); err != nil {
 			items = append(items, EnvCheckItem{
 				Name: "配置目录", Status: "fail", Detail: err.Error(),
@@ -235,14 +231,16 @@ func (a *App) RunEnvironmentCheck() []EnvCheckItem {
 		})
 	}
 
-	if _, err := os.Stat(filepath.Join(cfg, "FileDedup", "ui-settings.json")); err == nil {
-		items = append(items, EnvCheckItem{
-			Name: "配置文件", Status: "ok", Detail: "ui-settings.json 可读取，旧配置缺失键按默认值处理。",
-		})
-	} else {
-		items = append(items, EnvCheckItem{
-			Name: "配置文件", Status: "warn", Detail: "尚未生成 ui-settings.json，首次启动会使用默认设置。",
-		})
+	if settingsFile, err := brand.DataSub("ui-settings.json"); err == nil {
+		if _, statErr := os.Stat(settingsFile); statErr == nil {
+			items = append(items, EnvCheckItem{
+				Name: "配置文件", Status: "ok", Detail: "ui-settings.json 可读取，旧配置缺失键按默认值处理。",
+			})
+		} else {
+			items = append(items, EnvCheckItem{
+				Name: "配置文件", Status: "warn", Detail: "尚未生成 ui-settings.json，首次启动会使用默认设置。",
+			})
+		}
 	}
 
 	items = append(items, everythingCheck())

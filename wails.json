@@ -1,13 +1,13 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "filededup",
-  "outputfilename": "filededup",
+  "name": "文件整理.一杯好茶",
+  "outputfilename": "文件整理.一杯好茶",
   "frontend:dir": "web",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "filededup"
+    "name": "一杯好茶"
   }
 }

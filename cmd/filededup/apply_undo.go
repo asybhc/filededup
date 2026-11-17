@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"filededup/internal/brand"
 	"filededup/internal/engine/apply"
 	"filededup/internal/engine/model"
 	"filededup/internal/platform"
@@ -124,11 +125,7 @@ func (j *dedupUndoJournal) Record(a model.Action) error {
 }
 
 func dedupUndoPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "dedup-undo.json"), nil
+	return brand.DataSub("dedup-undo.json")
 }
 
 // saveDedupUndo 落盘本次执行记录。没有回收站删除动作时不写，

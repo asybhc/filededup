@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"filededup/internal/brand"
 	"filededup/internal/engine/model"
 )
 
@@ -417,7 +418,7 @@ footer{color:#8a93a0;font-size:12px;margin-top:24px}
 		b.WriteString("</tbody></table></section>\n")
 	}
 
-	fmt.Fprintf(&b, `<footer>本报告由文件去重 v%s 生成；以 dedup-report- 开头的 .html/.csv 会被本工具后续扫描自动忽略，不会出现在查重结果中。</footer>`+"\n", esc(appVersion))
+	fmt.Fprintf(&b, `<footer>本报告由%s v%s 生成；以 dedup-report- 开头的 .html/.csv 会被本工具后续扫描自动忽略，不会出现在查重结果中。</footer>`+"\n", esc(brand.DisplayName), esc(appVersion))
 	b.WriteString("</body>\n</html>\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }

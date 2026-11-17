@@ -56,13 +56,26 @@ try {
     "#1": {
       "0409": {
         "identity": { "name": "filededup", "version": "$version4" },
-        "description": "文件去重 Go",
+        "description": "文件整理.一杯好茶",
         "execution-level": "as invoker",
         "ui-access": false,
         "auto-elevate": false,
         "dpi-awareness": "system",
         "long-path-aware": true
       }
+    }
+  },
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "..\\..\\assets\\brand\\icons\\icon16.png",
+        "..\\..\\assets\\brand\\icons\\icon24.png",
+        "..\\..\\assets\\brand\\icons\\icon32.png",
+        "..\\..\\assets\\brand\\icons\\icon48.png",
+        "..\\..\\assets\\brand\\icons\\icon64.png",
+        "..\\..\\assets\\brand\\icons\\icon128.png",
+        "..\\..\\assets\\brand\\icons\\icon256.png"
+      ]
     }
   },
   "RT_VERSION": {
@@ -72,12 +85,12 @@ try {
         "info": {
           "0409": {
             "CompanyName": "一杯好茶",
-            "FileDescription": "一杯好茶.文件整理 Go",
+            "FileDescription": "文件整理.一杯好茶",
             "FileVersion": "$version4",
-            "InternalName": "fdedup-ui",
+            "InternalName": "文件整理.一杯好茶",
             "LegalCopyright": "Copyright © 一杯好茶",
-            "OriginalFilename": "fdedup-ui.exe",
-            "ProductName": "一杯好茶.文件整理 Go",
+            "OriginalFilename": "文件整理.一杯好茶.exe",
+            "ProductName": "文件整理.一杯好茶",
             "ProductVersion": "$version4"
           }
         }
@@ -97,7 +110,7 @@ try {
     }
     if (-not (Test-Path $syso)) { throw "go-winres 未产出 $syso" }
 
-    $out = Join-Path $root "bin/fdedup-ui.exe"
+    $out = Join-Path $root "bin/文件整理.一杯好茶.exe"
     & go build -tags "desktop,production" -trimpath -ldflags "-s -w -H windowsgui" -o $out ./cmd/filededup
     if ($LASTEXITCODE -ne 0) { throw "go build 失败（退出码 $LASTEXITCODE）" }
 
@@ -119,7 +132,14 @@ try {
     if ($vi.FileVersion -ne $version4) { throw "FileVersion=$($vi.FileVersion)，期望 $version4" }
     if ($vi.ProductVersion -ne $version4) { throw "ProductVersion=$($vi.ProductVersion)，期望 $version4" }
     if ($vi.CompanyName -ne "一杯好茶") { throw "CompanyName=$($vi.CompanyName)，期望 一杯好茶" }
-    if ($vi.ProductName -ne "一杯好茶.文件整理 Go") { throw "ProductName=$($vi.ProductName)" }
+    if ($vi.ProductName -ne "文件整理.一杯好茶") { throw "ProductName=$($vi.ProductName)" }
+    if ($vi.FileDescription -ne "文件整理.一杯好茶") { throw "FileDescription=$($vi.FileDescription)" }
+
+    # 校验 4：图标资源必须可被系统读出（不是只看文件大小）。
+    Add-Type -AssemblyName System.Drawing
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($out)
+    if (-not $icon) { throw "未能从 exe 读出图标资源" }
+    $icon.Dispose()
 
     $item = Get-Item $out
     $hash = (Get-FileHash $out -Algorithm SHA256).Hash

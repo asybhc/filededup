@@ -21,6 +21,8 @@ func TestMain(m *testing.M) {
 
 // 临时冒烟测试：验证 UI 后端门面（App）与引擎的真实接线。
 func TestAppSmoke(t *testing.T) {
+	// 执行阶段会写操作日志；AppData 指到临时目录，避免污染真实数据目录。
+	t.Setenv("AppData", t.TempDir())
 	root := t.TempDir()
 	dirA := filepath.Join(root, "照片", "2024")
 	dirB := filepath.Join(root, "备份")
@@ -257,6 +259,9 @@ func TestSettingsTolerance(t *testing.T) {
 
 // TestOrganizeJob 覆盖整理器的试运行与真跑：试运行不落盘，真跑只删重复项。
 func TestOrganizeJob(t *testing.T) {
+	// 真跑会写整理撤销文件与操作日志；把 AppData 指到临时目录，避免污染真实数据目录
+	// （否则预建的新数据目录会让启动迁移在真机上变成空操作）。
+	t.Setenv("AppData", t.TempDir())
 	root := t.TempDir()
 	keepPath := filepath.Join(root, "甲", "原图.txt")
 	dupPath := filepath.Join(root, "乙", "原图 副本.txt")

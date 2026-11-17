@@ -2,7 +2,7 @@
 #
 # 用法：
 #   powershell -File scripts/build-installer.ps1              # 先重建 exe 再打包
-#   powershell -File scripts/build-installer.ps1 -SkipBuild   # 复用现有 bin\fdedup-ui.exe
+#   powershell -File scripts/build-installer.ps1 -SkipBuild   # 复用现有 bin\文件整理.一杯好茶.exe
 #
 # makensis 查找顺序：显式参数 -Makensis > 已知全路径 > PATH。
 # 任何一步失败都直接报错，不会产出半成品。
@@ -34,19 +34,19 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "build-desktop.ps1 失败（退出码 $LASTEXITCODE）" }
     }
 
-    $exe = Join-Path $root "bin/fdedup-ui.exe"
+    $exe = Join-Path $root "bin/文件整理.一杯好茶.exe"
     if (-not (Test-Path $exe)) { throw "缺少 $exe：请先执行 build-desktop.ps1" }
 
     # 再挡一次 stub：即使有人绕过构建脚本，也不让普通 go build 的产物进安装包。
     $exeBytes = [IO.File]::ReadAllBytes($exe)
     if ([Text.Encoding]::ASCII.GetString($exeBytes).Contains("will not build without the correct build tags")) {
-        throw "bin/fdedup-ui.exe 是 Wails stub（缺 production tag），拒绝打包"
+        throw "bin/文件整理.一杯好茶.exe 是 Wails stub（缺 production tag），拒绝打包"
     }
 
     # 版本资源必须与 app.go 一致，防止复用旧 exe 打出错版本安装包。
     $exeVI = (Get-Item $exe).VersionInfo
     if ($exeVI.FileVersion -ne $version4) {
-        throw "bin/fdedup-ui.exe 的 FileVersion=$($exeVI.FileVersion)，期望 $version4：请重新执行 build-desktop.ps1"
+        throw "bin/文件整理.一杯好茶.exe 的 FileVersion=$($exeVI.FileVersion)，期望 $version4：请重新执行 build-desktop.ps1"
     }
 
     # makensis：优先显式参数，其次用户级便携版全路径，最后 PATH。
@@ -61,11 +61,13 @@ try {
         throw "找不到 makensis.exe。请安装 NSIS 或用 -Makensis 指定全路径。"
     }
 
-    $out = Join-Path $root "bin/FileDedupGo-Setup-$version.exe"
+    $out = Join-Path $root "bin/文件整理.一杯好茶-Setup-$version.exe"
     if (Test-Path $out) { Remove-Item $out -Force }
+    $icon = Join-Path $root "assets/brand/app.ico"
+    if (-not (Test-Path $icon)) { throw "缺少图标 $icon" }
 
     & $makensisExe "/V2" "/DAPP_VERSION=$version" "/DAPP_VERSION4=$version4" `
-        "/DSRC_EXE=$exe" "/DOUT_FILE=$out" (Join-Path $PSScriptRoot "installer.nsi")
+        "/DSRC_EXE=$exe" "/DOUT_FILE=$out" "/DICON_ICO=$icon" (Join-Path $PSScriptRoot "installer.nsi")
     if ($LASTEXITCODE -ne 0) { throw "makensis 失败（退出码 $LASTEXITCODE）" }
     if (-not (Test-Path $out)) { throw "makensis 未产出 $out" }
 

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"filededup/internal/brand"
 )
 
 const (
@@ -372,11 +374,11 @@ func verifyLegacyLicense(text string, fp [10]byte, now time.Time) (License, erro
 }
 
 func licenseDir() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := brand.DataDir()
 	if err != nil {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
-	return filepath.Join(dir, "FileDedup"), nil
+	return dir, nil
 }
 
 // LicensePath 返回本机许可证文件的存放路径。

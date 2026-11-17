@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"filededup/internal/brand"
 )
 
 // uploadCacheMaxEntries 是本机上传缓存的条目上限，超出后按上传时间淘汰最旧的。
@@ -34,13 +36,9 @@ type UploadCache struct {
 	Entries       map[string]CacheEntry `json:"entries"`
 }
 
-// CachePath 返回缓存文件路径：%AppData%\FileDedup\lanzou\upload-cache.json。
+// CachePath 返回缓存文件路径：<数据目录>\lanzou\upload-cache.json。
 func CachePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "FileDedup", "lanzou", "upload-cache.json"), nil
+	return brand.DataSub("lanzou", "upload-cache.json")
 }
 
 // LoadUploadCache 读取缓存；文件不存在或损坏时返回空缓存，不阻断上传。

@@ -88,12 +88,11 @@ code {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  background: #fff;
+  border: 1px solid var(--line);
+  object-fit: contain;
+  display: block;
+  flex: none;
 }
 
 .brand h1 {

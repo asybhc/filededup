@@ -5,10 +5,12 @@ package platform
 import (
 	"syscall"
 	"unsafe"
+
+	"filededup/internal/brand"
 )
 
 // instanceMutexName 是单实例互斥体名（Local\ 前缀：同一登录会话内唯一）。
-const instanceMutexName = `Local\FileDedupTool.SingleInstance`
+const instanceMutexName = brand.SingleInstanceName
 
 const errorAlreadyExists = 183
 

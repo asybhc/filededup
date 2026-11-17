@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"filededup/internal/brand"
 	"filededup/internal/engine/model"
 	"filededup/internal/secret"
 )
@@ -193,13 +194,13 @@ func DefaultSettings() UISettings {
 	}
 }
 
-// settingsPath 返回配置文件路径：用户配置目录下 FileDedup/ui-settings.json。
+// settingsPath 返回配置文件路径：新数据目录下的 ui-settings.json。
 func settingsPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	path, err := brand.DataSub("ui-settings.json")
 	if err != nil {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
-	return filepath.Join(dir, "FileDedup", "ui-settings.json"), nil
+	return path, nil
 }
 
 // LoadSettings 读取配置。第二个返回值是给用户看的提示，正常时为空。

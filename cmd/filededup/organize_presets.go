@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"filededup/internal/brand"
 )
 
 const (
@@ -52,11 +54,11 @@ type organizePresetFile struct {
 
 // organizePresetsPath 返回预设文件路径：用户配置目录下 FileDedup/organize-presets.json。
 func organizePresetsPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	path, err := brand.DataSub("organize-presets.json")
 	if err != nil {
 		return "", fmt.Errorf("无法定位用户配置目录：%w", err)
 	}
-	return filepath.Join(dir, "FileDedup", "organize-presets.json"), nil
+	return path, nil
 }
 
 // loadOrganizePresets 读取预设文件；文件不存在时返回空列表。

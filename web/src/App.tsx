@@ -9,6 +9,7 @@ import { SettingsDialog } from "./Settings";
 import { Search } from "./Search";
 import TimeOrganizer from "./TimeOrganizer";
 import { DiagnosticsDialog } from "./Diagnostics";
+import logo from "./assets/logo.png";
 import { getLang, setLang, tr, useT } from "./i18n";
 import type {
   AppInfo,
@@ -1139,9 +1140,9 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="logo">FD</div>
+          <img className="logo" src={logo} alt={t("文件整理.一杯好茶")} />
           <div>
-            <h1>{t("文件去重")}</h1>
+            <h1>{t("文件整理.一杯好茶")}</h1>
             <p>{t("本地扫描 · 回收站可恢复 · 云端上传为可选")}</p>
           </div>
         </div>
@@ -1889,7 +1890,7 @@ export default function App() {
 
             <p className="hint">
               {t("执行日志已写入用户配置目录下的 {path}。删除后的文件不在结果列表中刷新，建议重新扫描确认。", {
-                path: "FileDedup/ops",
+                path: "文件整理.一杯好茶/logs/ops",
               })}
             </p>
             <div className="actions">
