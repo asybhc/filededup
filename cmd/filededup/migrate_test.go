@@ -80,17 +80,18 @@ func TestMigrateCopiesOldDirsAndKeepsOriginals(t *testing.T) {
 	}
 }
 
-func TestMigrateSkipsWhenNewDirExists(t *testing.T) {
+func TestMigrateSkipsWhenMarkerExists(t *testing.T) {
 	base := t.TempDir()
 	newDir := filepath.Join(base, "文件整理.一杯好茶")
 	oldData := filepath.Join(base, "FileDedup")
 
 	writeTestFile(t, filepath.Join(oldData, "ui-settings.json"), "old")
 	writeTestFile(t, filepath.Join(newDir, "ui-settings.json"), "new")
+	writeTestFile(t, filepath.Join(newDir, migrationMarker), "done\n")
 
 	results := migrateDataDirs(base, newDir)
 	if len(results) != 0 {
-		t.Fatalf("新目录已存在时不应迁移，实际返回 %d 个来源", len(results))
+		t.Fatalf("已有完成标记时不应迁移，实际返回 %d 个来源", len(results))
 	}
 	if got := readTestFile(t, filepath.Join(newDir, "ui-settings.json")); got != "new" {
 		t.Fatalf("新目录被覆盖：%q", got)
@@ -98,6 +99,40 @@ func TestMigrateSkipsWhenNewDirExists(t *testing.T) {
 	// 旧目录继续保留。
 	if got := readTestFile(t, filepath.Join(oldData, "ui-settings.json")); got != "old" {
 		t.Fatalf("旧目录内容变化：%q", got)
+	}
+}
+
+func TestMigrateRetriesWhenMarkerMissing(t *testing.T) {
+	base := t.TempDir()
+	newDir := filepath.Join(base, "文件整理.一杯好茶")
+	oldData := filepath.Join(base, "FileDedup")
+	oldTool := filepath.Join(base, "FileDedupTool")
+
+	// 模拟上次半途中断：新目录已存在、没有标记，只复制到了一半。
+	writeTestFile(t, filepath.Join(newDir, "ui-settings.json"), "new")
+	writeTestFile(t, filepath.Join(oldData, "ui-settings.json"), "old")
+	writeTestFile(t, filepath.Join(oldData, "lanzou", "lanzou.bin"), "encrypted")
+	writeTestFile(t, filepath.Join(oldTool, "trial.dat"), "trial")
+
+	results := migrateDataDirs(base, newDir)
+	if len(results) != 2 {
+		t.Fatalf("缺少完成标记时应继续迁移，实际返回 %d 个来源", len(results))
+	}
+	if got := readTestFile(t, filepath.Join(newDir, "ui-settings.json")); got != "new" {
+		t.Fatalf("重试覆盖了新目录已有文件：%q", got)
+	}
+	if got := readTestFile(t, filepath.Join(newDir, "lanzou", "lanzou.bin")); got != "encrypted" {
+		t.Fatalf("缺失文件未补齐：%q", got)
+	}
+	if got := readTestFile(t, filepath.Join(newDir, "trial.dat")); got != "trial" {
+		t.Fatalf("第二个来源未补齐：%q", got)
+	}
+	if _, err := os.Stat(filepath.Join(newDir, migrationMarker)); err != nil {
+		t.Fatalf("补齐成功后应写入完成标记：%v", err)
+	}
+	// 再次运行不再重复迁移。
+	if results := migrateDataDirs(base, newDir); len(results) != 0 {
+		t.Fatalf("完成标记写入后不应再次迁移，实际 %d", len(results))
 	}
 }
 

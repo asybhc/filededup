@@ -996,3 +996,41 @@ Go 版走自己的序列，当前 `0.10.10`：
 - **未实测**：真实的签名清单 + release 安装包端到端下载/替换尚未联调（当前 latest release 无清单资产）；
   等发布 0.10.15 并附带清单后再验证。手动覆盖地址的旧分支保持原样，未回归。
 
+### 0.10.16 系统体检：迁移中断可重试、扫描防重复启动
+
+体检按「数据安全 → 凭据 → 更新链 → 并发 → 错误处理 → 界面」顺序只读排查，
+本轮修复两项会造成实际损失的问题，其余列清单待确认。
+
+- 修复 1：数据目录迁移半途中断后永远无法补齐（`cmd/filededup/migrate.go`）。
+  - 原行为：只判断新目录是否存在，一旦新目录被创建（哪怕只复制了一部分就断电/崩溃），
+    后续启动直接跳过，缺失的 `lanzou.bin`、`trial.dat` 等永不补齐，旧目录虽保留但新目录长期缺文件。
+  - 现行为：以 `<新目录>/.migration-complete` 标记为准。无标记时继续复制并只补缺失文件
+    （已存在文件一律不覆盖）；全部来源无失败才写标记；有失败下次启动重试。
+  - 单测：`TestMigrateRetriesWhenMarkerMissing`（模拟半途中断：不覆盖已有文件、补齐缺失文件、
+    写标记、再次运行不重复迁移）；`TestMigrateSkipsWhenMarkerExists`。实测
+    `go test -tags desktop ./cmd/filededup/ -run 'TestMigrate' -v` → 5 个用例 PASS。
+- 修复 2：扫描按钮与托盘事件可并发启动重复扫描（`web/src/App.tsx` `startScan`）。
+  - 原行为：`startScan` 是异步函数，点击后到 `setBusy(true)` 之间没有同步守卫，
+    双击按钮或「打开主窗口」托盘事件连发时会发出两次 StartScan，产生两个扫描任务竞争同一状态。
+  - 现行为：新增 `startingScanRef`，进入即置位、`finally` 复位；守卫期内重复调用直接返回。
+- 体检已核对、未改动（结论为安全）：
+  - 回收站失败不会静默转永久删除（`internal/platform/trash_windows.go` 返回错误，执行器记 Failed）；
+  - 撤销恢复不覆盖原位置同名文件（`internal/platform/restore_windows.go:60`、`:118`）；
+  - 整理路径拒绝绝对路径、盘符、`..` 逃逸与超长路径（`internal/engine/organize/exec.go` `resolveRel`）；
+  - 跨卷复制走临时文件 + 大小校验 + 原子重命名，源文件保留（`copyFileAtomic`）；
+  - 回收站/永久删除前复核大小与修改时间，永久删除额外复核 SHA-256（`internal/engine/apply/apply.go` `precheck`）；
+  - 勾选未知路径返回 `ErrSelectionUnknown`，不会被计划执行器静默跳过（`internal/engine/plan`）；
+  - 凭据文件 DPAPI 加密、权限 0600（`internal/secret`、`lanzou.bin`），日志与诊断未发现明文密码/Cookie/token；
+  - 更新清单与安装包 Ed25519/长度/SHA-256 校验分支完整，无空签名绕过路径；缓存清理只作用于更新缓存目录。
+- 待确认清单（未改，需授权后处理）：
+  1. 中：撤销恢复同名项可能取错版本。`restore_windows.go:69-77` 仅按「文件名 + 原目录」匹配回收站项，
+     同名文件多次删除时按回收站枚举顺序取第一个，可能恢复旧版本。复现：同一目录下同名文件删除两次后撤销。
+  2. 中：CLI `fdedup apply --plan` 不校验动作路径是否在计划根目录内（`cmd/fdedup/apply.go:48-83`）。
+     计划 JSON 可写入任意绝对路径，需显式 `--yes` 才执行；桌面端不受影响（走引擎内存计划）。
+  3. 低：蓝奏老版 HTTP 客户端未设总超时（`internal/cloud/lanzou/client.go:58`），仅靠调用方 ctx；
+     服务端无响应且调用方 ctx 无 deadline 时可能长时间挂起。上传大文件需要长超时，未直接收紧。
+- 校验：`web npm run build`、`go vet ./...`、`go vet -tags desktop ./...`、
+  `go test ./...`、`go test -tags desktop ./...` 全部退出码 0。
+- **未实测**：修复 1 的断电/杀进程真实中断场景只用单测模拟，未在真机迁移中人为中断；
+  修复 2 的双击与托盘连发未在桌面窗口实际连点验证。
+

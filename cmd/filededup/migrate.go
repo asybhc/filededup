@@ -5,7 +5,8 @@ package main
 // 品牌改名后的数据迁移：把旧 %AppData% 目录复制到新目录，旧目录保留以便回滚。
 //
 // 约定：
-//   - 仅当新目录不存在时执行；新目录已存在则完全不覆盖。
+//   - 已完成迁移（有 .migration-complete 标记）时不再执行；新目录里已有的文件一律不覆盖。
+//   - 上次复制中途失败没有写标记时，下次启动继续补齐缺失文件。
 //   - 复制而非移动，旧目录原样保留。
 //   - 任何失败只记录日志，不阻塞启动。
 //   - 迁移来源、文件/目录条目数与失败明细写入 <新目录>/logs/migration.log。
@@ -51,12 +52,17 @@ func migrateLegacyData() {
 	writeMigrationLog(newDir, results)
 }
 
-// migrateDataDirs 是迁移的可测试入口：新目录已存在时直接返回空结果，不做任何覆盖。
+// 迁移完成标记：写在新数据目录根下。只有完整成功（没有失败项）才写入；
+// 上次若因磁盘满、文件被占用等中断，下次启动会继续补齐缺失文件（已存在的跳过）。
+const migrationMarker = ".migration-complete"
+
+// migrateDataDirs 是迁移的可测试入口：已有完成标记时直接返回空结果；
+// 新目录存在但没有标记（例如上次复制中途失败）时继续补齐，不覆盖已有文件。
 func migrateDataDirs(configBase, newDir string) []migrationResult {
-	if info, err := os.Stat(newDir); err == nil {
-		if info.IsDir() {
-			return nil
-		}
+	if _, err := os.Stat(filepath.Join(newDir, migrationMarker)); err == nil {
+		return nil
+	}
+	if info, err := os.Stat(newDir); err == nil && !info.IsDir() {
 		logMigrationFailure("", newDir, "新数据目录路径已被同名文件占用，跳过迁移")
 		return nil
 	}
@@ -72,7 +78,31 @@ func migrateDataDirs(configBase, newDir string) []migrationResult {
 		}
 		results = append(results, copyLegacyDir(src, newDir))
 	}
+	if len(results) == 0 {
+		writeMigrationMarker(newDir)
+		return nil
+	}
+	failed := false
+	for _, r := range results {
+		if len(r.Failed) > 0 {
+			failed = true
+			break
+		}
+	}
+	if !failed {
+		writeMigrationMarker(newDir)
+	}
 	return results
+}
+
+func writeMigrationMarker(newDir string) {
+	if err := os.MkdirAll(newDir, 0o755); err != nil {
+		logMigrationFailure("", newDir, fmt.Sprintf("无法创建新数据目录：%v", err))
+		return
+	}
+	if err := os.WriteFile(filepath.Join(newDir, migrationMarker), []byte(time.Now().Format(time.RFC3339)+"\n"), 0o600); err != nil {
+		logMigrationFailure("", newDir, fmt.Sprintf("无法写入迁移完成标记：%v", err))
+	}
 }
 
 // copyLegacyDir 把 src 的内容递归复制进 dst；目标已存在的条目跳过，不覆盖。

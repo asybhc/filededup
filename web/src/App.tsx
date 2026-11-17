@@ -788,7 +788,10 @@ export default function App() {
     }
   }
 
+  const startingScanRef = useRef(false);
   async function startScan() {
+    if (startingScanRef.current) return;
+    startingScanRef.current = true;
     setError("");
     setScan(undefined);
     setExec(undefined);
@@ -810,6 +813,8 @@ export default function App() {
       setStep("scan");
     } catch (err) {
       setError(errorText(err));
+    } finally {
+      startingScanRef.current = false;
     }
   }
 
