@@ -1034,3 +1034,26 @@ Go 版走自己的序列，当前 `0.10.10`：
 - **未实测**：修复 1 的断电/杀进程真实中断场景只用单测模拟，未在真机迁移中人为中断；
   修复 2 的双击与托盘连发未在桌面窗口实际连点验证。
 
+### 0.10.17 撤销恢复按大小+删除时间唯一定位版本
+
+- 根因：`internal/platform/restore_windows.go` 只按「文件名 + 原目录」匹配回收站项并取第一个。
+  同一目录下同名文件被先后删除两次时，撤销可能恢复旧版本，新版本再也找不回。
+- 修复：
+  - `RestoreTarget` 新增 `Size`、`DeletedAt` 两个匹配指纹（`internal/platform/restore.go`）；
+    撤销调用方把 `dedup-undo.json` 里的 `size`、`deletedAt` 一起传入（`cmd/filededup/apply_undo.go:255-265`）。
+  - PowerShell 恢复脚本先把清单按 JSON 行读取；候选项按「文件名 + DeletedFrom」收窄后：
+    已知大小时先按 `System.Size` 精确过滤；仍有多项时按 `System.Recycle.DateDeleted`
+    取与记录删除时间最接近的一项（仅允许唯一最小差且 ≤300 秒）。
+    无法唯一确定（同大小同时间、大小全不一致、时间缺失）时返回
+    「无法确定要恢复的版本」，绝不静默取第一条。
+  - 未改动：不覆盖原位置同名文件、目录不存在先建目录、结果文件 DONE 校验、平台不支持时的既有失败原因。
+- 单测（Windows 真实回收站，`go test ./internal/platform/ -run TestRestoreFromTrash -v`）：
+  - `TestRestoreFromTrashPicksCorrectVersionBySize`：同名两版本先后入回收站，按记录大小分别恢复，
+    内容分别等于第一版/第二版；
+  - `TestRestoreFromTrashAmbiguousSameSize`：同名同大小、无法用删除时间区分时返回失败原因
+    「回收站中有 2 个同名项，无法确定要恢复的版本」，原位置不出现文件；
+  - 既有的 RoundTrip / Missing / NoOverwrite / Empty 全部通过。
+- **未实测**：桌面端点击「撤销上次删除」走完整 UI 路径未实测（绑定层单测通过）；
+  回收站 `System.Recycle.DateDeleted` 在不同 Windows 版本/非英文系统上的属性可用性未逐一验证；
+  歧义用例会在系统回收站留下两条临时测试项（已在用例注释标注）。
+

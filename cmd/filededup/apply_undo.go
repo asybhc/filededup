@@ -253,10 +253,16 @@ func (a *App) UndoLastDedup() (DedupUndoResult, error) {
 	}
 
 	paths := make([]string, 0, len(f.Trash))
+	targets := make([]platform.RestoreTarget, 0, len(f.Trash))
 	for _, e := range f.Trash {
 		paths = append(paths, e.Path)
+		targets = append(targets, platform.RestoreTarget{
+			Path:      e.Path,
+			Size:      e.Size,
+			DeletedAt: e.DeletedAt,
+		})
 	}
-	rep := platform.RestoreFromTrash(paths)
+	rep := platform.RestoreFromTrash(targets)
 
 	res := DedupUndoResult{
 		RequestID:    f.RequestID,

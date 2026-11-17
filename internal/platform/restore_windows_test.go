@@ -35,7 +35,7 @@ func TestRestoreFromTrashRoundTrip(t *testing.T) {
 		t.Fatalf("删除空子目录失败：%v", err)
 	}
 
-	rep := RestoreFromTrash([]string{path})
+	rep := RestoreFromTrash([]RestoreTarget{{Path: path}})
 	if len(rep.Results) != 1 {
 		t.Fatalf("恢复结果条数 = %d，期望 1", len(rep.Results))
 	}
@@ -62,7 +62,7 @@ func TestRestoreFromTrashRoundTrip(t *testing.T) {
 // TestRestoreFromTrashMissing 验证“回收站里没有对应项”时返回明确失败而非成功。
 func TestRestoreFromTrashMissing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fdedup-never-in-trash.txt")
-	rep := RestoreFromTrash([]string{path})
+	rep := RestoreFromTrash([]RestoreTarget{{Path: path}})
 	if len(rep.Results) != 1 {
 		t.Fatalf("恢复结果条数 = %d，期望 1", len(rep.Results))
 	}
@@ -83,7 +83,7 @@ func TestRestoreFromTrashNoOverwrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte("later-created"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	rep := RestoreFromTrash([]string{path})
+	rep := RestoreFromTrash([]RestoreTarget{{Path: path}})
 	if len(rep.Results) != 1 {
 		t.Fatalf("恢复结果条数 = %d，期望 1", len(rep.Results))
 	}
@@ -97,6 +97,86 @@ func TestRestoreFromTrashNoOverwrite(t *testing.T) {
 	if err != nil || string(got) != "later-created" {
 		t.Fatalf("已有文件不应被改动：content=%q err=%v", got, err)
 	}
+}
+
+// TestRestoreFromTrashPicksCorrectVersionBySize 验证同目录同名文件先后删除两次后，
+// 按撤销记录里的大小能各自恢复对应版本，而不是按枚举顺序取第一个。
+func TestRestoreFromTrashPicksCorrectVersionBySize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fdedup-two-versions.txt")
+	v1 := []byte("version-one")
+	v2 := []byte("version-two-is-longer")
+
+	if err := os.WriteFile(path, v1, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Trash(path); err != nil {
+		t.Skipf("回收站不可用，跳过：%v", err)
+	}
+	if err := os.WriteFile(path, v2, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Trash(path); err != nil {
+		t.Skipf("回收站不可用，跳过：%v", err)
+	}
+
+	// 先恢复第二版（撤销最近一次删除）。
+	rep := RestoreFromTrash([]RestoreTarget{{Path: path, Size: int64(len(v2))}})
+	if len(rep.Results) != 1 || !rep.Results[0].OK {
+		t.Fatalf("按大小恢复第二版失败：%+v", rep.Results)
+	}
+	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, v2) {
+		t.Fatalf("恢复的不是第二版：content=%q err=%v", got, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	// 再恢复第一版。
+	rep = RestoreFromTrash([]RestoreTarget{{Path: path, Size: int64(len(v1))}})
+	if len(rep.Results) != 1 || !rep.Results[0].OK {
+		t.Fatalf("按大小恢复第一版失败：%+v", rep.Results)
+	}
+	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, v1) {
+		t.Fatalf("恢复的不是第一版：content=%q err=%v", got, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("同名两版本按大小分别恢复成功，回收站项数=%d", rep.BinItems)
+}
+
+// TestRestoreFromTrashAmbiguousSameSize 验证同名同大小且无法用删除时间区分时，
+// 返回明确的“无法确定要恢复的版本”，不静默取第一条。
+// 注意：该用例会在系统回收站留下两条同名同大小的临时测试项。
+func TestRestoreFromTrashAmbiguousSameSize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fdedup-ambiguous.txt")
+	body := []byte("same-bytes-same-size")
+
+	for i := 0; i < 2; i++ {
+		if err := os.WriteFile(path, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := Trash(path); err != nil {
+			t.Skipf("回收站不可用，跳过：%v", err)
+		}
+	}
+
+	rep := RestoreFromTrash([]RestoreTarget{{Path: path, Size: int64(len(body))}})
+	if len(rep.Results) != 1 {
+		t.Fatalf("恢复结果条数 = %d，期望 1", len(rep.Results))
+	}
+	if rep.Results[0].OK {
+		t.Fatalf("无法唯一确定版本时不应报告恢复成功")
+	}
+	if !strings.Contains(rep.Results[0].Err, "无法确定要恢复的版本") {
+		t.Fatalf("失败原因应说明无法确定版本，实际：%q", rep.Results[0].Err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("不应静默恢复任意一个版本")
+	}
+	t.Logf("同名同大小歧义按预期拒绝：%s", rep.Results[0].Err)
 }
 
 // TestRestoreFromTrashEmpty 验证空输入不调用脚本且返回空结果。

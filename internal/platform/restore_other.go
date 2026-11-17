@@ -10,9 +10,10 @@ package platform
 // 调用方（查重侧撤销）会把这些原因原样展示给用户，而不是假装成功。
 
 // RestoreFromTrash 在非 Windows 平台返回明确的“不支持”原因。
-func RestoreFromTrash(paths []string) RestoreReport {
-	if len(paths) == 0 {
+func RestoreFromTrash(targets []RestoreTarget) RestoreReport {
+	if len(targets) == 0 {
 		return RestoreReport{}
 	}
-	return failedRestore(paths, "当前平台不支持自动从回收站撤销，请在系统回收站中手动还原")
+	reason := "当前平台不支持自动从回收站撤销，请在系统回收站中手动还原"
+	return failedRestore(targets, reason)
 }
