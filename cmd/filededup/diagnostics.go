@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -281,13 +280,17 @@ func (a *App) RunEnvironmentCheck() []EnvCheckItem {
 }
 
 func everythingCheck() EnvCheckItem {
-	if p, err := exec.LookPath("es.exe"); err == nil {
-		return EnvCheckItem{Name: "Everything 搜索后端", Status: "ok", Detail: "已检测到 " + p + "（供搜索功能选用）。"}
+	if p, err := findEverythingCLI(); err == nil {
+		detail := "已检测到 " + p + "（供搜索功能选用）。"
+		if !everythingProcessRunning() {
+			detail += " 当前未检测到运行中的 Everything。"
+		}
+		return EnvCheckItem{Name: "Everything 搜索后端", Status: "ok", Detail: detail}
 	}
 	return EnvCheckItem{
 		Name: "Everything 搜索后端", Status: "warn",
-		Detail: "未在 PATH 中找到 es.exe；搜索页仍可使用本地文件系统后端。",
-		Fix:    "如需 Everything 后端，请安装 Everything 并把 es.exe 放入 PATH。",
+		Detail: "未找到 es.exe（Everything 1.5 安装包不再自带该命令行工具）；搜索页仍可使用本地文件系统后端。",
+		Fix:    "从 voidtools 下载 ES，把 es.exe 放入 PATH 或 Everything 安装目录，然后回搜索页点“重新检测”。",
 	}
 }
 

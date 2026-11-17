@@ -98,14 +98,17 @@ func (a *App) StartSearch(req SearchRequest) (string, error) {
 	}
 
 	backend := strings.ToLower(strings.TrimSpace(req.Backend))
+	everythingCLI := ""
 	switch backend {
 	case "", "local":
 		backend = "local"
 	case "everything":
 		// 后端不可用时立刻报原因，避免建出一个注定失败的任务。
-		if _, err := findEverythingCLI(); err != nil {
+		cli, err := findEverythingCLI()
+		if err != nil {
 			return "", err
 		}
+		everythingCLI = cli
 	default:
 		return "", fmt.Errorf("不支持的搜索后端：%s", req.Backend)
 	}
@@ -145,7 +148,7 @@ func (a *App) StartSearch(req SearchRequest) (string, error) {
 		var res *search.Result
 		var err error
 		if backend == "everything" {
-			res, err = runEverythingSearch(ctx, ereq, onProgress)
+			res, err = runEverythingSearch(ctx, everythingCLI, ereq, onProgress)
 		} else {
 			res, err = search.Run(ctx, ereq, search.Options{
 				HiddenFile: searchHiddenFile,

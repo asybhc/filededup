@@ -881,3 +881,25 @@ Go 版走自己的序列，当前 `0.10.10`：
   Windows Explorer 是否按预期选中该文件、文件已被移动/删除时的报错展示未实测；
   危险源拒绝对话（扫描页与整理页选择整盘或系统目录后的提示）未在桌面 UI 实际触发；
   整理侧拒绝只由单测与代码路径覆盖，未走界面按钮验证；性能压测模式下隐藏该列的视觉效果未截图核对。
+
+### 0.10.12 本地搜索 Everything 后端真正可用
+
+- 根因：Everything 1.5 安装包不再附带 es.exe，原检测只查 PATH 与
+  `%ProgramFiles%\Everything` / `%ProgramFiles(x86)%` / `%LOCALAPPDATA%` 三个固定目录，
+  本机 Everything 1.5 已安装并运行但目录内只有 Everything.exe，检测判为不可用，下拉被禁用。
+- findEverythingCLI 探测顺序改为：PATH → 卸载注册表项（InstallLocation / DisplayIcon）、
+  Everything 服务 ImagePath、常见安装目录（Everything / Everything 1.5a / Everything 1.4）→
+  `%LOCALAPPDATA%\Programs`（深度 4）与 Program Files（深度 4）有界搜索 es.exe（2 万条目预算，
+  结果缓存 60 秒，不跟随符号链接）。
+- 静默失败处理：es.exe 对不存在目录、Everything 未运行时都返回 0 且无输出。
+  现在查询前先 os.Stat 每个根目录，全部不可用时报「搜索目录不可用：…」；
+  混合根目录时保留有效结果并登记跳过项；es.exe 返回 0 候选且未检测到 Everything.exe 进程时
+  报「es.exe 没有返回任何结果：未检测到运行中的 Everything」。
+- 诊断页的 Everything 自检改用同一检测函数，并提示 Everything 是否在运行；搜索页后端说明同步提示。
+- 新增 testdata/fake-es（测试期编译为 es.exe）证明 `-n`/`-path`/关键词参数确实传给子进程，
+  并覆盖输出解析、缺失目录原因与混合目录行为。
+- 实测：本机真实 es.exe（`%LOCALAPPDATA%\Programs\AIPanBot\_internal\tools\es.exe`，1.1.0.27）
+  被检测命中；实际命令 `es.exe -n 3 -path "C:\Program Files\Everything" *.exe` 退出码 0，
+  stdout 首行 `C:\Program Files\Everything\Everything.exe`；应用内链路 visits=1、matches=1。
+- 未实测：es.exe 进程被杀/Everything 退出时的界面提示未在 GUI 中点击验证（仅代码路径与单测）；
+  非 PATH、非 Programs 的自定义安装位置未在真机验证。

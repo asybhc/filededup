@@ -55,13 +55,18 @@ func (a *App) GetSearchBackends() SearchBackends {
 		everything.Available = true
 		everything.Path = p
 		everything.Message = "由 Everything 索引返回候选，再按本页的扩展名、大小、隐藏与排除条件过滤。"
+		if !everythingProcessRunning() {
+			everything.Message += " 当前未检测到运行中的 Everything，查询前请先启动它。"
+		}
 	} else {
 		everything.Message = err.Error()
 	}
 	return SearchBackends{Backends: []SearchBackendInfo{local, everything}}
 }
 
-// findEverythingCLI 定位 Everything 的命令行客户端 es.exe。优先 PATH，其次常见安装目录。
+// findEverythingCLI 定位 Everything 的命令行客户端 es.exe。
+// Everything 1.5 安装包不再附带 es.exe，位置不受安装目录约束，
+// 因此按「PATH → 注册表/服务/常见安装目录 → 程序目录有界搜索」逐级探测。
 func findEverythingCLI() (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", errors.New("Everything 后端仅支持 Windows")
@@ -69,27 +74,38 @@ func findEverythingCLI() (string, error) {
 	if p, err := exec.LookPath("es.exe"); err == nil {
 		return p, nil
 	}
-	var candidates []string
-	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"} {
-		if dir := os.Getenv(env); dir != "" {
-			candidates = append(candidates, filepath.Join(dir, "Everything", "es.exe"))
-		}
-	}
-	for _, p := range candidates {
+	for _, p := range everythingCandidatePaths() {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p, nil
 		}
 	}
-	return "", errors.New("未找到 es.exe：请安装 Everything 并把 es.exe 放入 PATH，然后在搜索页重新检测")
+	return "", errors.New("未找到 es.exe：Everything 1.5 安装包不再自带该命令行工具。请从 voidtools 下载 ES，并把 es.exe 放入 PATH 或 Everything 安装目录，然后在搜索页点“重新检测”")
+}
+
+// everythingCandidatePaths 列出 PATH 之外的 es.exe 候选路径（注册表、服务、常见目录、有界搜索）。
+func everythingCandidatePaths() []string {
+	var out []string
+	for _, dir := range everythingWindowsExtraDirs() {
+		if dir != "" {
+			out = append(out, filepath.Join(dir, "es.exe"))
+		}
+	}
+	if p := everythingScannedES(); p != "" {
+		out = append(out, p)
+	}
+	return out
 }
 
 // runEverythingSearch 用 es.exe 查询每个根目录，再按与本地后端一致的界面条件过滤。
 // es.exe 只负责给出候选路径；扩展名、大小、隐藏/系统属性与排除目录仍由这里判断，
 // 因此两个后端对同一条件的最终筛选口径一致。
-func runEverythingSearch(ctx context.Context, req search.Request, progress func(search.Progress)) (*search.Result, error) {
-	cli, err := findEverythingCLI()
-	if err != nil {
-		return nil, err
+func runEverythingSearch(ctx context.Context, cli string, req search.Request, progress func(search.Progress)) (*search.Result, error) {
+	if cli == "" {
+		var err error
+		cli, err = findEverythingCLI()
+		if err != nil {
+			return nil, err
+		}
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -99,20 +115,31 @@ func runEverythingSearch(ctx context.Context, req search.Request, progress func(
 	res := &search.Result{Limit: limit}
 	seen := make(map[string]bool, 16)
 	var visited int64
+	var unusable []string
 
 	for _, root := range req.Roots {
 		if ctx.Err() != nil {
 			return res, ctx.Err()
+		}
+		// es.exe 对不存在的路径会静默返回空结果并以 0 退出，
+		// 这里先自查目录，避免界面显示「0 条结果」却没有任何原因。
+		st, statErr := os.Stat(root)
+		if statErr != nil {
+			unusable = append(unusable, fmt.Sprintf("%s（%v）", root, statErr))
+			res.Skipped = append(res.Skipped, search.Skip{Path: root, Reason: "目录不可访问：" + statErr.Error()})
+			continue
+		}
+		if !st.IsDir() {
+			unusable = append(unusable, root+"（不是目录）")
+			res.Skipped = append(res.Skipped, search.Skip{Path: root, Reason: "不是目录"})
+			continue
 		}
 		remain := limit - len(res.Matches)
 		if remain <= 0 {
 			res.Truncated = true
 			break
 		}
-		args := []string{"-n", strconv.Itoa(remain), "-path", root}
-		if q := strings.TrimSpace(req.Query); q != "" {
-			args = append(args, q)
-		}
+		args := everythingArgs(remain, root, req.Query)
 		cmd := exec.CommandContext(ctx, cli, args...)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -137,6 +164,11 @@ func runEverythingSearch(ctx context.Context, req search.Request, progress func(
 				continue
 			}
 			return nil, fmt.Errorf("无法运行 Everything（es.exe）：%w", err)
+		}
+		// es.exe 在 Everything 未运行时不会报错，只会输出空结果；
+		// 这种情况下必须把真实原因透出，而不是让界面显示 0 条。
+		if len(lines) == 0 && len(res.Matches) == 0 && !everythingProcessRunning() {
+			return nil, fmt.Errorf("es.exe 没有返回任何结果：未检测到运行中的 Everything（%s）", cli)
 		}
 
 		hitLimit := len(lines) >= remain
@@ -171,6 +203,10 @@ func runEverythingSearch(ctx context.Context, req search.Request, progress func(
 	}
 
 	res.Visited = visited
+	// 所有根目录都不可访问时给出明确原因，而不是交出一份空结果。
+	if len(req.Roots) > 0 && len(unusable) == len(req.Roots) {
+		return nil, fmt.Errorf("搜索目录不可用：%s", strings.Join(unusable, "；"))
+	}
 	res.Truncated = res.Truncated || len(res.Matches) >= limit
 	sort.Slice(res.Matches, func(i, j int) bool {
 		a, b := strings.ToLower(res.Matches[i].Path), strings.ToLower(res.Matches[j].Path)
@@ -180,6 +216,15 @@ func runEverythingSearch(ctx context.Context, req search.Request, progress func(
 		return res.Matches[i].Path < res.Matches[j].Path
 	})
 	return res, nil
+}
+
+// everythingArgs 组装 es.exe 的查询参数：-n 限制条数，-path 限定根目录，空关键词表示列出该目录全部条目。
+func everythingArgs(remain int, root, query string) []string {
+	args := []string{"-n", strconv.Itoa(remain), "-path", root}
+	if q := strings.TrimSpace(query); q != "" {
+		args = append(args, q)
+	}
+	return args
 }
 
 // everythingLines 解码 es.exe 输出并按行拆成绝对路径。控制台输出在中文 Windows
