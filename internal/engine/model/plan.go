@@ -29,8 +29,11 @@ type Plan struct {
 	RequestID     string      `json:"requestId"`
 	CreatedAt     string      `json:"createdAt"` // UTC RFC3339Nano
 	Source        PlanSource  `json:"source"`
-	Actions       []Action    `json:"actions"`
-	Summary       PlanSummary `json:"summary"`
+	// Roots 是计划声明的扫描根目录（绝对路径）。CLI apply 用它校验每条动作的
+	// src/dst 都在根目录内，防止计划 JSON 被改成越界路径后执行。
+	Roots   []string    `json:"roots,omitempty"`
+	Actions []Action    `json:"actions"`
+	Summary PlanSummary `json:"summary"`
 }
 
 // Summarize 依据 Actions 计算 Summary。执行器与 UI 都必须使用同一实现。

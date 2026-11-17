@@ -1057,3 +1057,26 @@ Go 版走自己的序列，当前 `0.10.10`：
   回收站 `System.Recycle.DateDeleted` 在不同 Windows 版本/非英文系统上的属性可用性未逐一验证；
   歧义用例会在系统回收站留下两条临时测试项（已在用例注释标注）。
 
+### 0.10.18 CLI apply 增加计划根目录守卫
+
+- 根因：`fdedup apply --plan` 接受任意外部 JSON，旧代码只做 schema 校验，不检查动作路径是否在扫描根内；
+  人为改成根外绝对路径或含 `..` 的计划会照常删除/移动/改属性（需显式 `--yes`）。
+- 修复：
+  - `model.Plan` 新增 `roots`（`internal/engine/model/plan.go`），由 `FromScan` 从扫描请求的根目录写入
+    （`internal/engine/plan/plan.go`）。
+  - 新增 `cmd/fdedup/apply_guard.go`：执行前逐条校验 `src`/`dst` 都落在根目录内；
+    `-root` 可重复指定并优先于计划内 roots，两者都为空时拒绝执行旧计划。
+  - 越界判断先 `filepath.Abs` + `Clean`，再 `EvalSymlinks` 取真实路径（目标尚不存在时解析最近已存在祖先）；
+    `filepath.Rel` 结果以 `..` 开头或为绝对路径、跨卷即视为越界。
+  - 守卫在打开操作清单之前调用（`cmd/fdedup/apply.go:60-69`），整批拒绝时磁盘零改动；
+    `--yes` 语义与 `--dry-run` 分支保持原样。
+- 单测（`go test ./cmd/fdedup/ -run TestApplyRootGuard -v`，全部 PASS）：
+  - `TestApplyRootGuardAllowsInsideRoot`：根内 remove_dir 正常执行；
+  - `TestApplyRootGuardRejectsDotDot`：`root/../outside/victim.txt` 被拒（退出码 2），victim 内容未变；
+  - `TestApplyRootGuardRejectsAbsoluteOutside`：根外绝对路径被拒，文件未变；
+  - `TestApplyRootGuardRejectsSymlinkOutside`：根内符号链接指向根外，按真实路径拒绝，文件未变；
+  - `TestApplyRootGuardRequiresRoots`：旧计划无 roots 且未给 `-root` 时拒绝；补 `-root` 后正常执行；
+  - `TestApplyRootGuardReportsOffendingAction`：错误信息包含「第 2 条动作」与越界文件名，整批不执行。
+- **未实测**：桌面端不使用 `--plan` 文件路径，不受影响；未在真实用户计划上演练（单测用临时目录）；
+  UNC 路径与盘符切换场景未单独建用例（`filepath.Rel` 跨卷报错即拒绝，代码路径已覆盖但未实测）。
+

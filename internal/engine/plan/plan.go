@@ -79,6 +79,7 @@ func FromScan(res *model.Result, opt Options) (*model.Plan, error) {
 		RequestID:     requestID,
 		CreatedAt:     createdAt.Format(time.RFC3339Nano),
 		Source:        model.PlanFromScan,
+		Roots:         append([]string(nil), res.Request.Roots...),
 		Actions:       []model.Action{},
 	}
 	known := map[string]bool{}

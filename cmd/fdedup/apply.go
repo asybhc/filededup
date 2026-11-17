@@ -22,6 +22,8 @@ func runApply(args []string) int {
 	fs := flag.NewFlagSet("apply", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	planPath := fs.String("plan", "", "计划 JSON")
+	var roots rootFlags
+	fs.Var(&roots, "root", "计划根目录（可重复；计划未声明 roots 时必填）")
 	dryRun := fs.Bool("dry-run", false, "只复核不执行")
 	yes := fs.Bool("yes", false, "确认执行")
 	continueOnError := fs.Bool("continue-on-error", false, "单条失败后继续")
@@ -57,6 +59,12 @@ func runApply(args []string) int {
 	}
 	if err := plan.Validate(&p); err != nil {
 		fmt.Fprintf(os.Stderr, "计划校验失败：%v\n", err)
+		return 2
+	}
+	// 根目录校验必须在任何落盘动作（含打开操作清单）之前完成：
+	// 计划 JSON 可以被人为改成越界路径，越界时整批拒绝、不执行任何一条。
+	if err := validateActionRoots(&p, roots); err != nil {
+		fmt.Fprintf(os.Stderr, "计划根目录校验失败：%v\n", err)
 		return 2
 	}
 
