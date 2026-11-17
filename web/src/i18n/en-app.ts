@@ -32,6 +32,7 @@ const enApp: Record<string, string> = {
   "已更新到 {version}，程序即将重启。备份：{backup}": "Updated to {version}; the app will restart. Backup: {backup}",
   "安装已取消：{error}": "Installation cancelled: {error}",
   "未配置（不检查）": "Not configured (no check)",
+  "内置默认（GitHub {repo} 最新发布）": "Built-in default (latest GitHub release of {repo})",
   "自动，每 {hours} 小时": "Automatic, every {hours} h",
   "取消跳过 {version}": "Unskip {version}",
   "发现新版本 v{version}": "New version available: v{version}",

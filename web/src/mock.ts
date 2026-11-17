@@ -900,13 +900,7 @@ export const mock = {
   checkForUpdate(manual: boolean): UpdateCheckView {
     const s = readSettings();
     const currentVersion = "0.8.0";
-    if (!s.update.manifestUrl.trim()) {
-      return {
-        status: "disabled",
-        message: "未配置更新源。填写清单地址后才会检查更新。",
-        currentVersion,
-      };
-    }
+    const auto = !s.update.manifestUrl.trim();
     if (!manual && s.update.checkMode !== "auto") {
       return { status: "manual", message: "当前为手动检查模式。", currentVersion };
     }
@@ -928,7 +922,7 @@ export const mock = {
       notes: "浏览器预览不会真的下载或替换程序。",
       assetName: "文件整理.一杯好茶.exe",
       assetSize: 12932608,
-      sourceUrl: s.update.manifestUrl,
+      sourceUrl: auto ? "内置默认源（asybhc/filededup 最新 release）" : s.update.manifestUrl,
       checkedAt: new Date().toISOString(),
     };
   },

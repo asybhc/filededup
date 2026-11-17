@@ -451,7 +451,8 @@ powershell -File scripts/build-installer.ps1            # 安装包 bin\FileDedu
 
 ## 自动更新
 
-- 入口：顶栏“检查更新”；有新版时按钮显示“有更新 vX”。更新源默认为空，**留空不检查**。
+- 入口：顶栏“检查更新”；有新版时按钮显示“有更新 vX”。更新源默认走内置仓库最新 release，
+  `manifestUrl` 留空即自动（手动填写作为覆盖项，见 0.10.15）。
 - 配置（`ui-settings.json` 的 `update` 段）：`manifestUrl`、`checkMode`（`auto` / `manual`）、
   `intervalHours`（1–720，默认 18）、`skippedVersion`。启动后按间隔自动检查一次，有更新只点亮入口，不主动弹窗。
 - 信任链（全部失败即拒绝，没有“忽略签名继续”的开关）：
@@ -968,4 +969,30 @@ Go 版走自己的序列，当前 `0.10.10`：
 - 实测：`web npm run build` 通过（tsc + vite 均无报错）；中英文案都会走同一套输入框样式，
   未发现溢出。**未实测**：未在桌面窗口里截图逐像素核对；密码框的 `::-ms-reveal` 在 WebView2
   下是否真的隐藏，需要在桌面端打开登录页确认。
+
+### 0.10.15 更新源自动检测（内置默认源）
+
+- 行为：
+  - 设置里的「更新清单地址」留空 → 自动查询 GitHub 仓库 `asybhc/filededup` 的 **latest release**，
+    从 release 资产中找签名清单 `update-manifest.json` 与安装包（优先 `*Setup*.exe`，其次任意 `.exe`）；
+  - 填写地址 → 仍按原来的直连清单方式工作，作为覆盖项；
+  - 签名策略不变：清单必须过 Ed25519，安装包必须过「长度 + SHA-256 + 包签名」，
+    没有任何“忽略签名继续安装”的分支；
+  - 自动模式额外做一致性校验：release 标签必须与清单 `version` 相同；安装包名称、大小必须与
+    release 资产一致；GitHub 提供 `digest` 时还必须与清单 `sha256` 相同。通过后把下载地址替换为
+    release 里的真实资产地址（哈希仍按清单校验）。
+- 失败原因透传：GitHub API 非 200 → `HTTP <code>：<响应片段>`；清单非 200 与安装包非 200 同样附带
+  响应前 300 字；缺少签名清单时列出 release 现有资产名。
+- 真实请求（2026-11-18，本机）：
+  - `GET https://api.github.com/repos/asybhc/filededup/releases/latest` → `HTTP 200`
+  - `tag=0.10.10`；资产只有 `fdedup-ui.exe`（14187520 字节，`sha256:43256c4a…93cd`），
+    **没有 `update-manifest.json`**，因此当前自动检查会明确报：
+    「GitHub 最新发布 0.10.10 未附带签名清单 update-manifest.json（现有资产：fdedup-ui.exe）」。
+- 发布要求：每次发布 release 需同时上传 `update-manifest.json`（Ed25519 签名，资产字段指向该
+  release 的安装包），自动更新才可走通。当前 real release 尚未附带该资产。
+- 单测：`internal/update/github_test.go` 覆盖 API 解析（tag/资产/摘要/优先 Setup）、404 状态与响应
+  片段透传、缺少清单时列出资产、非法 tag 拒绝；`go test -tags desktop ./cmd/filededup/` 覆盖现有更新链路。
+- 实测：`go test ./internal/update/` → `ok`；`go test -tags desktop ./cmd/filededup/` → `ok`。
+- **未实测**：真实的签名清单 + release 安装包端到端下载/替换尚未联调（当前 latest release 无清单资产）；
+  等发布 0.10.15 并附带清单后再验证。手动覆盖地址的旧分支保持原样，未回归。
 

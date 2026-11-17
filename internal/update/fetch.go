@@ -37,7 +37,8 @@ func FetchManifest(ctx context.Context, client *http.Client, rawURL string) (Man
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Manifest{}, nil, fmt.Errorf("下载更新清单失败：HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return Manifest{}, nil, fmt.Errorf("下载更新清单失败：HTTP %d：%s", resp.StatusCode, responseSnippet(body))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, ManifestMaxBytes+1))
 	if err != nil {
@@ -127,7 +128,8 @@ func downloadAsset(ctx context.Context, client *http.Client, a Asset, dir string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("下载安装包失败：HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("下载安装包失败：HTTP %d：%s", resp.StatusCode, responseSnippet(body))
 	}
 
 	tmp := final + ".part"

@@ -5,7 +5,7 @@ package main
 // 自动更新门面：检查、验签、下载、替换与回滚。
 //
 // 安全约束（与需求一致）：
-//   - 更新源默认留空，只有配置了 http/https 清单地址才检查；
+//   - 更新源默认走内置仓库的最新 release；手动填写的清单地址仅作为覆盖项；
 //   - 清单与安装包都必须通过内置的更新专用 Ed25519 公钥验签；
 //   - 长度、SHA-256、清单签名、包签名任一不符都拒绝安装；
 //   - 没有“忽略签名继续安装”的选项。
@@ -39,6 +39,8 @@ type UpdateCheckView struct {
 	AssetName      string `json:"assetName,omitempty"`
 	AssetSize      int64  `json:"assetSize,omitempty"`
 	SourceURL      string `json:"sourceUrl,omitempty"`
+	AutoSource     bool   `json:"autoSource,omitempty"`
+	InstallerURL   string `json:"installerUrl,omitempty"`
 	CheckedAt      string `json:"checkedAt,omitempty"`
 	SkippedVersion string `json:"skippedVersion,omitempty"`
 }
@@ -134,13 +136,7 @@ func (a *App) CheckForUpdate(manual bool) (UpdateCheckView, error) {
 	cfg := settings.Update
 	view := UpdateCheckView{
 		CurrentVersion: appVersion,
-		SourceURL:      cfg.ManifestURL,
 		SkippedVersion: cfg.SkippedVersion,
-	}
-	if strings.TrimSpace(cfg.ManifestURL) == "" {
-		view.Status = "disabled"
-		view.Message = "未配置更新源。填写清单地址后才会检查更新。"
-		return view, nil
 	}
 	state := loadUpdateState()
 	if !manual {
@@ -164,13 +160,22 @@ func (a *App) CheckForUpdate(manual bool) (UpdateCheckView, error) {
 	if err != nil {
 		return view, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
-	man, _, err := update.FetchManifest(ctx, &http.Client{Timeout: 15 * time.Second}, cfg.ManifestURL)
+	src, err := resolveUpdateSource(ctx, cfg)
+	if err != nil {
+		return view, fmt.Errorf("检查更新失败：%w", err)
+	}
+	view.SourceURL = src.manifestURL
+	view.AutoSource = src.release != nil
+	man, _, err := update.FetchManifest(ctx, &http.Client{Timeout: 15 * time.Second}, src.manifestURL)
 	if err != nil {
 		return view, fmt.Errorf("检查更新失败：%w", err)
 	}
 	if err := update.VerifyManifest(man, pub); err != nil {
+		return view, fmt.Errorf("检查更新失败：%w", err)
+	}
+	if err := crossCheckRelease(src.release, man.Version); err != nil {
 		return view, fmt.Errorf("检查更新失败：%w", err)
 	}
 
@@ -199,9 +204,13 @@ func (a *App) CheckForUpdate(manual bool) (UpdateCheckView, error) {
 	if err != nil {
 		return view, fmt.Errorf("检查更新失败：%w", err)
 	}
+	if asset, err = crossCheckAsset(src.release, asset); err != nil {
+		return view, fmt.Errorf("检查更新失败：%w", err)
+	}
 	view.Status = "available"
 	view.AssetName = asset.Name
 	view.AssetSize = asset.Size
+	view.InstallerURL = asset.URL
 	view.Message = fmt.Sprintf("发现新版本 %s。", man.Version)
 	return view, nil
 }
@@ -213,20 +222,24 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 
 	settings, _ := LoadSettings()
 	cfg := settings.Update
-	if strings.TrimSpace(cfg.ManifestURL) == "" {
-		return UpdateInstallView{}, fmt.Errorf("未配置更新源，无法安装更新")
-	}
 	pub, err := update.PublicKey()
 	if err != nil {
 		return UpdateInstallView{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	man, _, err := update.FetchManifest(ctx, &http.Client{Timeout: 15 * time.Second}, cfg.ManifestURL)
+	src, err := resolveUpdateSource(ctx, cfg)
+	if err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
+	}
+	man, _, err := update.FetchManifest(ctx, &http.Client{Timeout: 15 * time.Second}, src.manifestURL)
 	if err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
 	if err := update.VerifyManifest(man, pub); err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
+	}
+	if err := crossCheckRelease(src.release, man.Version); err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
 	newer, err := update.IsNewer(man.Version, appVersion)
@@ -238,6 +251,9 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 	}
 	asset, err := man.CurrentAsset()
 	if err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
+	}
+	if asset, err = crossCheckAsset(src.release, asset); err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
 	if err := update.VerifyAsset(asset, pub); err != nil {
@@ -300,6 +316,62 @@ func (a *App) ClearSkippedUpdateVersion() error {
 	settings, _ := LoadSettings()
 	settings.Update.SkippedVersion = ""
 	return SaveSettings(settings)
+}
+
+// resolvedSource 是本次检查/安装实际使用的清单来源。
+// release 非空表示走内置默认源（GitHub 最新 release），为空表示用户手动覆盖。
+type resolvedSource struct {
+	manifestURL string
+	release     *update.Release
+}
+
+func resolveUpdateSource(ctx context.Context, cfg UpdateSettings) (resolvedSource, error) {
+	if url := strings.TrimSpace(cfg.ManifestURL); url != "" {
+		return resolvedSource{manifestURL: url}, nil
+	}
+	rel, err := update.FetchLatestRelease(ctx, &http.Client{Timeout: 20 * time.Second},
+		update.DefaultOwner, update.DefaultRepo)
+	if err != nil {
+		return resolvedSource{}, fmt.Errorf("自动更新源不可用：%w", err)
+	}
+	r := rel
+	return resolvedSource{manifestURL: rel.ManifestURL, release: &r}, nil
+}
+
+// crossCheckRelease 校验清单版本与 GitHub release 标签一致，防止清单被错配。
+func crossCheckRelease(rel *update.Release, manifestVersion string) error {
+	if rel == nil {
+		return nil
+	}
+	n, err := update.CompareVersion(manifestVersion, rel.Version)
+	if err != nil {
+		return fmt.Errorf("清单版本 %q 无法比较：%w", manifestVersion, err)
+	}
+	if n != 0 {
+		return fmt.Errorf("release 标签 %s 与清单版本 %s 不一致", rel.Tag, manifestVersion)
+	}
+	return nil
+}
+
+// crossCheckAsset 用 release 资产校准安装包：名称、大小、SHA-256 必须与清单一致，
+// 通过后把下载地址替换为 release 里的真实资产地址。签名校验仍按清单执行，不降级。
+func crossCheckAsset(rel *update.Release, asset update.Asset) (update.Asset, error) {
+	if rel == nil {
+		return asset, nil
+	}
+	ra, ok := rel.AssetByName(asset.Name)
+	if !ok {
+		return asset, fmt.Errorf("release %s 不包含清单声明的安装包 %s（现有资产：%s）",
+			rel.Tag, asset.Name, rel.AssetNames())
+	}
+	if ra.Size != asset.Size {
+		return asset, fmt.Errorf("安装包大小不一致：release=%d 清单=%d", ra.Size, asset.Size)
+	}
+	if ra.Digest != "" && !strings.EqualFold(ra.Digest, asset.SHA256) {
+		return asset, fmt.Errorf("安装包 SHA-256 不一致：release=%s 清单=%s", ra.Digest, asset.SHA256)
+	}
+	asset.URL = ra.URL
+	return asset, nil
 }
 
 func sameVersion(a, b string) bool {

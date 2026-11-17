@@ -433,7 +433,7 @@ export default function App() {
     if (!settingsReady || autoChecked.current) return;
     autoChecked.current = true;
     const cfg = settingsRef.current?.update;
-    if (!cfg || !cfg.manifestUrl.trim()) return;
+    if (!cfg) return;
     api
       .checkForUpdate(false)
       .then((v) => {
@@ -2178,7 +2178,10 @@ export default function App() {
               <dt>{t("当前版本")}</dt>
               <dd>v{info.version || "—"}</dd>
               <dt>{t("更新源")}</dt>
-              <dd className="break">{updateForm.manifestUrl || t("未配置（不检查）")}</dd>
+              <dd className="break">
+                {updateForm.manifestUrl ||
+                  t("内置默认（GitHub {repo} 最新发布）", { repo: "asybhc/filededup" })}
+              </dd>
               <dt>{t("检查模式")}</dt>
               <dd>
                 {updateForm.checkMode === "auto"
@@ -2196,10 +2199,10 @@ export default function App() {
             </dl>
 
             <label className="field">
-              <span>{t("更新清单地址（留空则不检查）")}</span>
+              <span>{t("更新清单地址（留空使用内置默认源）")}</span>
               <input
                 value={updateForm.manifestUrl}
-                placeholder="https://example.com/filededup/update.json"
+                placeholder={t("留空即用内置默认源，或填 https://…/update.json")}
                 onChange={(e) => setUpdateForm((prev) => ({ ...prev, manifestUrl: e.target.value }))}
               />
             </label>

@@ -93,6 +93,8 @@ const enCommon: Record<string, string> = {
   仅手动检查: "Manual check only",
   "更新源": "Update source",
   "更新清单地址（留空则不检查）": "Manifest URL (empty = no check)",
+  "更新清单地址（留空使用内置默认源）": "Manifest URL (empty = built-in default)",
+  "留空即用内置默认源，或填 https://…/update.json": "Leave empty for the built-in default, or enter https://…/update.json",
   "检查间隔（小时，1–720）": "Check interval (hours, 1–720)",
   "当前版本": "Current version",
   "检查模式": "Check mode",
