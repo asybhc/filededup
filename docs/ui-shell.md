@@ -1080,3 +1080,24 @@ Go 版走自己的序列，当前 `0.10.10`：
 - **未实测**：桌面端不使用 `--plan` 文件路径，不受影响；未在真实用户计划上演练（单测用临时目录）；
   UNC 路径与盘符切换场景未单独建用例（`filepath.Rel` 跨卷报错即拒绝，代码路径已覆盖但未实测）。
 
+### 0.10.18 产物校验与自动更新资产缺口
+
+- 便携版：`bin/文件整理.一杯好茶.exe`，14375936 字节，
+  SHA-256 `13CFEEE50959F62A2370CC842EF77FDD61A6DF0E14D34FCB7C1ED2F96F3842A0`。
+  `scripts/build-desktop.ps1` 已校验：非 Wails stub、PE Subsystem=2、FileVersion/ProductVersion=0.10.18.0、
+  CompanyName=一杯好茶、ProductName=文件整理.一杯好茶、图标可被 `Icon.ExtractAssociatedIcon` 读出。
+- 安装包：`bin/文件整理.一杯好茶-Setup-0.10.18.exe`，4810845 字节，
+  SHA-256 `09851ED6617B75AA91CE434E2B290A587A45E621C685C7B5F37D4335D3BB7D34`。
+  静默安装到临时目录后实测：安装出的主程序 14375936 字节、SHA-256 与便携版完全一致、
+  FileVersion=0.10.18.0；静默卸载后安装目录、HKCU 卸载键与桌面快捷方式均已清除
+  （安装前确认本机无同名旧安装，未覆盖任何既有安装）。
+- 自动更新资产缺口（本轮只确认、未改发布流程）：构建脚本与发布流程都**没有**生成或上传
+  `update-manifest.json`，当前 GitHub latest release 也没有该资产，因此 0.10.15 起的内置自动源
+  会按设计明确报「未附带签名清单…」，自动更新不会生效。
+  发布新版本时必须额外上传签名清单，步骤：
+  `fdedup-update-sign make-manifest -key <私钥> -version 0.10.18 -file bin\文件整理.一杯好茶-Setup-0.10.18.exe -url <该 release 的安装包下载地址> -out bin\update-manifest.json`，
+  数字签名私钥仍只放仓库外；清单资产名必须是 `update-manifest.json`（与 `internal/update/github.go` 的
+  `DefaultManifestAsset` 对齐）。
+- **未实测**：0.10.18 的 GitHub release 尚未发布，自动源端到端（latest → 清单 → 安装包签名 → 替换）
+  仍未联调；安装包签名（Authenticode）未做，NSIS 产物未签证书。
+
