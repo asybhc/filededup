@@ -3,6 +3,7 @@ package lanzouyou
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
@@ -143,7 +144,7 @@ func (c *Client) Login(ctx context.Context, username, password string) (Credenti
 	if err != nil {
 		return Credentials{}, err
 	}
-	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	ts := encryptedTimestamp(time.Now().UnixMilli())
 	path := "/unproved/login?uuid=" + url.QueryEscape(uuid) +
 		"&devType=6&devCode=" + url.QueryEscape(uuid) +
 		"&devModel=chrome&devVersion=131&appVersion=&timestamp=" + ts + "&extra=2"
@@ -155,9 +156,17 @@ func (c *Client) Login(ctx context.Context, username, password string) (Credenti
 	if err != nil {
 		return Credentials{}, err
 	}
-	token := strField(data, "appToken")
-	if token == "" {
-		token = strField(mustObject(raw), "appToken")
+	token := ""
+	root := mustObject(raw)
+	for _, m := range []map[string]json.RawMessage{data, root} {
+		if token = strField(m, "appToken"); token != "" {
+			break
+		}
+		if items, ok := asObject(m["items"]); ok {
+			if token = strField(items, "appToken"); token != "" {
+				break
+			}
+		}
 	}
 	if token == "" {
 		return Credentials{}, &APIError{Op: "登录", Detail: "登录响应里没有 appToken", Hint: "请确认账号密码，或稍后重试"}
@@ -700,7 +709,7 @@ func (c *Client) withCommon(path string) string {
 	}
 	q := "uuid=" + url.QueryEscape(uuid) +
 		"&devType=6&devCode=" + url.QueryEscape(uuid) +
-		"&devModel=chrome&devVersion=131&appVersion=&timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) +
+		"&devModel=chrome&devVersion=131&appVersion=&timestamp=" + encryptedTimestamp(time.Now().UnixMilli()) +
 		"&extra=" + url.QueryEscape(extra)
 	if c.creds.AppToken != "" {
 		q += "&appToken=" + url.QueryEscape(c.creds.AppToken)
@@ -736,6 +745,29 @@ func (c *Client) objectKey(now time.Time) string {
 	guid := strings.ToLower(strings.ReplaceAll(newUUID(), "-", ""))
 	return fmt.Sprintf("storage/files/%d/%d/%d/%s/%d_%s.gz",
 		now.Year(), int(now.Month()), now.Day(), account, now.UnixMilli(), guid)
+}
+
+// timestampKey 是蓝奏优享客户端对 timestamp 做 AES 加密时使用的固定密钥。
+const timestampKey = "lanZouY-disk-app"
+
+// encryptedTimestamp 把毫秒时间戳按原版协议加密：AES-128-ECB + PKCS7，
+// 输出小写十六进制。服务端只接受这种格式，明文毫秒会被判定为「系统时间不正确」。
+func encryptedTimestamp(ms int64) string {
+	plain := strconv.FormatInt(ms, 10)
+	padLen := aes.BlockSize - len(plain)%aes.BlockSize
+	buf := make([]byte, 0, len(plain)+padLen)
+	buf = append(buf, plain...)
+	for i := 0; i < padLen; i++ {
+		buf = append(buf, byte(padLen))
+	}
+	block, err := aes.NewCipher([]byte(timestampKey))
+	if err != nil {
+		return plain
+	}
+	for i := 0; i < len(buf); i += aes.BlockSize {
+		block.Encrypt(buf[i:i+aes.BlockSize], buf[i:i+aes.BlockSize])
+	}
+	return hex.EncodeToString(buf)
 }
 
 func newUUID() string {

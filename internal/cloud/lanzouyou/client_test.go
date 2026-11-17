@@ -105,6 +105,95 @@ func TestLoginAndAccount(t *testing.T) {
 	}
 }
 
+func TestEncryptedTimestampVector(t *testing.T) {
+	// 向量来自原版 C# 的 B.F.A(long)：AES-128-ECB + PKCS7 + key lanZouY-disk-app，
+	// 结果为小写 hex。此处用独立实现（PowerShell Aes）算出的期望值校对。
+	cases := []struct {
+		ms   int64
+		want string
+	}{
+		{1690000000000, "754a938402a7e614bad3c853f71f95d6"},
+		{1794944219941, "9cc1b418486e1cb09be6cd80be6b0a5f"},
+	}
+	for _, tc := range cases {
+		got := encryptedTimestamp(tc.ms)
+		if got != tc.want {
+			t.Fatalf("encryptedTimestamp(%d) = %q，期望 %q", tc.ms, got, tc.want)
+		}
+	}
+	if got := encryptedTimestamp(1690000000000); strings.ToLower(got) != got {
+		t.Errorf("时间戳密文应为小写 hex：%q", got)
+	}
+}
+
+func TestLoginTimestampIsEncrypted(t *testing.T) {
+	var ts string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/unproved/login":
+			ts = r.URL.Query().Get("timestamp")
+			writeJSON(w, `{"code":0,"data":{"appToken":"token-abc"}}`)
+		case "/proved/user/account/map":
+			writeJSON(w, `{"code":0,"data":{"map":{"userId":"42","account":"alice@example.com"}}}`)
+		}
+	})
+	c.creds = Credentials{}
+
+	if _, err := c.Login(context.Background(), "alice@example.com", "secret"); err != nil {
+		t.Fatalf("登录失败：%v", err)
+	}
+	if len(ts) != 32 {
+		t.Fatalf("timestamp = %q（长度 %d），期望 32 位 AES hex", ts, len(ts))
+	}
+	for _, r := range ts {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			t.Fatalf("timestamp = %q，含非小写 hex 字符 %q", ts, r)
+		}
+	}
+}
+
+func TestLoginEnvelopeMsgPassthrough(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, `{"msg":"系统时间不正确","code":-1}`)
+	})
+	c.creds = Credentials{}
+
+	_, err := c.Login(context.Background(), "probe@example.invalid", "x")
+	if err == nil {
+		t.Fatal("服务端返回错误码时登录应失败")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("错误类型 = %T，期望 *APIError", err)
+	}
+	if apiErr.Status != -1 {
+		t.Errorf("code = %d，期望 -1", apiErr.Status)
+	}
+	if apiErr.Detail != "系统时间不正确" {
+		t.Errorf("msg = %q，期望原文「系统时间不正确」", apiErr.Detail)
+	}
+}
+
+func TestLoginItemsAppToken(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/unproved/login":
+			writeJSON(w, `{"code":0,"data":{"items":{"appToken":"tok-items"}}}`)
+		case "/proved/user/account/map":
+			writeJSON(w, `{"code":0,"data":{"map":{"userId":"42","account":"alice@example.com"}}}`)
+		}
+	})
+	c.creds = Credentials{}
+
+	creds, err := c.Login(context.Background(), "alice@example.com", "secret")
+	if err != nil {
+		t.Fatalf("登录失败：%v", err)
+	}
+	if creds.AppToken != "tok-items" {
+		t.Errorf("appToken = %q，期望 tok-items", creds.AppToken)
+	}
+}
+
 func TestListing(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

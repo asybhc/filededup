@@ -903,3 +903,44 @@ Go 版走自己的序列，当前 `0.10.10`：
   stdout 首行 `C:\Program Files\Everything\Everything.exe`；应用内链路 visits=1、matches=1。
 - 未实测：es.exe 进程被杀/Everything 退出时的界面提示未在 GUI 中点击验证（仅代码路径与单测）；
   非 PATH、非 Programs 的自定义安装位置未在真机验证。
+
+### 0.10.13 优享登录「系统时间不正确」修复
+
+- 根因：原版（C#）对 `timestamp` 做 **AES-128-ECB + PKCS7** 加密后取小写 hex 再拼进查询串
+  （`B/F.cs` 的 `A(long)`，key 由字符串表解出为 `lanZouY-disk-app`）；Go 端一直发送明文毫秒，
+  服务端把明文当非法时间戳，返回 `{"msg":"系统时间不正确","code":-1}`。
+- 改动：`internal/cloud/lanzouyou/client.go` 新增 `encryptedTimestamp(ms)`，登录
+  （`/unproved/login`）与所有公共查询（`withCommon`）统一改用它；补充解析 `data.items.appToken`
+  作为 `data.appToken` 的后备；错误码与 msg 继续由 `checkEnvelope` 原样透传（新增单测锁定）。
+- 逐字段对照（先解字符串表再对齐，getter 名大小写敏感，见下）：
+
+  | 字段 | 原版 C# | 原 Go | 结论 |
+  | --- | --- | --- | --- |
+  | `uuid` / `devCode` | `Uri.EscapeDataString(uuid)` | `url.QueryEscape(uuid)` | 一致（UUID 只含 `-`，两者结果相同） |
+  | `devType` | `6` | `6` | 一致 |
+  | `devModel` / `devVersion` | `chrome` / `131` | `chrome` / `131` | 一致 |
+  | `appVersion` | 空 | 空 | 一致 |
+  | `timestamp` | `B.F.A(DateTimeOffset.Now.ToUnixTimeMilliseconds())` → AES-ECB/PKCS7 小写 hex | 明文 13 位毫秒 | **不一致，已修** |
+  | `extra` | `&extra=2` | `&extra=2` | 一致 |
+  | `appToken` | 有则 `&appToken=` + Escape | 同 | 一致 |
+  | 时区 | `DateTimeOffset.Now`（本地秒数换算为毫秒） | `time.Now().UnixMilli()` | 一致（都是绝对毫秒，与时区无关） |
+  | body | `{"loginName","loginPwd"}`，仅转义 `\` 与 `"` | `encoding/json` | 一致（JSON 转义更严格，服务端接受） |
+  | `Accept` | `application/json, text/plain, */*` | 同 | 一致 |
+  | `Accept-Language` | `zh-CN,zh;q=0.9` | 同 | 一致 |
+  | `User-Agent` | Chrome/78 UA | 同 | 一致 |
+  | `Origin` / `Referer` | `https://www.ilanzou.com` / 同 | 同 | 一致 |
+  | `X-WK-Device-Flag` | `1` | `1` | 一致 |
+  | `X-WK-UID` | uid 非空才发 | 同 | 一致 |
+  | `Authorization` | `Bearer ` + appToken | 同 | 一致 |
+  | Cookie | 有才发 | Go 侧没有 Cookie 字段 | 不适用（优享用 appToken） |
+
+- 真实请求实测（假账号 `probe-not-exist@example.invalid`，HTTP 200）：
+  - `timestamp` 用 AES hex → `{"msg":"用户账号不存在","code":-1}`（说明校验已通过，进入账号校验阶段）；
+  - `timestamp` 用明文毫秒 → `{"msg":"系统时间不正确","code":-1}`；
+  - `timestamp` 填 `0000000000000` → 同样「系统时间不正确」。
+  服务端 `Date` 头与本机时间一致，排除本机时钟偏差。
+- 单测：固定向量 `1690000000000 → 754a938402a7e614bad3c853f71f95d6`（独立实现 PowerShell Aes 算出），
+  另覆盖登录 timestamp 必须是 32 位小写 hex、错误 msg 原文透传、`data.items.appToken` 解析。
+- 未联调：没有真实优享账号，只验证到「账号不存在」这一层；正确账号/密码下的 appToken、容量、
+  上传链路仍未实测，需账号后复测。
+
