@@ -110,8 +110,9 @@ try {
     }
     if (-not (Test-Path $syso)) { throw "go-winres 未产出 $syso" }
 
+    # -buildvcs=false：不把 git revision/time 编进二进制，保证同一提交逐位可复现。
     $out = Join-Path $root "bin/文件整理.一杯好茶.exe"
-    & go build -tags "desktop,production" -trimpath -ldflags "-s -w -H windowsgui" -o $out ./cmd/filededup
+    & go build -buildvcs=false -tags "desktop,production" -trimpath -ldflags "-s -w -H windowsgui" -o $out ./cmd/filededup
     if ($LASTEXITCODE -ne 0) { throw "go build 失败（退出码 $LASTEXITCODE）" }
 
     $bytes = [IO.File]::ReadAllBytes($out)

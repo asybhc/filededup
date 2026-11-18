@@ -30,6 +30,7 @@ try {
     }
 
     if (-not $SkipBuild) {
+        # 复现性由 build-desktop.ps1 的 -buildvcs=false 保证：本脚本不直接调用 go build。
         & (Join-Path $PSScriptRoot "build-desktop.ps1")
         if ($LASTEXITCODE -ne 0) { throw "build-desktop.ps1 失败（退出码 $LASTEXITCODE）" }
     }
