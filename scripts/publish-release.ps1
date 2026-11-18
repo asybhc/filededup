@@ -152,8 +152,14 @@ try {
     # ---- 6. 远端 release 现状 ----
     $releaseJson = $null
     $releaseExists = $false
+    # gh 在 404 时会写 stderr；$ErrorActionPreference=Stop 会把它当成终止错误，
+    # 导致首次发布（release 尚不存在）直接退出。这里临时改为 Continue。
+    $previousEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     $raw = & gh api "repos/$Repo/releases/tags/$Tag" 2>$null
-    if ($LASTEXITCODE -eq 0 -and $raw) {
+    $ghExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousEAP
+    if ($ghExit -eq 0 -and $raw) {
         $releaseJson = $raw | ConvertFrom-Json
         $releaseExists = $true
     }
