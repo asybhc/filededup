@@ -30,6 +30,7 @@ const enApp: Record<string, string> = {
   "取消跳过失败：{error}": "Failed to cancel skip: {error}",
   "正在下载、验签并替换程序，请勿关闭窗口…": "Downloading, verifying, and replacing the program; do not close the window…",
   "已更新到 {version}，程序即将重启。备份：{backup}": "Updated to {version}; the app will restart. Backup: {backup}",
+  "已更新到 {version}，程序即将重启。": "Updated to {version}; the app will restart.",
   "安装已取消：{error}": "Installation cancelled: {error}",
   "未配置（不检查）": "Not configured (no check)",
   "内置默认（GitHub {repo} 最新发布）": "Built-in default (latest GitHub release of {repo})",

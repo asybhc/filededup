@@ -44,14 +44,18 @@ function subscribe(listener: () => void): () => void {
 
 // 翻译单条文案。params 用 {name} 占位，避免把数字/路径拼进字典键。
 export function tr(text: string, params?: TParams): string {
-  if (current === "zh") return text;
-  let out = EN[text];
-  if (out === undefined) {
-    if (import.meta.env.DEV && !warned.has(text)) {
-      warned.add(text);
-      console.warn("[i18n] missing English translation:", text);
+  // 中文是源文案，但占位符替换对中英文一视同仁：
+  // 不能在查表前按语言提前返回，否则中文界面会把 {version} 原样显示。
+  let out = text;
+  if (current !== "zh") {
+    out = EN[text];
+    if (out === undefined) {
+      if (import.meta.env.DEV && !warned.has(text)) {
+        warned.add(text);
+        console.warn("[i18n] missing English translation:", text);
+      }
+      out = text;
     }
-    out = text;
   }
   if (params) {
     for (const [key, value] of Object.entries(params)) {

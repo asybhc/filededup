@@ -550,7 +550,12 @@ export default function App() {
     setUpdateNote(t("正在下载、验签并替换程序，请勿关闭窗口…"));
     try {
       const r = await api.installUpdate();
-      setUpdateNote(t("已更新到 {version}，程序即将重启。备份：{backup}", { version: r.version, backup: r.backupPath }));
+      // 安装器式更新没有 .old 备份路径，不能渲染成“备份：”。
+      setUpdateNote(
+        r.backupPath
+          ? t("已更新到 {version}，程序即将重启。备份：{backup}", { version: r.version, backup: r.backupPath })
+          : t("已更新到 {version}，程序即将重启。", { version: r.version }),
+      );
     } catch (err) {
       // 浏览器预览会在这里直接给出“不能安装”的明确原因。
       setUpdateNote(t("安装已取消：{error}", { error: errorText(err) }));
