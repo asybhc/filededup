@@ -269,6 +269,12 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
 	}
 
+	// 安装包资产走静默安装器：Replace 会把包本身当成新 exe 启动，
+	// 对 NSIS 安装包等于弹出图形向导，因此必须交给安装器完成替换。
+	if isSetupPackage(asset.Name) {
+		return a.installViaSetup(pkg, asset, man.Version)
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return UpdateInstallView{}, fmt.Errorf("安装已取消：无法定位当前程序：%w", err)
@@ -298,6 +304,46 @@ func (a *App) InstallUpdate() (UpdateInstallView, error) {
 		SHA256:     res.SHA256,
 		Restarting: a.ctx != nil,
 	}, nil
+}
+
+// installViaSetup 用已验签的安装包执行静默安装：先安排后台进程等本进程退出，
+// 再运行 setup /S，由安装器替换 exe、更新卸载键与快捷方式。
+// 安装包在启动安装器前会再校验一次长度与 SHA-256，失败不执行。
+func (a *App) installViaSetup(pkg string, asset update.Asset, version string) (UpdateInstallView, error) {
+	if err := update.VerifyFile(pkg, asset.Size, asset.SHA256); err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：%w", err)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：无法定位当前程序：%w", err)
+	}
+	if err := scheduleSilentInstall(pkg); err != nil {
+		return UpdateInstallView{}, fmt.Errorf("安装已取消：无法启动静默安装器：%w", err)
+	}
+	pruneUpdateCache()
+	if a.ctx != nil {
+		go func() {
+			time.Sleep(1200 * time.Millisecond)
+			wruntime.Quit(a.ctx)
+		}()
+	}
+	return UpdateInstallView{
+		Version:    version,
+		ExePath:    exe,
+		Size:       asset.Size,
+		SHA256:     asset.SHA256,
+		Restarting: a.ctx != nil,
+	}, nil
+}
+
+// isSetupPackage 判断清单资产是否是 NSIS 安装包（与 internal/update/github.go 的
+// isSetupAsset 同一判据，避免把便携版 exe 误走安装器分支）。
+func isSetupPackage(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if !strings.HasSuffix(lower, ".exe") {
+		return false
+	}
+	return strings.Contains(lower, "setup") || strings.Contains(lower, "安装")
 }
 
 // SkipUpdateVersion 记住要跳过的版本，后续检查不再提示。

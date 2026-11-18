@@ -1082,22 +1082,47 @@ Go 版走自己的序列，当前 `0.10.10`：
 
 ### 0.10.18 产物校验与自动更新资产缺口
 
-- 便携版：`bin/文件整理.一杯好茶.exe`，14375936 字节，
-  SHA-256 `13CFEEE50959F62A2370CC842EF77FDD61A6DF0E14D34FCB7C1ED2F96F3842A0`。
+> 本节是最初 0.10.18 构建的记录。为补齐自动更新真实替换，0.10.18 已重新构建并重新上传
+> （新增安装器式静默更新），当前产物与哈希见下一节。
+
+- 便携版：`bin/文件整理.一杯好茶.exe`，14380032 字节，
+  SHA-256 `62D67E841D37FAFA7C5FA144E1CBF4D51CB312645C503DD3E40AD4923E66CA96`。
   `scripts/build-desktop.ps1` 已校验：非 Wails stub、PE Subsystem=2、FileVersion/ProductVersion=0.10.18.0、
   CompanyName=一杯好茶、ProductName=文件整理.一杯好茶、图标可被 `Icon.ExtractAssociatedIcon` 读出。
-- 安装包：`bin/文件整理.一杯好茶-Setup-0.10.18.exe`，4810845 字节，
-  SHA-256 `09851ED6617B75AA91CE434E2B290A587A45E621C685C7B5F37D4335D3BB7D34`。
-  静默安装到临时目录后实测：安装出的主程序 14375936 字节、SHA-256 与便携版完全一致、
-  FileVersion=0.10.18.0；静默卸载后安装目录、HKCU 卸载键与桌面快捷方式均已清除
+- 安装包：`bin/文件整理.一杯好茶-Setup-0.10.18.exe`，4810487 字节，
+  SHA-256 `B55A52729BA25C05ABD224EA252E63768620103206607D19F6521B870ABD942B`。
+  静默安装到临时目录后实测：安装出的主程序 14380032 字节、SHA-256 与便携版完全一致、
+  FileVersion=0.10.18.0；静默卸载后安装目录、HKCU 卸载键与快捷方式均已清除
   （安装前确认本机无同名旧安装，未覆盖任何既有安装）。
-- 自动更新资产缺口（本轮只确认、未改发布流程）：构建脚本与发布流程都**没有**生成或上传
-  `update-manifest.json`，当前 GitHub latest release 也没有该资产，因此 0.10.15 起的内置自动源
-  会按设计明确报「未附带签名清单…」，自动更新不会生效。
-  发布新版本时必须额外上传签名清单，步骤：
-  `fdedup-update-sign make-manifest -key <私钥> -version 0.10.18 -file bin\文件整理.一杯好茶-Setup-0.10.18.exe -url <该 release 的安装包下载地址> -out bin\update-manifest.json`，
-  数字签名私钥仍只放仓库外；清单资产名必须是 `update-manifest.json`（与 `internal/update/github.go` 的
-  `DefaultManifestAsset` 对齐）。
-- **未实测**：0.10.18 的 GitHub release 尚未发布，自动源端到端（latest → 清单 → 安装包签名 → 替换）
-  仍未联调；安装包签名（Authenticode）未做，NSIS 产物未签证书。
+- 自动更新资产缺口（最初发布时只确认、未改发布流程）：构建脚本与发布流程都**没有**生成或上传
+  `update-manifest.json`，当时 GitHub latest release 也没有该资产，因此 0.10.15 起的内置自动源
+  会按设计明确报「未附带签名清单…」，自动更新不会生效。现已由
+  `scripts/publish-release.ps1` 纳入发布流程。
+- **未实测**：安装包签名（Authenticode）未做，NSIS 产物未签证书。
+
+### 0.10.18 自动更新安装器式替换实测（重新发布）
+
+- 0.10.17 靶子：临时 worktree 从 `809eec3` 构建（未动 main 工作区，完成后已删除），另加两个改动：
+  `FILEDEDUP_UPDATE_HEADLESS` 无界面入口（调用与界面按钮完全相同的 `CheckForUpdate` / `InstallUpdate`）；
+  以及本轮发布的安装器式更新代码（`cmd/filededup/update.go` 与新增的
+  `update_installer_windows.go` / `update_installer_other.go` 原样拷入）。
+  靶子安装包 4813620 字节，静默安装后主程序 FileVersion=0.10.17.0、卸载键 DisplayVersion=0.10.17。
+- 更新链路（真实下载，非手工替换）：latest 解析到 0.10.18 → 清单 Ed25519 验签通过 →
+  资产 `filededup-0.10.18-setup.exe` 4810487 字节 → 下载并复核长度 / SHA-256 / 包签名 →
+  后台隐藏窗口 PowerShell 等旧进程退出后执行 `setup /S`。
+- 替换结果：安装目录主程序 SHA-256 `62D67E84…CA96`（与安装包解包出的主程序完全一致）；
+  FileVersion=0.10.18.0；卸载键 DisplayVersion=0.10.18；旧进程退出；
+  桌面与开始菜单快捷方式由安装器重建；安装目录及更新缓存均无 `.part/.new/.old` 残留。
+- 设计变更：清单资产是 NSIS 安装包时，`InstallUpdate` 不再调用 `update.Replace`
+  （那会把安装包当成新 exe 启动，等于弹出图形安装向导），改为后台静默安装器；
+  便携版资产仍走原单文件替换路径。静默安装完成后应用不会自动重启（`/S` 跳过完成页），
+  需用户自行启动。
+- 发布流程：`scripts/publish-release.ps1` 一条命令完成签名清单生成、本地与线上一致性校验、
+  tag/release 创建/更新与三个资产上传；私钥只通过 `-PrivateKey` 或环境变量
+  `FILEDEDUP_UPDATE_KEY` 传入，脚本内没有默认私钥路径，并会拒绝仓库内的私钥路径。
+  示例：
+  `powershell -File scripts/publish-release.ps1 -Version 0.10.18 -Notes "<更新说明>"`；
+  只校验用 `-VerifyOnly`，重建产物用 `-Rebuild`。
+- **未实测**：真实用户机器上的 UAC/杀软拦截；更新过程中断网/断电的恢复路径；
+  无代码签名证书。
 
