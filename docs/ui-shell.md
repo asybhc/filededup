@@ -1126,3 +1126,11 @@ Go 版走自己的序列，当前 `0.10.10`：
 - **未实测**：真实用户机器上的 UAC/杀软拦截；更新过程中断网/断电的恢复路径；
   无代码签名证书。
 
+### 0.10.19：构建改为逐位可复现
+
+- 唯一改动是构建口径：`scripts/build-desktop.ps1` 的 `go build` 增加
+  `-buildvcs=false`，不再把 git revision / commit time / dirty 标记编进二进制，
+  同一提交重复构建得到相同字节。`-tags "desktop,production"`、`-trimpath`、
+  `-ldflags "-s -w -H windowsgui"` 保持不变。
+- 没有功能、UI 或更新逻辑改动；版本号升至 0.10.19 以便区分产物。
+
